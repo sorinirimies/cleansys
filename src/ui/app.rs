@@ -22,8 +22,6 @@ pub struct DetailedCleanedItem {
 pub enum CleanedItemType {
     File,
     Directory,
-    Cache,
-    Package,
     Log,
 }
 
@@ -133,6 +131,7 @@ pub struct App {
     pub demo_operations_completed: usize,
     pub chart_type: ChartType,
     pub operation_logs: Vec<String>,
+    pub show_progress_screen: bool,
 }
 
 impl App {
@@ -180,6 +179,7 @@ impl App {
             demo_operations_completed: 0,
             chart_type: ChartType::PieCount,
             operation_logs: Vec::new(),
+            show_progress_screen: false,
         };
         app.item_list_state.select(Some(0));
 
@@ -214,20 +214,7 @@ impl App {
         }
     }
 
-    pub fn set_category_filter(&mut self, category: String) {
-        self.detailed_view_filter = category;
-        self.search_active = false;
-    }
 
-    pub fn get_search_display(&self) -> String {
-        if self.search_active {
-            format!("Search: {}_", self.search_query)
-        } else if !self.search_query.is_empty() {
-            format!("Search: {} (Press / to edit)", self.search_query)
-        } else {
-            "Press / to search".to_string()
-        }
-    }
 
     pub fn get_category_distribution(&self) -> Vec<(String, usize, u64)> {
         let mut category_map: std::collections::HashMap<String, (usize, u64)> =
@@ -426,6 +413,7 @@ impl App {
 
         // Start processing
         self.is_running = true;
+        self.show_progress_screen = true;
         self.operation_start_time = Some(Instant::now());
         self.operation_end_time = None;
         self.total_bytes_cleaned = 0;
@@ -660,7 +648,7 @@ impl App {
             // Navigation
             (KeyCode::Down, _) => {
                 if !self.show_help {
-                    if self.is_running {
+                    if self.is_running || self.show_progress_screen {
                         self.scroll_detailed_list_down();
                     } else {
                         self.next_item();
@@ -669,7 +657,7 @@ impl App {
             }
             (KeyCode::Up, _) => {
                 if !self.show_help {
-                    if self.is_running {
+                    if self.is_running || self.show_progress_screen {
                         self.scroll_detailed_list_up();
                     } else {
                         self.previous_item();
@@ -709,13 +697,16 @@ impl App {
                     self.toggle_search();
                 }
             }
-            // Clear search or cancel operations
+            // Clear search or cancel operations or return to main menu
             (KeyCode::Esc, _) => {
                 if self.search_active {
                     self.clear_search();
                 } else if self.is_running {
                     self.is_running = false;
                     self.cancel_sudo_operations();
+                } else if self.show_progress_screen {
+                    // Return to main menu from completed operations screen
+                    self.show_progress_screen = false;
                 }
             }
             // Scroll removed items list
@@ -818,7 +809,7 @@ impl App {
             }
             // Page scrolling for removed items (when in progress view)
             (KeyCode::PageUp, _) => {
-                if self.is_running {
+                if self.is_running || self.show_progress_screen {
                     // Scroll up by 10 items
                     for _ in 0..10 {
                         self.scroll_detailed_list_up();
@@ -826,7 +817,7 @@ impl App {
                 }
             }
             (KeyCode::PageDown, _) => {
-                if self.is_running {
+                if self.is_running || self.show_progress_screen {
                     // Scroll down by 10 items
                     for _ in 0..10 {
                         self.scroll_detailed_list_down();
@@ -836,7 +827,7 @@ impl App {
             // Enhanced navigation with Ctrl modifiers
             (KeyCode::Home, _) => {
                 if !self.show_help {
-                    if self.is_running {
+                    if self.is_running || self.show_progress_screen {
                         self.detailed_list_scroll_state.select(Some(0));
                     } else {
                         self.item_list_state.select(Some(0));
@@ -845,7 +836,7 @@ impl App {
             }
             (KeyCode::End, _) => {
                 if !self.show_help {
-                    if self.is_running {
+                    if self.is_running || self.show_progress_screen {
                         if !self.detailed_cleaned_items.is_empty() {
                             let last_index =
                                 (self.detailed_cleaned_items.len() * 3).saturating_sub(1);
@@ -982,10 +973,11 @@ impl App {
                     .any(|msg| msg.contains("Completed"))
                 {
                     self.result_messages.push(format!(
-                        "✅ Cleaning completed! Total space freed: {}",
+                        "✅ Cleaning completed! Total space freed: {} (Press ESC to return to main menu)",
                         format_size(self.total_bytes_cleaned)
                     ));
                 }
+                // Keep show_progress_screen true so user stays on details screen
             }
         }
     }
@@ -1116,39 +1108,7 @@ impl App {
         items
     }
 
-    pub fn get_detailed_items_summary(&self) -> (usize, u64, String) {
-        let filtered_items = self.get_filtered_detailed_items();
-        let total_items = filtered_items.len();
-        let total_size: u64 = filtered_items.iter().map(|item| item.size).sum();
-        let categories: std::collections::HashSet<_> =
-            filtered_items.iter().map(|item| &item.category).collect();
-        let category_list = if categories.len() <= 3 {
-            categories
-                .into_iter()
-                .cloned()
-                .collect::<Vec<_>>()
-                .join(", ")
-        } else {
-            format!("{} categories", categories.len())
-        };
 
-        let total_available = self.detailed_cleaned_items.len();
-        let _summary = if total_items != total_available {
-            format!("{}/{} items", total_items, total_available)
-        } else {
-            format!("{} items", total_items)
-        };
-
-        (
-            total_items,
-            total_size,
-            if !self.search_query.is_empty() || !self.detailed_view_filter.is_empty() {
-                format!("{} (filtered)", category_list)
-            } else {
-                category_list
-            },
-        )
-    }
 
     pub fn toggle_chart_type(&mut self) {
         self.chart_type = match self.chart_type {

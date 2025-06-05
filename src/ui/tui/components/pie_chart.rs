@@ -5,7 +5,6 @@ use ratatui::{
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph},
 };
-use std::f64::consts::PI;
 
 pub struct PieChartData {
     pub name: String,
@@ -235,45 +234,7 @@ impl PieChart {
         lines
     }
 
-    fn fill_pie_slice(
-        &self,
-        grid: &mut Vec<Vec<char>>,
-        center_x: usize,
-        center_y: usize,
-        radius: usize,
-        start_angle: f64,
-        end_angle: f64,
-        fill_char: char,
-    ) {
-        let height = grid.len();
-        let width = if height > 0 { grid[0].len() } else { 0 };
 
-        for y in 0..height {
-            for x in 0..width {
-                let dx = x as f64 - center_x as f64;
-                let dy = (y as f64 - center_y as f64) * 2.0; // Adjust for character aspect ratio
-                let distance = (dx * dx + dy * dy).sqrt();
-
-                if distance <= radius as f64 {
-                    let angle = dy.atan2(dx) + PI; // Normalize to 0-2π
-                    let angle = if angle < 0.0 { angle + 2.0 * PI } else { angle };
-
-                    if self.angle_in_range(angle, start_angle, end_angle) {
-                        grid[y][x] = fill_char;
-                    }
-                }
-            }
-        }
-    }
-
-    fn angle_in_range(&self, angle: f64, start: f64, end: f64) -> bool {
-        if start <= end {
-            angle >= start && angle <= end
-        } else {
-            // Handle wrap-around case
-            angle >= start || angle <= end
-        }
-    }
 
     fn get_char_color(&self, ch: char) -> Color {
         match ch {

@@ -195,10 +195,11 @@ The Terminal UI provides an intuitive interface with dynamic animations and the 
   - c: Toggle chart visibility
 
 - **Progress Screen**
-  - ESC: Return to main menu after operation
-  - q: Cancel current operation
+  - ESC: Cancel operation (while running) or Return to main menu (when completed)
+  - q: Cancel current operation or quit application
   - Features animated spinners, progress bar, and elapsed time tracking
   - Visual indicators for success (✓), errors (✗), and running operations (animated spinner)
+  - Remains visible after operations complete for review - press ESC to return to menu
 
 - **Other**
   - ?: Show/hide help

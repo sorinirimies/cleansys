@@ -44,7 +44,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     if app.show_help {
         render_help(f, chunks[1]);
-    } else if app.is_running {
+    } else if app.is_running || app.show_progress_screen {
         render_progress_screen(f, app, chunks[1]);
     } else {
         render_main_content(f, app, chunks[1]);
@@ -112,11 +112,6 @@ fn render_title<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
 }
 
 fn render_main_content<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
-    if app.is_running {
-        // Render the progress view when running
-        render_progress_screen(f, app, area);
-        return;
-    }
 
     // Adjust layout based on terminal width
     let (categories_percent, content_percent) = if app.terminal_width < 80 {
@@ -727,6 +722,8 @@ fn render_pie_chart_size_distribution<B: Backend>(f: &mut Frame<B>, app: &App, a
 fn render_removed_items_window<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
     let title = if app.is_running {
         "📋 Operation Progress"
+    } else if app.show_progress_screen {
+        "📋 Cleaning Results - Removed Items"
     } else {
         "📋 Removed Items Details"
     };
@@ -823,8 +820,6 @@ fn render_removed_items_window<B: Backend>(f: &mut Frame<B>, app: &mut App, area
                 let icon = match item.item_type {
                     CleanedItemType::File => "📄",
                     CleanedItemType::Directory => "📁",
-                    CleanedItemType::Cache => "🗃️",
-                    CleanedItemType::Package => "📦",
                     CleanedItemType::Log => "📝",
                 };
 
@@ -872,369 +867,7 @@ fn render_removed_items_window<B: Backend>(f: &mut Frame<B>, app: &mut App, area
     f.render_widget(block, area);
 }
 
-fn render_detailed_cleaned_items_view<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
-    let title = if app.search_active {
-        "🔍 Detailed Cleaned Items - Search Mode"
-    } else if !app.search_query.is_empty() || !app.detailed_view_filter.is_empty() {
-        "🗂️ Detailed Cleaned Items - Filtered"
-    } else {
-        "🗂️ Detailed Cleaned Items"
-    };
 
-    let main_block = Block::default()
-        .title(title)
-        .title_style(
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
-        .borders(Borders::ALL)
-        .border_style(if app.search_active {
-            Style::default().fg(Color::Yellow)
-        } else {
-            Style::default().fg(Color::Cyan)
-        });
-
-    // Split into header, search, list, and footer
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(3), // Header with summary
-            Constraint::Length(if app.search_active || !app.search_query.is_empty() {
-                2
-            } else {
-                0
-            }), // Search bar
-            Constraint::Min(5),    // List of items
-            Constraint::Length(4), // Footer with controls and category filter
-        ])
-        .margin(1)
-        .split(area);
-
-    // Render summary header
-    let (total_items, total_size, categories) = app.get_detailed_items_summary();
-    let summary_text = vec![
-        Line::from(vec![
-            Span::styled(
-                "📊 Summary: ",
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                format!("{} items", total_items),
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(" | "),
-            Span::styled(
-                format_size(total_size),
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(" | "),
-            Span::styled(categories, Style::default().fg(Color::Blue)),
-        ]),
-        Line::from(vec![
-            Span::styled("Sort: ", Style::default().fg(Color::Gray)),
-            Span::styled(
-                format!("{:?}", app.sort_mode),
-                Style::default().fg(Color::Yellow),
-            ),
-            Span::raw(" | "),
-            Span::styled(
-                "o",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(": Sort | "),
-            Span::styled(
-                "/",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(": Search | "),
-            Span::styled(
-                "j/k",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(": Navigate"),
-        ]),
-    ];
-
-    let summary_paragraph = Paragraph::new(summary_text).block(
-        Block::default()
-            .borders(Borders::BOTTOM)
-            .border_style(Style::default().fg(Color::DarkGray)),
-    );
-    f.render_widget(summary_paragraph, chunks[0]);
-
-    // Render search bar if active or has content
-    let mut search_chunk_index = 1;
-    if app.search_active || !app.search_query.is_empty() {
-        let search_text = vec![Line::from(vec![
-            Span::styled("🔍 ", Style::default().fg(Color::Yellow)),
-            if app.search_active {
-                Span::styled(
-                    format!("Search: {}_", app.search_query),
-                    Style::default().fg(Color::White).bg(Color::DarkGray),
-                )
-            } else {
-                Span::styled(
-                    format!("Search: {} (Press / to edit)", app.search_query),
-                    Style::default().fg(Color::Gray),
-                )
-            },
-            if !app.detailed_view_filter.is_empty() {
-                Span::styled(
-                    format!(" | Filter: {}", app.detailed_view_filter),
-                    Style::default().fg(Color::Blue),
-                )
-            } else {
-                Span::raw("")
-            },
-        ])];
-
-        let search_paragraph = Paragraph::new(search_text).block(
-            Block::default()
-                .borders(Borders::BOTTOM)
-                .border_style(Style::default().fg(Color::DarkGray)),
-        );
-        f.render_widget(search_paragraph, chunks[1]);
-        search_chunk_index = 2;
-    } else {
-        search_chunk_index = 1;
-    }
-
-    // Render detailed items list
-    let mut list_items = Vec::new();
-
-    // Get filtered items and build list items without holding references
-    {
-        let filtered_items = app.get_filtered_detailed_items();
-
-        if filtered_items.is_empty() {
-            if !app.search_query.is_empty() {
-                list_items.push(ListItem::new(Line::from(vec![Span::styled(
-                    "🔍 No items match your search criteria.",
-                    Style::default().fg(Color::Yellow),
-                )])));
-                list_items.push(ListItem::new(Line::from(vec![Span::raw(
-                    "Try adjusting your search terms or clearing the filter.",
-                )])));
-            } else {
-                list_items.push(ListItem::new(Line::from(vec![Span::styled(
-                    "📋 No cleaned items to display yet.",
-                    Style::default().fg(Color::Gray),
-                )])));
-                list_items.push(ListItem::new(Line::from(vec![Span::raw(
-                    "Items will appear here as cleaning operations complete.",
-                )])));
-            }
-        } else {
-            for (index, item) in filtered_items.iter().enumerate() {
-                let icon = match item.item_type {
-                    CleanedItemType::File => "📄",
-                    CleanedItemType::Directory => "📁",
-                    CleanedItemType::Cache => "🗃️",
-                    CleanedItemType::Package => "📦",
-                    CleanedItemType::Log => "📝",
-                };
-
-                let time_str =
-                    if let Ok(duration) = item.timestamp.duration_since(std::time::UNIX_EPOCH) {
-                        let secs = duration.as_secs();
-                        let hours = secs / 3600;
-                        let minutes = (secs % 3600) / 60;
-                        let seconds = secs % 60;
-                        if hours > 0 {
-                            format!("{}h{}m{}s", hours, minutes, seconds)
-                        } else if minutes > 0 {
-                            format!("{}m{}s", minutes, seconds)
-                        } else {
-                            format!("{}s", seconds)
-                        }
-                    } else {
-                        "unknown".to_string()
-                    };
-
-                // Highlight matching search terms
-                let path_style = if !app.search_query.is_empty()
-                    && item
-                        .path
-                        .to_lowercase()
-                        .contains(&app.search_query.to_lowercase())
-                {
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD)
-                        .bg(Color::DarkGray)
-                } else {
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD)
-                };
-
-                // First line: icon, path, and size with enhanced styling
-                list_items.push(ListItem::new(Line::from(vec![
-                    Span::styled(format!("{} ", icon), Style::default().fg(Color::Yellow)),
-                    Span::styled(item.path.clone(), path_style),
-                    Span::raw(" "),
-                    Span::styled(
-                        format!("({})", format_size(item.size)),
-                        Style::default()
-                            .fg(Color::Green)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                ])));
-
-                // Second line: category, cleaner, and timestamp with better formatting
-                let category_style = if !app.search_query.is_empty()
-                    && item
-                        .category
-                        .to_lowercase()
-                        .contains(&app.search_query.to_lowercase())
-                {
-                    Style::default().fg(Color::Blue).bg(Color::DarkGray)
-                } else {
-                    Style::default().fg(Color::Blue)
-                };
-
-                list_items.push(ListItem::new(Line::from(vec![
-                    Span::raw("   "),
-                    Span::styled("📂 ", Style::default().fg(Color::Blue)),
-                    Span::styled(item.category.clone(), category_style),
-                    Span::raw(" • "),
-                    Span::styled("🔧 ", Style::default().fg(Color::Magenta)),
-                    Span::styled(
-                        item.cleaner_name.clone(),
-                        Style::default().fg(Color::Magenta),
-                    ),
-                    Span::raw(" • "),
-                    Span::styled("⏰ ", Style::default().fg(Color::Cyan)),
-                    Span::styled(time_str, Style::default().fg(Color::Cyan)),
-                ])));
-
-                // Add spacing between entries (except for the last one)
-                if index < filtered_items.len() - 1 {
-                    list_items.push(ListItem::new(Line::from(vec![])));
-                }
-            }
-        }
-    } // filtered_items goes out of scope here, ending the immutable borrow
-
-    let items_list = List::new(list_items)
-        .block(Block::default().borders(Borders::NONE))
-        .highlight_style(
-            Style::default()
-                .bg(if app.search_active {
-                    Color::Yellow
-                } else {
-                    Color::DarkGray
-                })
-                .fg(Color::Black)
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("🔍 ");
-
-    f.render_stateful_widget(
-        items_list,
-        chunks[search_chunk_index],
-        &mut app.detailed_list_scroll_state,
-    );
-
-    // Render controls footer with category stats
-    let category_distribution = app.get_category_distribution();
-    let top_categories: Vec<String> = category_distribution
-        .iter()
-        .take(3)
-        .map(|(name, count, size)| format!("{}: {} ({})", name, count, format_size(*size)))
-        .collect();
-
-    let controls_text = vec![
-        Line::from(vec![
-            Span::styled(
-                "📊 Top Categories: ",
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(top_categories.join(" • "), Style::default().fg(Color::Blue)),
-        ]),
-        Line::from(vec![
-            Span::styled(
-                "Controls: ",
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                "l",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(": Back | "),
-            Span::styled(
-                "/",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(": Search | "),
-            Span::styled(
-                "o",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(": Sort | "),
-            Span::styled(
-                "j/k",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(" or "),
-            Span::styled(
-                "↑/↓",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(": Navigate | "),
-            Span::styled(
-                "ESC",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(": "),
-            if app.search_active {
-                Span::styled("Clear Search", Style::default().fg(Color::Red))
-            } else {
-                Span::styled("Main Menu", Style::default().fg(Color::Red))
-            },
-        ]),
-    ];
-
-    let controls_paragraph = Paragraph::new(controls_text)
-        .block(
-            Block::default()
-                .borders(Borders::TOP)
-                .border_style(Style::default().fg(Color::DarkGray)),
-        )
-        .alignment(ratatui::layout::Alignment::Center);
-    f.render_widget(controls_paragraph, chunks[search_chunk_index + 1]);
-
-    f.render_widget(main_block, area);
-}
 
 fn render_categories<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
     // Add icons to category names
@@ -1436,7 +1069,7 @@ fn render_footer<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
 
     let inner_area = block.inner(area);
 
-    if app.is_running {
+    if app.is_running || app.show_progress_screen {
         // Progress mode footer - clean and simple
         let footer_chunks = Layout::default()
             .direction(Direction::Horizontal)
@@ -1493,28 +1126,53 @@ fn render_footer<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
             ),
         ])];
 
-        // Controls
-        let controls_text = vec![Line::from(vec![
-            Span::styled(
-                "ESC",
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(": Menu  "),
-            Span::styled(
-                "↑/↓",
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(": Scroll Items  "),
-            Span::styled(
-                "q",
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(": Cancel"),
-        ])];
+        // Controls - different for running vs completed operations
+        let controls_text = if app.is_running {
+            vec![Line::from(vec![
+                Span::styled(
+                    "ESC",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(": Cancel  "),
+                Span::styled(
+                    "↑/↓",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(": Scroll Items  "),
+                Span::styled(
+                    "q",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(": Quit"),
+            ])]
+        } else {
+            // Operations completed - show different controls
+            vec![Line::from(vec![
+                Span::styled(
+                    "ESC",
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(": Return to Menu  "),
+                Span::styled(
+                    "↑/↓",
+                    Style::default()
+                        .fg(Color::Cyan)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(": Scroll Items  "),
+                Span::styled(
+                    "q",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                ),
+                Span::raw(": Quit"),
+            ])]
+        };
 
         let status_para = Paragraph::new(status_text);
         let controls_para =
@@ -1661,7 +1319,7 @@ fn render_help<B: Backend>(f: &mut Frame<B>, area: Rect) {
             "  j/k: Scroll detailed items list (vi-style)",
         )]),
         Line::from(vec![Span::raw("  /: Search files/paths in detailed view")]),
-        Line::from(vec![Span::raw("  ESC: Clear search (when searching)")]),
+        Line::from(vec![Span::raw("  ESC: Clear search / Cancel operation / Return to menu")]),
         Line::from(vec![Span::raw("  Backspace: Remove search character")]),
         Line::from(vec![Span::raw("  PgUp/PgDn: Scroll operation log")]),
         Line::from(vec![Span::raw("  Home/End: Jump to first/last item")]),

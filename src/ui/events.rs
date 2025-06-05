@@ -20,11 +20,6 @@ pub struct Events {
 }
 
 impl Events {
-    /// Constructs an new instance of `Events` with default settings.
-    pub fn new() -> Self {
-        Self::with_config(Config::default())
-    }
-
     /// Constructs an new instance of `Events` with custom config.
     pub fn with_config(config: Config) -> Self {
         let (tx, rx) = mpsc::channel();
