@@ -1293,9 +1293,8 @@ fn render_help<B: Backend>(f: &mut Frame<B>, area: Rect) {
         Line::from(vec![Span::raw("  Enter: Run selected cleaners")]),
         Line::from(vec![Span::raw("  a: Select all in current category")]),
         Line::from(vec![Span::raw("  n: Deselect all in current category")]),
-        Line::from(vec![Span::raw("  l: Toggle detailed cleaned items list")]),
         Line::from(vec![Span::raw(
-            "  c: Cycle chart type (Count Pie → Size Pie → Bar → Count Pie)",
+            "  c: Cycle chart type (Bar → Count Pie → Size Pie → Bar)",
         )]),
         Line::from(vec![Span::raw("  /: Search in detailed view")]),
         Line::from(vec![Span::raw("")]),
@@ -1342,13 +1341,13 @@ fn render_help<B: Backend>(f: &mut Frame<B>, area: Rect) {
             Style::default().add_modifier(Modifier::BOLD),
         )]),
         Line::from(vec![Span::raw(
+            "  Bar Chart: Traditional vertical bars for comparison",
+        )]),
+        Line::from(vec![Span::raw(
             "  Pie Count: Circular chart showing item distribution by count",
         )]),
         Line::from(vec![Span::raw(
             "  Pie Size: Circular chart showing space usage by category",
-        )]),
-        Line::from(vec![Span::raw(
-            "  Bar Chart: Traditional vertical bars for comparison",
         )]),
         Line::from(vec![Span::raw("")]),
         Line::from(vec![Span::styled(

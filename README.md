@@ -76,21 +76,24 @@ Cleansys now includes significant layout improvements and new features for a pro
 - **Status Indicators**: Visual icons for different operation states
 - **Performance Metrics**: Optional detailed statistics and timing
 
+> **Note**: This application includes extensive keyboard controls and advanced features. Some features mentioned in documentation may represent planned functionality or demo capabilities. The core cleaning operations and terminal UI are fully functional.
+
 ### ⌨️ Advanced Keyboard Controls
-- `c`: Cycle chart types (Count Pie → Size Pie → Bar Chart → Count Pie)
+- `c`: Cycle chart types (Bar Chart → Count Pie → Size Pie → Bar Chart)
 - `m`: Toggle compact mode
 - `v`: Cycle view modes (Standard/Compact/Detailed/Performance)
-- `l`: Toggle detailed cleaned items list with file paths and sizes
 - `p`: Toggle performance statistics
-- `s`: Toggle auto-scroll log (during operations)
+- `s`: Toggle auto-scroll log (during operations only)
 - `o`: Cycle sort modes
 - `f`: Cycle filter modes
 - `y`: Toggle confirmation prompts
 - `x`: Clear all errors
 - `j/k`: Scroll detailed items list (vi-style navigation)
-- `Ctrl+Space`: Pause/Resume operations
-- `PgUp/PgDn`: Scroll operation log
+- `/`: Toggle search in detailed view
+- `Ctrl+Space`: Pause/Resume operations (during operations only)
+- `PgUp/PgDn`: Scroll operation log and detailed items
 - `Home/End`: Jump to first/last item
+- `Backspace`: Remove search character (when searching)
 
 ### 🚀 Robustness Features
 - **Error Recovery**: Comprehensive error tracking and clearing
@@ -191,8 +194,8 @@ The Terminal UI provides an intuitive interface with dynamic animations and the 
   - Enter: Run selected cleaners
   - a: Select all in current category
   - n: Deselect all in current category
-  - l: Toggle detailed cleaned items list
-  - c: Toggle chart visibility
+  - c: Cycle chart types
+  - /: Toggle search in detailed view
 
 - **Progress Screen**
   - ESC: Cancel operation (while running) or Return to main menu (when completed)
