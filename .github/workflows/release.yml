@@ -62,13 +62,13 @@ jobs:
             # Generate changelog for first release
             git-cliff --config cliff.toml --tag ${{ github.ref_name }} --strip header > CLIFF_CHANGES.md
           fi
-
+          
           # Create the release note template
           echo "# CleanSys ${VERSION}" > RELEASE_CHANGELOG.md
           echo "" >> RELEASE_CHANGELOG.md
           echo "## 🚀 What's New" >> RELEASE_CHANGELOG.md
           echo "" >> RELEASE_CHANGELOG.md
-
+          
           if [ -n "$LAST_TAG" ]; then
             echo "### 📝 Changes since ${LAST_TAG}:" >> RELEASE_CHANGELOG.md
             echo "" >> RELEASE_CHANGELOG.md
@@ -76,10 +76,10 @@ jobs:
             echo "### 🎉 Initial Release" >> RELEASE_CHANGELOG.md
             echo "" >> RELEASE_CHANGELOG.md
           fi
-
+          
           # Add the git-cliff generated changes to the release notes
           cat CLIFF_CHANGES.md >> RELEASE_CHANGELOG.md
-
+          
           # Add installation and quick start info
           echo "" >> RELEASE_CHANGELOG.md
           echo "## 📦 Installation" >> RELEASE_CHANGELOG.md
@@ -128,4 +128,4 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: publish
-          args: --token ${{ secrets.CRATES_IO_TOKEN }}
+          args: --token ${{ secrets.CRATES_IO_TOKEN }} --allow-dirty
