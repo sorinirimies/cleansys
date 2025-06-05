@@ -1,0 +1,32 @@
+[package]
+name = "cleansys"
+version = "0.11.0"
+edition = "2021"
+authors = ["Sorin <sorin@example.com>"]
+description = "A simple and efficient CLI tool to clean your Linux system"
+readme = "README.md"
+repository = "https://github.com/sorin/cleansys"
+license = "MIT"
+keywords = ["clean", "system", "linux", "utility", "cli"]
+categories = ["command-line-utilities", "system"]
+
+[dependencies]
+clap = { version = "4.4", features = ["derive"] }
+colored = "2.0"
+log = "0.4"
+env_logger = "0.10"
+anyhow = "1.0"
+directories = "5.0"
+indicatif = "0.17"
+serde = { version = "1.0", features = ["derive"] }
+toml = "0.8"
+users = "0.11"
+ratatui = "0.23.0"
+crossterm = "0.26.1"
+unicode-width = "0.1.10"
+tui-textarea = "0.2.0"
+
+[dev-dependencies]
+assert_cmd = "2.0"
+predicates = "3.0"
+tempfile = "3.8"
