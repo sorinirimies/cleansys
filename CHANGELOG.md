@@ -2,6 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.6] - 2025-10-02
+
+### Miscellaneous Tasks
+
+- Bump version to 0.0.5
+
+
 ## [0.0.5] - 2025-10-02
 
 ### Miscellaneous Tasks
