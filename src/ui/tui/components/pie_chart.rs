@@ -136,7 +136,7 @@ impl PieChart {
         _center_y: u16,
         radius: u16,
         total: f64,
-    ) -> Vec<Line> {
+    ) -> Vec<Line<'_>> {
         let mut lines = Vec::new();
         let chart_height = std::cmp::min(radius as usize * 2, 12);
         let chart_width = std::cmp::min(radius as usize * 3, 24); // Wider for better visibility
@@ -211,7 +211,7 @@ impl PieChart {
         // If no slices, show a simple filled circle
         if slice_info.is_empty() {
             lines.clear();
-            let simple_circle = vec![
+            let simple_circle = [
                 "      ████████      ",
                 "    ████████████    ",
                 "  ████████████████  ",
@@ -233,8 +233,6 @@ impl PieChart {
 
         lines
     }
-
-
 
     fn get_char_color(&self, ch: char) -> Color {
         match ch {
@@ -312,7 +310,7 @@ impl PieChart {
         }
 
         let mut lines = Vec::new();
-        for (_i, data) in self.data.iter().take(3).enumerate() {
+        for data in self.data.iter().take(3) {
             // Show only top 3 in compact mode
             let percentage = (data.value / total) * 100.0;
             let line = Line::from(vec![

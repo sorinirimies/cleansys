@@ -1,7 +1,7 @@
 pub mod app;
 pub mod events;
+pub mod render;
 pub mod tui;
-pub mod ui;
 
 use crate::cleaners::{system_cleaners, user_cleaners};
 use anyhow::Result;
@@ -13,8 +13,8 @@ use crossterm::{
 };
 use events::{Event, Events};
 use ratatui::{prelude::CrosstermBackend, Terminal};
+use render::ui;
 use std::io;
-use ui::ui;
 
 pub fn run_tui() -> Result<()> {
     // Setup terminal

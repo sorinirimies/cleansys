@@ -62,13 +62,13 @@ jobs:
             # Generate changelog for first release
             git-cliff --config cliff.toml --tag ${{ github.ref_name }} --strip header > CLIFF_CHANGES.md
           fi
-          
+
           # Create the release note template
           echo "# CleanSys ${VERSION}" > RELEASE_CHANGELOG.md
           echo "" >> RELEASE_CHANGELOG.md
           echo "## 🚀 What's New" >> RELEASE_CHANGELOG.md
           echo "" >> RELEASE_CHANGELOG.md
-          
+
           if [ -n "$LAST_TAG" ]; then
             echo "### 📝 Changes since ${LAST_TAG}:" >> RELEASE_CHANGELOG.md
             echo "" >> RELEASE_CHANGELOG.md
@@ -76,10 +76,10 @@ jobs:
             echo "### 🎉 Initial Release" >> RELEASE_CHANGELOG.md
             echo "" >> RELEASE_CHANGELOG.md
           fi
-          
+
           # Add the git-cliff generated changes to the release notes
           cat CLIFF_CHANGES.md >> RELEASE_CHANGELOG.md
-          
+
           # Add installation and quick start info
           echo "" >> RELEASE_CHANGELOG.md
           echo "## 📦 Installation" >> RELEASE_CHANGELOG.md
@@ -103,12 +103,9 @@ jobs:
           cat RELEASE_CHANGELOG.md
 
       - name: Build release
-        uses: actions-rs/cargo@v1
-        with:
-          command: build
-          args: --release
+        run: cargo build --release
 
-      - name: Package binary (Linux)
+      - name: Package binary
         run: |
           tar -C target/release -czvf cleansys-${{ github.ref_name }}-linux-x86_64.tar.gz cleansys
 
@@ -121,11 +118,20 @@ jobs:
             LICENSE
             README.md
             CHANGELOG.md
-        env:
-          GITHUB_TOKEN: ${{ secrets.CLEAN_SYS_GITHUB_OPERATIONS_TOKEN }}
+          token: ${{ secrets.CLEAN_SYS_GITHUB_OPERATIONS_TOKEN }}
 
       - name: Publish to crates.io
-        uses: actions-rs/cargo@v1
-        with:
-          command: publish
-          args: --token ${{ secrets.CRATES_IO_TOKEN }} --allow-dirty
+        if: env.CRATES_IO_TOKEN != ''
+        env:
+          CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          echo "Publishing to crates.io..."
+          cargo publish --token $CRATES_IO_TOKEN --allow-dirty
+
+      - name: Skip crates.io publish
+        if: env.CRATES_IO_TOKEN == ''
+        env:
+          CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          echo "⚠️  CRATES_IO_TOKEN not set. Skipping crates.io publication."
+          echo "To publish to crates.io, add CRATES_IO_TOKEN to your GitHub secrets."

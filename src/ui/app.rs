@@ -214,8 +214,6 @@ impl App {
         }
     }
 
-
-
     pub fn get_category_distribution(&self) -> Vec<(String, usize, u64)> {
         let mut category_map: std::collections::HashMap<String, (usize, u64)> =
             std::collections::HashMap::new();
@@ -343,7 +341,7 @@ impl App {
         if has_root_cleaners && !self.is_root {
             // Check if we can use sudo
             let sudo_test = std::process::Command::new("sudo")
-                .args(&["-n", "true"])
+                .args(["-n", "true"])
                 .output();
 
             let needs_password = match sudo_test {
@@ -365,7 +363,7 @@ impl App {
                 );
 
                 // Ask for sudo password using a separate process
-                let password_process = std::process::Command::new("sudo").args(&["-v"]).status()?;
+                let password_process = std::process::Command::new("sudo").args(["-v"]).status()?;
 
                 // Re-enable raw mode
                 crossterm::terminal::enable_raw_mode()?;
@@ -465,13 +463,8 @@ impl App {
             let elapsed = start_time.elapsed().as_millis();
 
             // Find next pending operation to start
-            let mut pending_operations: Vec<(
-                usize,
-                usize,
-                String,
-                fn(bool) -> anyhow::Result<u64>,
-                bool,
-            )> = Vec::new();
+            type Operation = (usize, usize, String, fn(bool) -> anyhow::Result<u64>, bool);
+            let mut pending_operations: Vec<Operation> = Vec::new();
             for (cat_idx, category) in self.categories.iter().enumerate() {
                 for (item_idx, item) in category.items.iter().enumerate() {
                     if matches!(item.status, Some(Status::Pending)) {
@@ -492,7 +485,7 @@ impl App {
                 && !pending_operations.is_empty()
             {
                 if let Some((cat_idx, item_idx, _name, _function, _requires_root)) =
-                    pending_operations.get(0)
+                    pending_operations.first()
                 {
                     // Set to running
                     self.categories[*cat_idx].items[*item_idx].status = Some(Status::Running);
@@ -501,13 +494,7 @@ impl App {
             }
 
             // Complete running operations after 2 seconds
-            let mut running_operations: Vec<(
-                usize,
-                usize,
-                String,
-                fn(bool) -> anyhow::Result<u64>,
-                bool,
-            )> = Vec::new();
+            let mut running_operations: Vec<Operation> = Vec::new();
             for (cat_idx, category) in self.categories.iter().enumerate() {
                 for (item_idx, item) in category.items.iter().enumerate() {
                     if matches!(item.status, Some(Status::Running)) {
@@ -585,7 +572,7 @@ impl App {
                                 "Failed: {}",
                                 e.to_string()
                                     .split(':')
-                                    .last()
+                                    .next_back()
                                     .unwrap_or("Unknown error")
                                     .trim()
                             )
@@ -1107,8 +1094,6 @@ impl App {
 
         items
     }
-
-
 
     pub fn toggle_chart_type(&mut self) {
         self.chart_type = match self.chart_type {

@@ -284,11 +284,9 @@ fn clean_temp_files(skip_confirmation: bool) -> Result<u64> {
                                     warn!("Failed to remove directory {:?}: {}", path, e);
                                     continue;
                                 }
-                            } else {
-                                if let Err(e) = remove_file(&path) {
-                                    warn!("Failed to remove file {:?}: {}", path, e);
-                                    continue;
-                                }
+                            } else if let Err(e) = remove_file(&path) {
+                                warn!("Failed to remove file {:?}: {}", path, e);
+                                continue;
                             }
 
                             print_success(&format!("Removed temporary {:?}", path));
@@ -341,11 +339,9 @@ fn clean_package_caches(skip_confirmation: bool) -> Result<u64> {
                         continue;
                     }
                     fs::create_dir_all(&path).ok(); // Recreate empty directory
-                } else {
-                    if let Err(e) = remove_file(&path) {
-                        warn!("Failed to remove {} cache: {}", name, e);
-                        continue;
-                    }
+                } else if let Err(e) = remove_file(&path) {
+                    warn!("Failed to remove {} cache: {}", name, e);
+                    continue;
                 }
 
                 print_success(&format!("Cleaned {} cache", name));

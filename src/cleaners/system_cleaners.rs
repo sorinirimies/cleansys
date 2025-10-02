@@ -101,7 +101,7 @@ fn clean_package_caches(_skip_confirmation: bool) -> Result<u64> {
         info!("Found APT package manager, cleaning cache...");
         let cache_size = get_size("/var/cache/apt/archives/").unwrap_or(5 * 1024 * 1024);
 
-        let output = Command::new("apt-get").args(&["clean"]).output()?;
+        let output = Command::new("apt-get").args(["clean"]).output()?;
 
         if output.status.success() {
             info!("Successfully cleaned APT cache");
@@ -112,7 +112,7 @@ fn clean_package_caches(_skip_confirmation: bool) -> Result<u64> {
         }
 
         // Also clean autoclean
-        let output = Command::new("apt-get").args(&["autoclean"]).output()?;
+        let output = Command::new("apt-get").args(["autoclean"]).output()?;
 
         if output.status.success() {
             info!("Successfully cleaned APT autoclean");
@@ -125,7 +125,7 @@ fn clean_package_caches(_skip_confirmation: bool) -> Result<u64> {
         let cache_size = get_size("/var/cache/pacman/pkg/").unwrap_or(20 * 1024 * 1024);
 
         let output = Command::new("pacman")
-            .args(&["-Sc", "--noconfirm"])
+            .args(["-Sc", "--noconfirm"])
             .output()?;
 
         if output.status.success() {
@@ -141,7 +141,7 @@ fn clean_package_caches(_skip_confirmation: bool) -> Result<u64> {
         info!("Found DNF package manager, cleaning cache...");
         let cache_size = get_size("/var/cache/dnf/").unwrap_or(10 * 1024 * 1024);
 
-        let output = Command::new("dnf").args(&["clean", "all"]).output()?;
+        let output = Command::new("dnf").args(["clean", "all"]).output()?;
 
         if output.status.success() {
             info!("Successfully cleaned DNF cache");
@@ -202,7 +202,7 @@ fn clean_system_logs(skip_confirmation: bool) -> Result<u64> {
                 {
                     // Use find to delete old log files
                     let output = Command::new("find")
-                        .args(&[
+                        .args([
                             log_path, "-type", "f", "-name", "*.gz", "-o", "-name", "*.old", "-o",
                             "-name", "*.1", "-o", "-name", "*.2", "-o", "-name", "*.3", "-o",
                             "-name", "*.4", "-delete",
@@ -230,9 +230,7 @@ fn clean_system_logs(skip_confirmation: bool) -> Result<u64> {
         .success()
     {
         // Get current journal size
-        let output = Command::new("journalctl")
-            .args(&["--disk-usage"])
-            .output()?;
+        let output = Command::new("journalctl").args(["--disk-usage"]).output()?;
 
         let disk_usage = String::from_utf8_lossy(&output.stdout);
         debug!("Journal disk usage: {}", disk_usage);
@@ -240,10 +238,10 @@ fn clean_system_logs(skip_confirmation: bool) -> Result<u64> {
         // Estimate size - this is a rough approximation as we can't easily parse the output
         let journal_size: u64 = 100 * 1024 * 1024; // Default 100MB estimation
 
-        if skip_confirmation || confirm(&format!("Vacuum system journal logs?"), true)? {
+        if skip_confirmation || confirm("Vacuum system journal logs?", true)? {
             // Keep only logs from the last week
             let status = Command::new("journalctl")
-                .args(&["--vacuum-time=7d"])
+                .args(["--vacuum-time=7d"])
                 .status()?;
 
             if status.success() {
@@ -272,8 +270,8 @@ fn clean_system_caches(skip_confirmation: bool) -> Result<u64> {
         if path.exists() {
             let size = get_size(cache_path)?;
 
-            if size > 0 {
-                if skip_confirmation
+            if size > 0
+                && (skip_confirmation
                     || confirm(
                         &format!(
                             "Clean system cache in {} ({} to be freed)?",
@@ -281,35 +279,34 @@ fn clean_system_caches(skip_confirmation: bool) -> Result<u64> {
                             format_size(size)
                         ),
                         true,
-                    )?
-                {
-                    if path.is_dir() {
-                        // Remove content but keep the directory
-                        if let Ok(entries) = read_dir(path) {
-                            for entry in entries.flatten() {
-                                let file_path = entry.path();
+                    )?)
+            {
+                if path.is_dir() {
+                    // Remove content but keep the directory
+                    if let Ok(entries) = read_dir(path) {
+                        for entry in entries.flatten() {
+                            let file_path = entry.path();
 
-                                if file_path.is_file() {
-                                    if let Err(e) = remove_file(&file_path) {
-                                        warn!("Failed to remove file {:?}: {}", file_path, e);
-                                    }
-                                } else if file_path.is_dir() {
-                                    if let Err(e) = remove_dir_all(&file_path) {
-                                        warn!("Failed to remove directory {:?}: {}", file_path, e);
-                                    }
+                            if file_path.is_file() {
+                                if let Err(e) = remove_file(&file_path) {
+                                    warn!("Failed to remove file {:?}: {}", file_path, e);
+                                }
+                            } else if file_path.is_dir() {
+                                if let Err(e) = remove_dir_all(&file_path) {
+                                    warn!("Failed to remove directory {:?}: {}", file_path, e);
                                 }
                             }
                         }
-                    } else if path.is_file() {
-                        if let Err(e) = remove_file(path) {
-                            warn!("Failed to remove file {:?}: {}", path, e);
-                            continue;
-                        }
                     }
-
-                    print_success(&format!("Cleaned system cache in {}", cache_path));
-                    bytes_saved += size;
+                } else if path.is_file() {
+                    if let Err(e) = remove_file(path) {
+                        warn!("Failed to remove file {:?}: {}", path, e);
+                        continue;
+                    }
                 }
+
+                print_success(&format!("Cleaned system cache in {}", cache_path));
+                bytes_saved += size;
             }
         }
     }
@@ -320,15 +317,14 @@ fn clean_system_caches(skip_confirmation: bool) -> Result<u64> {
         .output()?
         .status
         .success()
+        && (skip_confirmation || confirm("Update locate database?", true)?)
     {
-        if skip_confirmation || confirm("Update locate database?", true)? {
-            let status = Command::new("updatedb").status()?;
+        let status = Command::new("updatedb").status()?;
 
-            if status.success() {
-                print_success("Updated locate database");
-            } else {
-                print_error("Failed to update locate database");
-            }
+        if status.success() {
+            print_success("Updated locate database");
+        } else {
+            print_error("Failed to update locate database");
         }
     }
 
@@ -345,7 +341,7 @@ fn clean_temp_files(skip_confirmation: bool) -> Result<u64> {
         if path.exists() {
             // Calculate size of files we can safely remove (not currently in use)
             let output = Command::new("find")
-                .args(&[
+                .args([
                     temp_path, "-type", "f", "-atime",
                     "+1", // Files not accessed in the last day
                     "-exec", "du", "-sc", "{}", ";",
@@ -376,7 +372,7 @@ fn clean_temp_files(skip_confirmation: bool) -> Result<u64> {
                 {
                     // Use find to delete old temporary files
                     let status = Command::new("find")
-                        .args(&[
+                        .args([
                             temp_path, "-type", "f", "-atime",
                             "+1", // Files not accessed in the last day
                             "-delete",
@@ -413,7 +409,7 @@ fn clean_old_kernels(skip_confirmation: bool) -> Result<u64> {
 
         // List installed kernels
         let output = Command::new("dpkg")
-            .args(&["-l", "linux-image-*"])
+            .args(["-l", "linux-image-*"])
             .output()?;
 
         let installed_kernels = String::from_utf8_lossy(&output.stdout);
@@ -448,7 +444,7 @@ fn clean_old_kernels(skip_confirmation: bool) -> Result<u64> {
                     .success()
                 {
                     let status = Command::new("purge-old-kernels")
-                        .args(&["--keep", "1"])
+                        .args(["--keep", "1"])
                         .status()?;
 
                     if status.success() {
@@ -480,8 +476,8 @@ fn clean_crash_reports(skip_confirmation: bool) -> Result<u64> {
         if path.exists() {
             let size = get_size(crash_path)?;
 
-            if size > 0 {
-                if skip_confirmation
+            if size > 0
+                && (skip_confirmation
                     || confirm(
                         &format!(
                             "Clean crash reports in {} ({} to be freed)?",
@@ -489,30 +485,29 @@ fn clean_crash_reports(skip_confirmation: bool) -> Result<u64> {
                             format_size(size)
                         ),
                         true,
-                    )?
-                {
-                    if path.is_dir() {
-                        // Remove content but keep the directory
-                        if let Ok(entries) = read_dir(path) {
-                            for entry in entries.flatten() {
-                                let file_path = entry.path();
+                    )?)
+            {
+                if path.is_dir() {
+                    // Remove content but keep the directory
+                    if let Ok(entries) = read_dir(path) {
+                        for entry in entries.flatten() {
+                            let file_path = entry.path();
 
-                                if file_path.is_file() {
-                                    if let Err(e) = remove_file(&file_path) {
-                                        warn!("Failed to remove file {:?}: {}", file_path, e);
-                                    }
-                                } else if file_path.is_dir() {
-                                    if let Err(e) = remove_dir_all(&file_path) {
-                                        warn!("Failed to remove directory {:?}: {}", file_path, e);
-                                    }
+                            if file_path.is_file() {
+                                if let Err(e) = remove_file(&file_path) {
+                                    warn!("Failed to remove file {:?}: {}", file_path, e);
+                                }
+                            } else if file_path.is_dir() {
+                                if let Err(e) = remove_dir_all(&file_path) {
+                                    warn!("Failed to remove directory {:?}: {}", file_path, e);
                                 }
                             }
                         }
                     }
-
-                    print_success(&format!("Cleaned crash reports in {}", crash_path));
-                    bytes_saved += size;
                 }
+
+                print_success(&format!("Cleaned crash reports in {}", crash_path));
+                bytes_saved += size;
             }
         }
     }
@@ -520,7 +515,7 @@ fn clean_crash_reports(skip_confirmation: bool) -> Result<u64> {
     // Clean core dumps if we can find any
     if Command::new("which").arg("find").output()?.status.success() {
         let output = Command::new("find")
-            .args(&[
+            .args([
                 "/", "-name", "core", "-o", "-name", "core.*", "-type", "f", "-size",
                 "+10k", // Only files larger than 10KB
                 "-exec", "du", "-sc", "{}", ";",
@@ -537,30 +532,29 @@ fn clean_crash_reports(skip_confirmation: bool) -> Result<u64> {
             }
         }
 
-        if size_to_clean > 0 {
-            if skip_confirmation
+        if size_to_clean > 0
+            && (skip_confirmation
                 || confirm(
                     &format!(
                         "Clean core dumps across system ({} to be freed)?",
                         format_size(size_to_clean)
                     ),
                     true,
-                )?
-            {
-                let status = Command::new("find")
-                    .args(&[
-                        "/", "-name", "core", "-o", "-name", "core.*", "-type", "f", "-size",
-                        "+10k", // Only files larger than 10KB
-                        "-delete",
-                    ])
-                    .status()?;
+                )?)
+        {
+            let status = Command::new("find")
+                .args([
+                    "/", "-name", "core", "-o", "-name", "core.*", "-type", "f", "-size",
+                    "+10k", // Only files larger than 10KB
+                    "-delete",
+                ])
+                .status()?;
 
-                if status.success() {
-                    print_success("Cleaned core dumps");
-                    bytes_saved += size_to_clean;
-                } else {
-                    print_error("Failed to clean core dumps");
-                }
+            if status.success() {
+                print_success("Cleaned core dumps");
+                bytes_saved += size_to_clean;
+            } else {
+                print_error("Failed to clean core dumps");
             }
         }
     }

@@ -112,7 +112,6 @@ fn render_title<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
 }
 
 fn render_main_content<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
-
     // Adjust layout based on terminal width
     let (categories_percent, content_percent) = if app.terminal_width < 80 {
         // Narrow terminals: give more space to content
@@ -290,9 +289,9 @@ fn render_progress_stats_and_chart<B: Backend>(f: &mut Frame<B>, app: &App, area
             ),
         ]),
         Line::from(vec![
-            Span::raw("█".repeat((progress_percent as usize * 35) / 100)),
+            Span::raw("█".repeat((progress_percent * 35) / 100)),
             Span::styled(
-                "░".repeat(35 - (progress_percent as usize * 35) / 100),
+                "░".repeat(35 - (progress_percent * 35) / 100),
                 Style::default().fg(Color::DarkGray),
             ),
         ]),
@@ -382,12 +381,9 @@ fn render_ultra_compact_view<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect
                     .fg(Color::Green)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(
-                "█".repeat(
-                    ((progress_percent as usize * (area.width.saturating_sub(10) as usize)) / 100)
-                        .min(30),
-                ),
-            ),
+            Span::raw("█".repeat(
+                ((progress_percent * (area.width.saturating_sub(10) as usize)) / 100).min(30),
+            )),
         ]),
         Line::from(vec![
             Span::styled(
@@ -471,12 +467,10 @@ fn render_vertical_bar_chart<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect
                     } else {
                         name
                     }
+                } else if name.len() > 12 {
+                    &name[..12]
                 } else {
-                    if name.len() > 12 {
-                        &name[..12]
-                    } else {
-                        name
-                    }
+                    name
                 }
             })
             .collect();
@@ -498,7 +492,7 @@ fn render_vertical_bar_chart<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect
     // Create x-axis labels
     let x_labels = if categories.len() <= 3 {
         vec![
-            Span::raw(categories.get(0).unwrap_or(&"").to_string()),
+            Span::raw(categories.first().unwrap_or(&"").to_string()),
             Span::raw(categories.get(1).unwrap_or(&"").to_string()),
             Span::raw(categories.get(2).unwrap_or(&"").to_string()),
         ]
@@ -866,8 +860,6 @@ fn render_removed_items_window<B: Backend>(f: &mut Frame<B>, app: &mut App, area
     f.render_stateful_widget(items_list, inner_area, &mut app.detailed_list_scroll_state);
     f.render_widget(block, area);
 }
-
-
 
 fn render_categories<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
     // Add icons to category names
@@ -1318,7 +1310,9 @@ fn render_help<B: Backend>(f: &mut Frame<B>, area: Rect) {
             "  j/k: Scroll detailed items list (vi-style)",
         )]),
         Line::from(vec![Span::raw("  /: Search files/paths in detailed view")]),
-        Line::from(vec![Span::raw("  ESC: Clear search / Cancel operation / Return to menu")]),
+        Line::from(vec![Span::raw(
+            "  ESC: Clear search / Cancel operation / Return to menu",
+        )]),
         Line::from(vec![Span::raw("  Backspace: Remove search character")]),
         Line::from(vec![Span::raw("  PgUp/PgDn: Scroll operation log")]),
         Line::from(vec![Span::raw("  Home/End: Jump to first/last item")]),

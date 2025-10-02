@@ -79,7 +79,7 @@ pub fn format_size(bytes: u64) -> String {
 /// Get the size of a directory or file in bytes
 pub fn get_size(path: &str) -> Result<u64> {
     let output = std::process::Command::new("du")
-        .args(&["-sb", path])
+        .args(["-sb", path])
         .output()?;
 
     if !output.status.success() {
@@ -97,5 +97,3 @@ pub fn get_size(path: &str) -> Result<u64> {
         Err(_) => Ok(0),
     }
 }
-
-
