@@ -1,11 +1,18 @@
 use anyhow::Result;
 use colored::*;
 use std::io::{self, Write};
+#[cfg(unix)]
 use users::get_effective_uid;
 
 /// Check if the program is running with root privileges
+#[cfg(unix)]
 pub fn check_root() -> bool {
     get_effective_uid() == 0
+}
+
+#[cfg(not(unix))]
+pub fn check_root() -> bool {
+    false
 }
 
 /// Print a header with a colorful banner

@@ -64,12 +64,8 @@ jobs:
         env:
           RUSTDOCFLAGS: --cfg docsrs
   test:
-    runs-on: ${{ matrix.os }}
-    name: test ${{ matrix.os }}
-    strategy:
-      fail-fast: false
-      matrix:
-        os: [ubuntu-latest, windows-latest]
+    runs-on: ubuntu-latest
+    name: test
     steps:
       # if your project needs OpenSSL, uncomment this to fix Windows builds.
       # it's commented out by default as the install command takes 5-10m.

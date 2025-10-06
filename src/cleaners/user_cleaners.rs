@@ -2,6 +2,7 @@ use anyhow::{Context, Result};
 use directories::BaseDirs;
 use log::{debug, warn};
 use std::fs::{self, read_dir, remove_dir_all, remove_file};
+#[cfg(unix)]
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 
@@ -248,13 +249,9 @@ fn clean_thumbnail_caches(skip_confirmation: bool) -> Result<u64> {
     Ok(bytes_saved)
 }
 
+#[cfg(unix)]
 fn clean_temp_files(skip_confirmation: bool) -> Result<u64> {
     let tmp_dir = Path::new("/tmp");
-    let _current_user = users::get_current_username()
-        .unwrap_or_else(|| "unknown".into())
-        .into_string()
-        .unwrap_or_else(|_| "unknown".to_string());
-
     let mut bytes_saved = 0;
 
     if tmp_dir.exists() {
@@ -299,6 +296,11 @@ fn clean_temp_files(skip_confirmation: bool) -> Result<u64> {
     }
 
     Ok(bytes_saved)
+}
+
+#[cfg(not(unix))]
+fn clean_temp_files(_skip_confirmation: bool) -> Result<u64> {
+    Ok(0)
 }
 
 fn clean_package_caches(skip_confirmation: bool) -> Result<u64> {
