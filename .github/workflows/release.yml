@@ -5,6 +5,9 @@ on:
     tags:
       - "v*"
 
+permissions:
+  contents: write
+
 jobs:
   build:
     name: Build and release
@@ -118,7 +121,6 @@ jobs:
             LICENSE
             README.md
             CHANGELOG.md
-          token: ${{ secrets.CLEAN_SYS_GITHUB_OPERATIONS_TOKEN }}
 
       - name: Publish to crates.io
         if: env.CRATES_IO_TOKEN != ''
