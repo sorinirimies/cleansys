@@ -9,6 +9,11 @@ All notable changes to this project will be documented in this file.
 - Update README and CHANGELOG for v0.0.7
 
 
+### Miscellaneous Tasks
+
+- Bump version to 0.0.8
+
+
 ## [0.0.7] - 2025-10-06
 
 ### Documentation
