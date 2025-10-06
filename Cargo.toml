@@ -1,6 +1,6 @@
 [package]
 name = "cleansys"
-version = "0.0.6"
+version = "0.0.7"
 edition = "2021"
 authors = ["Sorin <sorin@example.com>"]
 description = "A simple and efficient CLI tool to clean your Linux system"
