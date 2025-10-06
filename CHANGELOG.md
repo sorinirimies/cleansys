@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.0.9] - 2025-10-06
+## [0.0.10] - 2025-10-06
 
 ### Bug Fixes
 
@@ -17,6 +17,8 @@ All notable changes to this project will be documented in this file.
 ### Miscellaneous Tasks
 
 - Improve release recipe with error handling
+
+- Bump version to 0.0.9
 
 
 ## [0.0.9] - 2025-10-06
