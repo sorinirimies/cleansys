@@ -115,8 +115,15 @@ push-tags:
 release version: (bump version)
     @echo "Pushing to remote..."
     git push origin main
+    @echo "Pushing tag v{{version}}..."
     git push origin v{{version}}
-    @echo "✅ Release v{{version}} complete!"
+    @echo "Verifying tag was pushed..."
+    @if git ls-remote --tags origin | grep -q "refs/tags/v{{version}}"; then \
+        echo "✅ Release v{{version}} complete! Release workflow should trigger shortly."; \
+    else \
+        echo "⚠️  Warning: Tag v{{version}} may not have been pushed successfully!"; \
+        exit 1; \
+    fi
 
 # Show current version
 version:
