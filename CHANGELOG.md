@@ -4,6 +4,23 @@ All notable changes to this project will be documented in this file.
 
 ## [0.0.9] - 2025-10-06
 
+### Bug Fixes
+
+- Use default GITHUB_TOKEN for releases with proper permissions
+
+
+### Documentation
+
+- Update README and CHANGELOG for v0.0.9
+
+
+### Miscellaneous Tasks
+
+- Improve release recipe with error handling
+
+
+## [0.0.9] - 2025-10-06
+
 ### Miscellaneous Tasks
 
 - Bump version to 0.0.9
@@ -41,9 +58,14 @@ All notable changes to this project will be documented in this file.
 
 - Bump version to 0.0.5
 
-- Bump version to 0.0.5
-
 - Bump version to 0.0.6
+
+
+## [0.0.5] - 2025-10-02
+
+### Miscellaneous Tasks
+
+- Bump version to 0.0.5
 
 
 ## [0.0.1] - 2025-06-05
