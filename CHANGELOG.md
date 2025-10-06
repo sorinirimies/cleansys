@@ -20,6 +20,8 @@ All notable changes to this project will be documented in this file.
 
 - Bump version to 0.0.9
 
+- Bump version to 0.0.10
+
 
 ## [0.0.9] - 2025-10-06
 
@@ -60,14 +62,9 @@ All notable changes to this project will be documented in this file.
 
 - Bump version to 0.0.5
 
-- Bump version to 0.0.6
-
-
-## [0.0.5] - 2025-10-02
-
-### Miscellaneous Tasks
-
 - Bump version to 0.0.5
+
+- Bump version to 0.0.6
 
 
 ## [0.0.1] - 2025-06-05
