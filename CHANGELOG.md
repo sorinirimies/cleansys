@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## [0.0.11] - 2025-10-15
+
+### Documentation
+
+- Update README and CHANGELOG for v0.0.10
+
+
+### Miscellaneous Tasks
+
+- Bump version to 0.0.11
+
+
 ## [0.0.10] - 2025-10-06
 
 ### Bug Fixes
