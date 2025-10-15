@@ -113,7 +113,7 @@ cargo install cleansys
 ### From source
 
 ```bash
-git clone https://github.com/sorin/cleansys
+git clone https://github.com/sorinirimies/cleansys
 cd cleansys
 cargo install --path .
 ```
