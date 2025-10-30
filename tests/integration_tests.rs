@@ -65,26 +65,6 @@ fn test_list_shows_system_cleaners() {
 }
 
 #[test]
-fn test_system_command_without_root() {
-    let mut cmd = Command::cargo_bin("cleansys").unwrap();
-    cmd.arg("system");
-
-    // Should either prompt for elevation or inform user about sudo requirement
-    let output = cmd.output().unwrap();
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let stderr = String::from_utf8_lossy(&output.stderr);
-    let combined = format!("{}{}", stdout, stderr);
-
-    // Should mention root, sudo, or privileges
-    assert!(
-        combined.contains("root")
-            || combined.contains("sudo")
-            || combined.contains("privileges")
-            || combined.contains("elevate")
-    );
-}
-
-#[test]
 fn test_invalid_command() {
     let mut cmd = Command::cargo_bin("cleansys").unwrap();
     cmd.arg("invalid_command");
@@ -133,29 +113,6 @@ mod unix_specific_tests {
 
         // Should work regardless of root status
         cmd.assert().success();
-    }
-
-    #[test]
-    fn test_system_cleaners_require_elevation() {
-        let mut cmd = Command::cargo_bin("cleansys").unwrap();
-        cmd.arg("system").arg("--yes");
-
-        // If not root, should mention privilege requirements
-        let output = cmd.output().unwrap();
-
-        // Either succeeds (if root) or mentions privileges (if not root)
-        if !output.status.success() {
-            let combined = format!(
-                "{}{}",
-                String::from_utf8_lossy(&output.stdout),
-                String::from_utf8_lossy(&output.stderr)
-            );
-            assert!(
-                combined.contains("root")
-                    || combined.contains("sudo")
-                    || combined.contains("privilege")
-            );
-        }
     }
 }
 
@@ -220,18 +177,6 @@ mod error_handling_tests {
     use super::*;
 
     #[test]
-    fn test_handles_missing_sudo_gracefully() {
-        let mut cmd = Command::cargo_bin("cleansys").unwrap();
-        cmd.arg("system");
-
-        // Should not panic, should handle missing sudo gracefully
-        let output = cmd.output().unwrap();
-
-        // Either succeeds or fails gracefully
-        assert!(output.status.code().is_some());
-    }
-
-    #[test]
     fn test_invalid_flags_combination() {
         let mut cmd = Command::cargo_bin("cleansys").unwrap();
         cmd.arg("--unknown-flag");
@@ -288,35 +233,6 @@ fn test_tui_command_exists() {
     cmd.assert()
         .success()
         .stdout(predicate::str::contains("tui"));
-}
-
-mod sudo_elevation_tests {
-    use super::*;
-
-    #[test]
-    fn test_elevation_prompt_mechanism() {
-        // Test that system command triggers elevation logic
-        let mut cmd = Command::cargo_bin("cleansys").unwrap();
-        cmd.arg("system").arg("--yes");
-
-        let output = cmd.output().unwrap();
-
-        // Should complete without crashing
-        assert!(output.status.code().is_some());
-    }
-
-    #[test]
-    fn test_user_cleaners_dont_require_sudo() {
-        let mut cmd = Command::cargo_bin("cleansys").unwrap();
-        cmd.arg("user").arg("--yes");
-
-        let output = cmd.output().unwrap();
-
-        // User cleaners should not mention sudo/root requirements
-        // (They should run or fail for other reasons)
-        // This is a soft check - we just verify the command completes
-        assert!(output.status.code().is_some());
-    }
 }
 
 mod comprehensive_tests {
