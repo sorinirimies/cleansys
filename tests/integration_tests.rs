@@ -175,7 +175,6 @@ mod checkbox_integration_tests {
 
 mod cleaner_module_tests {
     use super::*;
-    use std::path::Path;
 
     #[test]
     fn test_temporary_directory_cleanup_simulation() {
@@ -312,11 +311,6 @@ mod sudo_elevation_tests {
         cmd.arg("user").arg("--yes");
 
         let output = cmd.output().unwrap();
-        let combined = format!(
-            "{}{}",
-            String::from_utf8_lossy(&output.stdout),
-            String::from_utf8_lossy(&output.stderr)
-        );
 
         // User cleaners should not mention sudo/root requirements
         // (They should run or fail for other reasons)
