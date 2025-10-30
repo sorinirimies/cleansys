@@ -9,6 +9,11 @@ All notable changes to this project will be documented in this file.
 - Update README and CHANGELOG for v0.0.11
 
 
+### Miscellaneous Tasks
+
+- Bump version to 0.2.1
+
+
 ## [0.0.11] - 2025-10-15
 
 ### Documentation
@@ -81,14 +86,9 @@ All notable changes to this project will be documented in this file.
 
 - Bump version to 0.0.5
 
-- Bump version to 0.0.6
-
-
-## [0.0.5] - 2025-10-02
-
-### Miscellaneous Tasks
-
 - Bump version to 0.0.5
+
+- Bump version to 0.0.6
 
 
 ## [0.0.1] - 2025-06-05
