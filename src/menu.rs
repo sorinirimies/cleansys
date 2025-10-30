@@ -19,6 +19,12 @@ pub struct Menu {
     is_root: bool,
 }
 
+impl Default for Menu {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Menu {
     pub fn new() -> Self {
         let is_root = check_root();

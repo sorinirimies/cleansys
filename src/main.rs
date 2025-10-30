@@ -9,7 +9,7 @@ mod utils;
 
 use cleaners::{system_cleaners, user_cleaners};
 use menu::Menu;
-use utils::{check_root, print_error, print_header};
+use utils::{check_root, elevate_if_needed, print_error, print_header};
 
 #[derive(Parser)]
 #[command(
@@ -105,8 +105,17 @@ fn main() -> Result<()> {
         Some(Commands::System { yes }) => {
             print_header("SYSTEM CLEANER");
             if !is_root {
-                print_error("System cleaning requires root privileges. Please run with sudo.");
-                return Ok(());
+                // Prompt for elevation
+                if !elevate_if_needed()? {
+                    print_error("Cannot proceed without root privileges.");
+                    return Ok(());
+                }
+                // After elevation, check if we now have root
+                if !check_root() {
+                    print_error("Elevation was approved but system cleaners still require sudo.");
+                    println!("Please run: sudo cleansys system");
+                    return Ok(());
+                }
             }
             system_cleaners::run_all(yes)?;
         }

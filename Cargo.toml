@@ -3,12 +3,12 @@ name = "cleansys"
 version = "0.2.1"
 edition = "2021"
 authors = ["Sorin <sorin@example.com>"]
-description = "A simple and efficient CLI tool to clean your Linux system"
+description = "A modern terminal-based utility for Linux system cleanup with interactive TUI"
 readme = "README.md"
 repository = "https://github.com/sorinirimies/cleansys"
 license = "MIT"
-keywords = ["clean", "system", "linux", "utility", "cli"]
-categories = ["command-line-utilities", "os"]
+keywords = ["clean", "system", "linux", "cleanup", "cache"]
+categories = ["command-line-utilities", "os", "filesystem", "development-tools"]
 
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
@@ -24,6 +24,7 @@ ratatui = "0.23.0"
 crossterm = "0.26.1"
 unicode-width = "0.1.10"
 tui-textarea = "0.2.0"
+tui-checkbox = "0.3.3"
 
 [target.'cfg(unix)'.dependencies]
 users = "0.11"

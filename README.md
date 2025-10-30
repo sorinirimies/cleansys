@@ -7,8 +7,8 @@
 
 ## Features
 
-- **Modern Terminal UI**: Beautiful interactive interface with Ratatui
-- **Interactive Selection**: Easy to use checkbox-based selection interface
+- **Modern Terminal UI**: Beautiful interactive interface with [Ratatui](https://github.com/ratatui-org/ratatui)
+- **Interactive Selection**: Easy to use checkbox-based selection interface using [tui-checkbox](https://crates.io/crates/tui-checkbox)
 - **Progress Tracking**: Split-view progress screen with detailed status information
 - **Animated Loading**: Real-time loading spinners and progress indicators
 - **Detailed Status Icons**: Visual indicators showing operation status (running, success, error)

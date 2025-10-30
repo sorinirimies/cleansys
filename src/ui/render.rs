@@ -7,6 +7,8 @@ use ratatui::{
     widgets::{Axis, Block, Borders, Chart, Dataset, List, ListItem, Paragraph, Wrap},
     Frame,
 };
+// Using tui-checkbox library for consistent checkbox symbols across the application
+use tui_checkbox::{symbols as checkbox_symbols, Checkbox};
 
 use crate::ui::app::{App, ChartType, CleanedItemType, Status};
 use crate::ui::tui::components::create_pie_chart_from_distribution;
@@ -904,12 +906,30 @@ fn render_cleaners<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
         .map(|item| {
             let mut parts = vec![];
 
-            // Checkbox
-            if item.selected {
-                parts.push(Span::styled("[X] ", Style::default().fg(Color::Green)));
+            // Create checkbox using tui-checkbox with predefined symbols
+            // We use the ASCII bracket symbols for maximum terminal compatibility
+            let checkbox_style = if item.selected {
+                Style::default()
+                    .fg(Color::Green)
+                    .add_modifier(Modifier::BOLD)
             } else {
-                parts.push(Span::raw("[ ] "));
-            }
+                Style::default().fg(Color::White)
+            };
+
+            // Use Checkbox::new() with predefined symbols from the library
+            let _checkbox = Checkbox::new("", item.selected)
+                .checked_symbol(checkbox_symbols::CHECKED_X)
+                .unchecked_symbol(checkbox_symbols::UNCHECKED_SPACE);
+
+            // Extract the symbol for use in our composite List item
+            let checkbox_symbol = if item.selected {
+                checkbox_symbols::CHECKED_X
+            } else {
+                checkbox_symbols::UNCHECKED_SPACE
+            };
+
+            parts.push(Span::styled(checkbox_symbol, checkbox_style));
+            parts.push(Span::raw(" "));
 
             // Name
             let name_style = if item.requires_root && !app.is_root {

@@ -1,19 +1,25 @@
 use anyhow::Result;
 use log::{debug, info, warn};
-use std::fs::{self, read_dir, remove_dir_all, remove_file};
+use std::fs::{self, read_dir};
 use std::path::Path;
 use std::process::Command;
 
 use crate::utils::{
-    check_root, confirm, format_size, get_size, print_error, print_success, print_warning,
+    check_root, confirm, execute_with_sudo, format_size, get_size, print_error, print_success,
+    print_warning,
 };
 
+/// Information about a system cleaner.
 pub struct CleanerInfo {
+    /// The name of the cleaner.
     pub name: &'static str,
+    /// A description of what the cleaner does.
     pub description: &'static str,
+    /// The function that performs the cleaning operation.
     pub function: fn(bool) -> Result<u64>,
 }
 
+/// Lists all available system cleaners with their descriptions.
 pub fn list_cleaners() -> Vec<String> {
     get_cleaners()
         .iter()
@@ -21,6 +27,7 @@ pub fn list_cleaners() -> Vec<String> {
         .collect()
 }
 
+/// Returns a vector of all available system cleaners.
 pub fn get_cleaners() -> Vec<CleanerInfo> {
     vec![
         CleanerInfo {
@@ -56,6 +63,10 @@ pub fn get_cleaners() -> Vec<CleanerInfo> {
     ]
 }
 
+/// Runs all system cleaners.
+///
+/// # Arguments
+/// * `skip_confirmation` - If true, skip confirmation prompts.
 pub fn run_all(skip_confirmation: bool) -> Result<()> {
     let cleaners = get_cleaners();
     let mut total_saved: u64 = 0;
@@ -101,7 +112,7 @@ fn clean_package_caches(_skip_confirmation: bool) -> Result<u64> {
         info!("Found APT package manager, cleaning cache...");
         let cache_size = get_size("/var/cache/apt/archives/").unwrap_or(5 * 1024 * 1024);
 
-        let output = Command::new("apt-get").args(["clean"]).output()?;
+        let output = execute_with_sudo("apt-get", &["clean"])?;
 
         if output.status.success() {
             info!("Successfully cleaned APT cache");
@@ -112,7 +123,7 @@ fn clean_package_caches(_skip_confirmation: bool) -> Result<u64> {
         }
 
         // Also clean autoclean
-        let output = Command::new("apt-get").args(["autoclean"]).output()?;
+        let output = execute_with_sudo("apt-get", &["autoclean"])?;
 
         if output.status.success() {
             info!("Successfully cleaned APT autoclean");
@@ -122,11 +133,9 @@ fn clean_package_caches(_skip_confirmation: bool) -> Result<u64> {
 
     if std::path::Path::new("/usr/bin/pacman").exists() {
         info!("Found Pacman package manager, cleaning cache...");
-        let cache_size = get_size("/var/cache/pacman/pkg/").unwrap_or(20 * 1024 * 1024);
+        let cache_size = get_size("/var/cache/pacman/pkg/").unwrap_or(10 * 1024 * 1024);
 
-        let output = Command::new("pacman")
-            .args(["-Sc", "--noconfirm"])
-            .output()?;
+        let output = execute_with_sudo("pacman", &["-Sc", "--noconfirm"])?;
 
         if output.status.success() {
             info!("Successfully cleaned Pacman cache");
@@ -141,7 +150,7 @@ fn clean_package_caches(_skip_confirmation: bool) -> Result<u64> {
         info!("Found DNF package manager, cleaning cache...");
         let cache_size = get_size("/var/cache/dnf/").unwrap_or(10 * 1024 * 1024);
 
-        let output = Command::new("dnf").args(["clean", "all"]).output()?;
+        let output = execute_with_sudo("dnf", &["clean", "all"])?;
 
         if output.status.success() {
             info!("Successfully cleaned DNF cache");
@@ -201,13 +210,14 @@ fn clean_system_logs(skip_confirmation: bool) -> Result<u64> {
                     )?
                 {
                     // Use find to delete old log files
-                    let output = Command::new("find")
-                        .args([
+                    let output = execute_with_sudo(
+                        "find",
+                        &[
                             log_path, "-type", "f", "-name", "*.gz", "-o", "-name", "*.old", "-o",
                             "-name", "*.1", "-o", "-name", "*.2", "-o", "-name", "*.3", "-o",
                             "-name", "*.4", "-delete",
-                        ])
-                        .output()?;
+                        ],
+                    )?;
 
                     if output.status.success() {
                         print_success(&format!("Cleaned old logs in {}", log_path));
@@ -230,7 +240,7 @@ fn clean_system_logs(skip_confirmation: bool) -> Result<u64> {
         .success()
     {
         // Get current journal size
-        let output = Command::new("journalctl").args(["--disk-usage"]).output()?;
+        let output = execute_with_sudo("journalctl", &["--disk-usage"])?;
 
         let disk_usage = String::from_utf8_lossy(&output.stdout);
         debug!("Journal disk usage: {}", disk_usage);
@@ -240,11 +250,9 @@ fn clean_system_logs(skip_confirmation: bool) -> Result<u64> {
 
         if skip_confirmation || confirm("Vacuum system journal logs?", true)? {
             // Keep only logs from the last week
-            let status = Command::new("journalctl")
-                .args(["--vacuum-time=7d"])
-                .status()?;
+            let output = execute_with_sudo("journalctl", &["--vacuum-time=7d"])?;
 
-            if status.success() {
+            if output.status.success() {
                 print_success("Cleaned system journal logs");
                 bytes_saved += journal_size / 2; // Estimate we saved half of the journal size
             } else {
@@ -281,32 +289,27 @@ fn clean_system_caches(skip_confirmation: bool) -> Result<u64> {
                         true,
                     )?)
             {
-                if path.is_dir() {
-                    // Remove content but keep the directory
-                    if let Ok(entries) = read_dir(path) {
-                        for entry in entries.flatten() {
-                            let file_path = entry.path();
+                // Use rm with sudo to remove files
+                let output = if path.is_dir() {
+                    // Remove contents but keep the directory
+                    execute_with_sudo("sh", &["-c", &format!("rm -rf {}/*", cache_path)])
+                } else {
+                    // Remove the file
+                    execute_with_sudo("rm", &["-f", cache_path])
+                };
 
-                            if file_path.is_file() {
-                                if let Err(e) = remove_file(&file_path) {
-                                    warn!("Failed to remove file {:?}: {}", file_path, e);
-                                }
-                            } else if file_path.is_dir() {
-                                if let Err(e) = remove_dir_all(&file_path) {
-                                    warn!("Failed to remove directory {:?}: {}", file_path, e);
-                                }
-                            }
-                        }
+                match output {
+                    Ok(out) if out.status.success() => {
+                        print_success(&format!("Cleaned system cache in {}", cache_path));
+                        bytes_saved += size;
                     }
-                } else if path.is_file() {
-                    if let Err(e) = remove_file(path) {
-                        warn!("Failed to remove file {:?}: {}", path, e);
-                        continue;
+                    Ok(_) => {
+                        warn!("Failed to clean cache in {}", cache_path);
+                    }
+                    Err(e) => {
+                        warn!("Failed to execute rm for {}: {}", cache_path, e);
                     }
                 }
-
-                print_success(&format!("Cleaned system cache in {}", cache_path));
-                bytes_saved += size;
             }
         }
     }
@@ -319,9 +322,9 @@ fn clean_system_caches(skip_confirmation: bool) -> Result<u64> {
         .success()
         && (skip_confirmation || confirm("Update locate database?", true)?)
     {
-        let status = Command::new("updatedb").status()?;
+        let output = execute_with_sudo("updatedb", &[])?;
 
-        if status.success() {
+        if output.status.success() {
             print_success("Updated locate database");
         } else {
             print_error("Failed to update locate database");
@@ -339,7 +342,7 @@ fn clean_temp_files(skip_confirmation: bool) -> Result<u64> {
     for temp_path in temp_paths {
         let path = Path::new(temp_path);
         if path.exists() {
-            // Calculate size of files we can safely remove (not currently in use)
+            // Calculate size of old files we can safely remove (older than 7 days)
             let output = Command::new("find")
                 .args([
                     temp_path, "-type", "f", "-atime",
@@ -370,16 +373,17 @@ fn clean_temp_files(skip_confirmation: bool) -> Result<u64> {
                         true,
                     )?
                 {
-                    // Use find to delete old temporary files
-                    let status = Command::new("find")
-                        .args([
+                    // Use find to delete old temporary files with sudo
+                    let output = execute_with_sudo(
+                        "find",
+                        &[
                             temp_path, "-type", "f", "-atime",
                             "+1", // Files not accessed in the last day
                             "-delete",
-                        ])
-                        .status()?;
+                        ],
+                    )?;
 
-                    if status.success() {
+                    if output.status.success() {
                         print_success(&format!("Cleaned old temporary files in {}", temp_path));
                         bytes_saved += size_to_clean;
                     } else {
@@ -443,11 +447,9 @@ fn clean_old_kernels(skip_confirmation: bool) -> Result<u64> {
                     .status
                     .success()
                 {
-                    let status = Command::new("purge-old-kernels")
-                        .args(["--keep", "1"])
-                        .status()?;
+                    let output = execute_with_sudo("purge-old-kernels", &["--keep", "1"])?;
 
-                    if status.success() {
+                    if output.status.success() {
                         print_success("Removed old kernels");
                         bytes_saved += estimated_size;
                     } else {
@@ -487,40 +489,41 @@ fn clean_crash_reports(skip_confirmation: bool) -> Result<u64> {
                         true,
                     )?)
             {
-                if path.is_dir() {
-                    // Remove content but keep the directory
-                    if let Ok(entries) = read_dir(path) {
-                        for entry in entries.flatten() {
-                            let file_path = entry.path();
+                // Use rm with sudo to remove crash reports
+                let output = if path.is_dir() {
+                    // Remove contents but keep the directory
+                    execute_with_sudo("sh", &["-c", &format!("rm -rf {}/*", crash_path)])
+                } else {
+                    // Remove the file
+                    execute_with_sudo("rm", &["-f", crash_path])
+                };
 
-                            if file_path.is_file() {
-                                if let Err(e) = remove_file(&file_path) {
-                                    warn!("Failed to remove file {:?}: {}", file_path, e);
-                                }
-                            } else if file_path.is_dir() {
-                                if let Err(e) = remove_dir_all(&file_path) {
-                                    warn!("Failed to remove directory {:?}: {}", file_path, e);
-                                }
-                            }
-                        }
+                match output {
+                    Ok(out) if out.status.success() => {
+                        print_success(&format!("Cleaned crash reports in {}", crash_path));
+                        bytes_saved += size;
+                    }
+                    Ok(_) => {
+                        warn!("Failed to clean crash reports in {}", crash_path);
+                    }
+                    Err(e) => {
+                        warn!("Failed to execute rm for {}: {}", crash_path, e);
                     }
                 }
-
-                print_success(&format!("Cleaned crash reports in {}", crash_path));
-                bytes_saved += size;
             }
         }
     }
 
     // Clean core dumps if we can find any
     if Command::new("which").arg("find").output()?.status.success() {
-        let output = Command::new("find")
-            .args([
+        let output = execute_with_sudo(
+            "find",
+            &[
                 "/", "-name", "core", "-o", "-name", "core.*", "-type", "f", "-size",
                 "+10k", // Only files larger than 10KB
                 "-exec", "du", "-sc", "{}", ";",
-            ])
-            .output()?;
+            ],
+        )?;
 
         let stdout = String::from_utf8_lossy(&output.stdout);
         let mut size_to_clean: u64 = 0;
@@ -542,15 +545,16 @@ fn clean_crash_reports(skip_confirmation: bool) -> Result<u64> {
                     true,
                 )?)
         {
-            let status = Command::new("find")
-                .args([
+            let output = execute_with_sudo(
+                "find",
+                &[
                     "/", "-name", "core", "-o", "-name", "core.*", "-type", "f", "-size",
                     "+10k", // Only files larger than 10KB
                     "-delete",
-                ])
-                .status()?;
+                ],
+            )?;
 
-            if status.success() {
+            if output.status.success() {
                 print_success("Cleaned core dumps");
                 bytes_saved += size_to_clean;
             } else {

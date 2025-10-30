@@ -134,6 +134,12 @@ pub struct App {
     pub show_progress_screen: bool,
 }
 
+impl Default for App {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl App {
     pub fn new() -> Self {
         // Get initial terminal size
@@ -315,15 +321,12 @@ impl App {
 
         // Count selected items
         let mut has_selected = false;
-        let mut has_root_cleaners = false;
 
         for category in &self.categories {
             for item in &category.items {
                 if item.selected {
                     has_selected = true;
-                    if item.requires_root {
-                        has_root_cleaners = true;
-                    }
+                    break;
                 }
             }
             if has_selected {
@@ -337,71 +340,13 @@ impl App {
             return Ok(());
         }
 
-        // If we need root and don't have it, prompt for sudo password
-        if has_root_cleaners && !self.is_root {
-            // Check if we can use sudo
-            let sudo_test = std::process::Command::new("sudo")
-                .args(["-n", "true"])
-                .output();
-
-            let needs_password = match sudo_test {
-                Ok(output) => !output.status.success(),
-                Err(_) => true,
-            };
-
-            if needs_password {
-                // Display a message in the UI that we're waiting for sudo password
-                self.result_messages.push("Root permissions needed. Please enter your sudo password in the terminal or press Ctrl+C to cancel.".to_string());
-
-                // Temporarily disable raw mode to allow password entry
-                crossterm::terminal::disable_raw_mode()?;
-
-                // Print a message about how to cancel
-                println!("\n\x1b[33m[CleanSys]\x1b[0m Press \x1b[1mCtrl+C\x1b[0m to cancel and return to the menu if you changed your mind.");
-                println!(
-                    "\x1b[33m[CleanSys]\x1b[0m Otherwise, enter your sudo password when prompted:"
-                );
-
-                // Ask for sudo password using a separate process
-                let password_process = std::process::Command::new("sudo").args(["-v"]).status()?;
-
-                // Re-enable raw mode
-                crossterm::terminal::enable_raw_mode()?;
-
-                if !password_process.success() {
-                    self.result_messages.push("Failed to obtain root permissions or operation was cancelled. System cleaners will be skipped.".to_string());
-                    // We'll continue but mark system cleaners as errored
-                } else {
-                    // We've gotten sudo permissions
-                    self.result_messages.push(
-                        "Root permissions obtained. Proceeding with all cleaners.".to_string(),
-                    );
-                }
-            }
-        }
-
-        // Collect items that need root and mark them with error status
-        let mut root_items = Vec::new();
-        if !self.is_root {
-            for (cat_idx, category) in self.categories.iter().enumerate() {
-                for (item_idx, item) in category.items.iter().enumerate() {
-                    if item.selected && item.requires_root {
-                        root_items.push((cat_idx, item_idx));
-                    }
-                }
-            }
-        }
-
-        // Don't mark root items as errors immediately - let them try to run
-        // The sudo validation above should have handled authentication
-
         // Prepare the selected cleaners
         let mut selected_cleaners = Vec::new();
 
         for (cat_idx, category) in self.categories.iter().enumerate() {
             for (item_idx, item) in category.items.iter().enumerate() {
                 if item.selected {
-                    // Include all selected cleaners - sudo authentication was handled above
+                    // Include all selected cleaners - sudo will be prompted by execute_with_sudo when needed
                     let name = item.name.clone();
                     let function = item.function;
                     selected_cleaners.push((cat_idx, item_idx, name, function, item.requires_root));

@@ -1,6 +1,7 @@
-use anyhow::Result;
+use anyhow::{Context, Result};
 use colored::*;
 use std::io::{self, Write};
+use std::process::Command;
 #[cfg(unix)]
 use users::get_effective_uid;
 
@@ -13,6 +14,109 @@ pub fn check_root() -> bool {
 #[cfg(not(unix))]
 pub fn check_root() -> bool {
     false
+}
+
+/// Prompt for sudo elevation if not already root
+/// Returns true if elevation succeeded or already root, false otherwise
+#[cfg(unix)]
+pub fn elevate_if_needed() -> Result<bool> {
+    if check_root() {
+        return Ok(true);
+    }
+
+    print_warning("System cleaners require root privileges.");
+    println!("You can either:");
+    println!("  1. Run this command again with sudo");
+    println!("  2. Enter your password to elevate now");
+    print!("\nWould you like to elevate now? [Y/n]: ");
+    io::stdout().flush()?;
+
+    let mut response = String::new();
+    io::stdin().read_line(&mut response)?;
+
+    match response.trim().to_lowercase().as_str() {
+        "n" | "no" => {
+            print_warning("Skipping system cleaners. Only user cleaners will run.");
+            Ok(false)
+        }
+        _ => {
+            // Try to validate sudo access by running a simple command
+            print!("Authenticating... ");
+            io::stdout().flush()?;
+
+            let status = Command::new("sudo")
+                .args(["-v"])
+                .status()
+                .context("Failed to execute sudo")?;
+
+            if status.success() {
+                println!("{}", "✓ Authentication successful".green());
+                Ok(true)
+            } else {
+                print_error("Authentication failed. Skipping system cleaners.");
+                Ok(false)
+            }
+        }
+    }
+}
+
+#[cfg(not(unix))]
+pub fn elevate_if_needed() -> Result<bool> {
+    print_warning("System cleaners are only available on Unix-like systems.");
+    Ok(false)
+}
+
+/// Execute a command with sudo if not already root
+/// This function handles terminal raw mode properly for TUI applications
+#[cfg(unix)]
+pub fn execute_with_sudo(command: &str, args: &[&str]) -> Result<std::process::Output> {
+    use crossterm::terminal::{disable_raw_mode, enable_raw_mode, is_raw_mode_enabled};
+
+    if check_root() {
+        // Already root, execute directly
+        Command::new(command)
+            .args(args)
+            .output()
+            .context(format!("Failed to execute command: {}", command))
+    } else {
+        // Check if we're in raw mode (TUI is active)
+        let was_raw_mode = is_raw_mode_enabled().unwrap_or(false);
+
+        // If in raw mode, temporarily disable it for sudo password prompt
+        if was_raw_mode {
+            disable_raw_mode().ok();
+            println!(
+                "\n\x1b[33m[CleanSys]\x1b[0m Executing system operation: {} {}",
+                command,
+                args.join(" ")
+            );
+            println!("\x1b[33m[CleanSys]\x1b[0m Please enter your sudo password if prompted:");
+        }
+
+        // Use sudo
+        let mut sudo_args = vec![command];
+        sudo_args.extend_from_slice(args);
+
+        let result = Command::new("sudo")
+            .args(sudo_args)
+            .output()
+            .context(format!("Failed to execute command with sudo: {}", command));
+
+        // Re-enable raw mode if it was enabled before
+        if was_raw_mode {
+            enable_raw_mode().ok();
+        }
+
+        result
+    }
+}
+
+#[cfg(not(unix))]
+pub fn execute_with_sudo(command: &str, args: &[&str]) -> Result<std::process::Output> {
+    Command::new(command)
+        .args(args)
+        .output()
+        .context(format!("Failed to execute command: {}", command))
 }
 
 /// Print a header with a colorful banner
@@ -104,3 +208,6 @@ pub fn get_size(path: &str) -> Result<u64> {
         Err(_) => Ok(0),
     }
 }
+
+#[cfg(test)]
+mod tests;
