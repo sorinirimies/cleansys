@@ -10,8 +10,8 @@ use ratatui::{
 // Using tui-checkbox library for consistent checkbox symbols across the application
 use tui_checkbox::{symbols as checkbox_symbols, Checkbox};
 
-use crate::ui::app::{App, ChartType, CleanedItemType, Status};
-use crate::ui::tui::components::create_pie_chart_from_distribution;
+use crate::app::{App, ChartType, CleanedItemType, Status};
+use crate::pie_chart::create_pie_chart_from_distribution;
 use crate::utils::format_size;
 
 pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {

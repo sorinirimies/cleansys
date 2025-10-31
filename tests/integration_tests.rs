@@ -75,20 +75,6 @@ fn test_invalid_command() {
 }
 
 #[test]
-fn test_user_command_with_yes_flag() {
-    let mut cmd = Command::cargo_bin("cleansys").unwrap();
-    cmd.arg("user").arg("--yes");
-
-    // Should run without prompting
-    // We can't easily test the actual cleaning, but we can verify it doesn't fail
-    let output = cmd.output().unwrap();
-
-    // Command should complete (success or expected failure is ok)
-    // Just checking it doesn't crash
-    assert!(output.status.code().is_some());
-}
-
-#[test]
 fn test_cargo_metadata() {
     // Verify package metadata is correct
     let mut cmd = Command::cargo_bin("cleansys").unwrap();
@@ -204,18 +190,6 @@ mod format_tests {
 }
 
 #[test]
-fn test_no_args_shows_tui_or_help() {
-    let mut cmd = Command::cargo_bin("cleansys").unwrap();
-
-    // Running with no args should either show TUI (which we can't test in CI)
-    // or show some output
-    let output = cmd.output();
-
-    // Just verify it doesn't panic
-    assert!(output.is_ok());
-}
-
-#[test]
 fn test_menu_command_exists() {
     let mut cmd = Command::cargo_bin("cleansys").unwrap();
     cmd.arg("--help");
@@ -266,7 +240,9 @@ mod comprehensive_tests {
         let stdout = String::from_utf8_lossy(&output.stdout);
 
         // Key flags should be documented
-        assert!(stdout.contains("--yes") || stdout.contains("-y"));
         assert!(stdout.contains("--verbose") || stdout.contains("-v"));
+
+        // Subcommands should have their own flags documented
+        assert!(stdout.contains("user") && stdout.contains("system"));
     }
 }

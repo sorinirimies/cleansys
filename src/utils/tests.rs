@@ -119,46 +119,6 @@ mod tests {
         assert_eq!(format_size(1030), "1.01 KB"); // Should show 1.01 KB
     }
 
-    mod elevation_tests {
-        use crate::utils::*;
-
-        #[cfg(unix)]
-        #[test]
-        fn test_elevate_if_needed_when_root() {
-            // This test only makes sense if we're already root
-            if check_root() {
-                let result = elevate_if_needed();
-                assert!(result.is_ok());
-                assert_eq!(result.unwrap(), true);
-            }
-        }
-
-        #[cfg(not(unix))]
-        #[test]
-        fn test_elevate_if_needed_non_unix() {
-            let result = elevate_if_needed();
-            assert!(result.is_ok());
-            assert_eq!(result.unwrap(), false);
-        }
-
-        #[cfg(unix)]
-        #[test]
-        fn test_execute_with_sudo_echo() {
-            // Test a simple command that doesn't actually need sudo
-            let result = execute_with_sudo("echo", &["test"]);
-
-            // If we're not root, this will try to use sudo
-            // If we're root, it will execute directly
-            // Either way, if sudo is available, it should work
-            if check_root() {
-                assert!(result.is_ok());
-                let output = result.unwrap();
-                assert_eq!(String::from_utf8_lossy(&output.stdout).trim(), "test");
-            }
-            // If not root and no sudo available, it may fail - that's okay for this test
-        }
-    }
-
     mod print_functions_tests {
         use crate::utils::*;
 

@@ -1,108 +1,45 @@
-# Cleansys - Modern Animated System Cleaner for Linux with TUI
+# CleanSys - Modern Terminal-Based System Cleaner for Linux
 
 [![Crates.io](https://img.shields.io/crates/v/cleansys.svg)](https://crates.io/crates/cleansys)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
-**Cleansys** is a terminal-based utility for Linux that helps you safely clean your system. It provides a modern interface to remove unnecessary files, clean caches, and free up disk space.
+**CleanSys** is a modern, terminal-based utility for Linux that helps you safely clean your system. It provides a beautiful interactive TUI to remove unnecessary files, clean caches, and free up disk space with real-time animations and detailed progress tracking.
 
-## Features
+## ✨ Features
 
-- **Modern Terminal UI**: Beautiful interactive interface with [Ratatui](https://github.com/ratatui-org/ratatui)
-- **Interactive Selection**: Easy to use checkbox-based selection interface using [tui-checkbox](https://crates.io/crates/tui-checkbox)
-- **Progress Tracking**: Split-view progress screen with detailed status information
-- **Animated Loading**: Real-time loading spinners and progress indicators
-- **Detailed Status Icons**: Visual indicators showing operation status (running, success, error)
-- **User Land Cleaning**:
-  - Browser caches (Firefox, Chrome/Chromium)
-  - Application caches
-  - Thumbnail caches
-  - Temporary files owned by the user
-  - Package manager caches (pip, npm, cargo)
-  - User trash
+### 🎨 Modern Terminal UI
+- **Beautiful Interface**: Built with [Ratatui](https://github.com/ratatui-org/ratatui) for a smooth, modern experience
+- **Interactive Checkboxes**: Easy selection using [tui-checkbox](https://crates.io/crates/tui-checkbox) library
+- **Multiple Chart Types**: Toggle between Bar Chart, Pie Chart (by count), and Pie Chart (by size)
+- **Split-View Progress**: Detailed status information with real-time updates
+- **Animated Indicators**: Loading spinners, progress bars, and status icons
+- **Responsive Design**: Automatically adapts to any terminal size
+- **Real-time Resize**: Handles terminal resizing without losing state
 
-- **System-Level Cleaning** (requires root):
-  - Package manager caches (apt, pacman, dnf, etc.)
-  - System logs
-  - System caches
-  - Temporary files
-  - Old kernels (on supported systems)
-  - Crash reports and core dumps
+### 🧹 User-Level Cleaning
+- Browser caches (Firefox, Chrome/Chromium)
+- Application caches
+- Thumbnail caches
+- Temporary files
+- Package manager caches (pip, npm, cargo)
+- User trash
 
-- **Safe by Default**: Never removes files that would break your system
-- **Interactive**: Confirms before running each cleaner
-- **Verbose**: Shows detailed information about space freed
+### 🔧 System-Level Cleaning (requires root)
+- Package manager caches (apt, pacman, dnf, etc.)
+- System logs
+- System caches
+- Temporary files
+- Old kernels (on supported systems)
+- Crash reports and core dumps
 
-## Responsive Design
+### 🛡️ Safe by Default
+- Never removes system-critical files
+- Confirms before running operations
+- Detailed logs of all actions
+- Shows exactly what will be cleaned
+- Individual cleaner selection
 
-Cleansys features a fully responsive terminal user interface that automatically adapts to different terminal sizes:
-
-- **Dynamic Layout**: Automatically adjusts layout proportions based on terminal width and height
-- **Responsive Chart**: Cleanup distribution chart scales, simplifies, or hides based on available space
-- **Adaptive Content**: Text and controls adjust for optimal display on narrow or small terminals
-- **Real-time Resize**: Handles terminal resize events instantly without losing state
-- **Size Indicators**: Shows terminal dimensions on very small screens for debugging
-- **Manual Controls**: Press `c` to manually toggle chart visibility
-
-### Responsive Breakpoints
-
-- **Very narrow** (< 60 columns): Chart hidden, minimal UI, essential information only
-- **Narrow** (60-79 columns): Compact layout with reduced chart
-- **Medium** (80-119 columns): Balanced layout with full chart
-- **Wide** (120+ columns): Spacious layout with maximum information density
-
-## Enhanced Features & Layout Improvements
-
-Cleansys now includes significant layout improvements and new features for a professional terminal experience:
-
-### 🎨 Multiple View Modes
-- **Standard Mode**: Balanced layout with full feature visibility (default)
-- **Compact Mode**: Condensed layout for smaller terminals (<25 rows)
-- **Detailed Mode**: Maximum information density with extended statistics
-- **Performance Mode**: Focus on operation metrics and real-time monitoring
-
-### 🔧 Layout Fixes
-- **Resolved Overlapping Text**: Complete elimination of text overlap issues
-- **Smart Spacing**: Proper margins and content separation
-- **Dynamic Constraints**: Layout adapts perfectly to any terminal size
-- **Content Prioritization**: Essential information always visible
-
-### 📊 Enhanced Progress Display & Pie Chart Canvas
-- **Real-time Statistics**: Live operation counters and progress tracking
-- **Interactive Pie Charts**: ASCII art pie charts showing item distribution by count or size
-- **Chart Type Cycling**: Press 'c' to cycle between Bar Chart, Pie Count, and Pie Size views
-- **Responsive Visualization**: Charts adapt automatically to terminal size with side-by-side or stacked layouts
-- **Professional Log**: Scrollable operation history with timestamps
-- **Detailed Cleaned Items View**: Complete list of every file/directory cleaned with paths, sizes, and timestamps
-- **Status Indicators**: Visual icons for different operation states
-- **Performance Metrics**: Optional detailed statistics and timing
-
-> **Note**: This application includes extensive keyboard controls and advanced features. Some features mentioned in documentation may represent planned functionality or demo capabilities. The core cleaning operations and terminal UI are fully functional.
-
-### ⌨️ Advanced Keyboard Controls
-- `c`: Cycle chart types (Bar Chart → Count Pie → Size Pie → Bar Chart)
-- `m`: Toggle compact mode
-- `v`: Cycle view modes (Standard/Compact/Detailed/Performance)
-- `p`: Toggle performance statistics
-- `s`: Toggle auto-scroll log (during operations only)
-- `o`: Cycle sort modes
-- `f`: Cycle filter modes
-- `y`: Toggle confirmation prompts
-- `x`: Clear all errors
-- `j/k`: Scroll detailed items list (vi-style navigation)
-- `/`: Toggle search in detailed view
-- `Ctrl+Space`: Pause/Resume operations (during operations only)
-- `PgUp/PgDn`: Scroll operation log and detailed items
-- `Home/End`: Jump to first/last item
-- `Backspace`: Remove search character (when searching)
-
-### 🚀 Robustness Features
-- **Error Recovery**: Comprehensive error tracking and clearing
-- **Detailed Audit Trail**: Complete record of all cleaned files with paths, sizes, and timestamps
-- **State Management**: Persistent settings across operations
-- **Memory Optimization**: Efficient rendering and bounded log buffers
-- **Pause/Resume**: Control over long-running operations
-
-## Installation
+## 📦 Installation
 
 ### From crates.io
 
@@ -118,97 +55,205 @@ cd cleansys
 cargo install --path .
 ```
 
-## Usage
+## 🚀 Usage
 
-```
-# Run terminal UI (default)
+### Interactive TUI (Default)
+
+Simply run CleanSys to launch the interactive terminal interface:
+
+```bash
+# User-level cleaning
 cleansys
 
-# Run terminal UI with root privileges
+# System-level cleaning (requires root)
 sudo cleansys
+```
 
+### Command-Line Interface
+
+```bash
 # Run terminal UI explicitly
 cleansys tui
 
 # Run text-based interactive menu
 cleansys menu
-cleansys --interactive
 
-# Run specific cleaners
-cleansys user  # Run all user-level cleaners
-sudo cleansys system  # Run all system-level cleaners
+# Run user-level cleaners with confirmation
+cleansys user
+
+# Run user-level cleaners without prompts
+cleansys user --yes
+
+# Run system-level cleaners (requires root)
+sudo cleansys system
+
+# Run system cleaners without prompts
+sudo cleansys system --yes
 
 # List all available cleaners
 cleansys list
-
-# Run without confirmation prompts
-cleansys --yes
-sudo cleansys --yes
-
-# Run all cleaners (both user and system, requires root)
-sudo cleansys --all
 
 # Show verbose output
 cleansys --verbose
 ```
 
-## Examples
+## ⌨️ Terminal UI Controls
 
-Using the Terminal UI:
+### Navigation
+- `↑/↓` or `j/k`: Navigate items
+- `Tab/Shift+Tab`: Switch between categories
+- `j/k`: Scroll detailed items list (vi-style)
+- `PgUp/PgDn`: Scroll operation log
+- `Home/End`: Jump to first/last item
+
+### Actions
+- `Space`: Toggle selection
+- `Enter`: Run selected cleaners
+- `a`: Select all in current category
+- `n`: Deselect all in current category
+- `ESC`: Cancel operation or return to menu
+- `q`: Exit application
+
+### View Controls
+- `c`: Cycle chart types (Bar → Pie Count → Pie Size)
+- `m`: Toggle compact mode
+- `v`: Cycle view modes (Standard/Compact/Detailed/Performance)
+- `p`: Toggle performance statistics
+- `s`: Toggle auto-scroll log
+- `/`: Toggle search in detailed view
+- `?`: Show/hide help
+
+## 📱 Responsive Design
+
+CleanSys features a fully responsive terminal interface with multiple breakpoints:
+
+| Terminal Width | Layout Features |
+|---------------|----------------|
+| < 60 columns | Minimal UI, chart hidden, essential information only |
+| 60-79 columns | Compact layout with reduced chart |
+| 80-119 columns | Balanced layout with full chart |
+| 120+ columns | Spacious layout with maximum information density |
+
+## 🎯 View Modes
+
+- **Standard Mode**: Balanced layout with full feature visibility (default)
+- **Compact Mode**: Condensed layout for smaller terminals (<25 rows)
+- **Detailed Mode**: Maximum information density with extended statistics
+- **Performance Mode**: Focus on operation metrics and real-time monitoring
+
+## 📊 Chart Visualization
+
+Press `c` to cycle through different chart types:
+
+1. **Bar Chart**: Traditional vertical bar chart showing cleaned items
+2. **Pie Chart (Count)**: Distribution by number of items cleaned
+3. **Pie Chart (Size)**: Distribution by bytes cleaned
+
+All charts automatically adapt to terminal size and include:
+- Percentages
+- Legends
+- Color coding
+- Smart label positioning
+
+## 🔍 Detailed View
+
+After cleaning operations, view comprehensive details:
+- Complete list of cleaned files and directories
+- Full file paths
+- Individual file sizes
+- Timestamps
+- Scrollable with `j/k` or `PgUp/PgDn`
+- Search functionality with `/`
+
+## 📝 Examples
+
+### Interactive TUI
 
 ```bash
+# Launch TUI (default behavior)
 cleansys
-# Navigate with arrow keys, select with Space, run with Enter
+
+# Navigate with arrow keys
+# Select cleaners with Space
+# Press Enter to run
 ```
 
-Using the text-based interactive menu:
+### Quick Clean
 
 ```bash
-cleansys menu
-# Then select options by entering numbers (e.g., 1,3,5)
-```
-
-Clean user caches without prompts:
-
-```bash
+# Clean user caches without prompts
 cleansys user --yes
+
+# Clean system caches with verbose output
+sudo cleansys system --verbose --yes
 ```
 
-Clean system caches with verbose output:
+### List Available Cleaners
 
 ```bash
-sudo cleansys system --verbose
+cleansys list
 ```
 
-## Terminal UI Controls
+Output:
+```
+AVAILABLE CLEANERS
 
-The Terminal UI provides an intuitive interface with dynamic animations and the following controls:
+User cleaners (no root required):
+  • Browser Caches
+  • Application Caches
+  • Thumbnail Caches
+  ...
 
-- **Navigation**
-  - ↑/↓: Navigate items
-  - Tab/Shift+Tab: Switch categories
-  - q: Exit application from main menu
+System cleaners (root required):
+  • Package Manager Caches
+  • System Logs
+  • System Caches
+  ...
+```
 
-- **Actions**
-  - Space: Toggle selection
-  - Enter: Run selected cleaners
-  - a: Select all in current category
-  - n: Deselect all in current category
-  - c: Cycle chart types
-  - /: Toggle search in detailed view
+## 🏗️ Architecture
 
-- **Progress Screen**
-  - ESC: Cancel operation (while running) or Return to main menu (when completed)
-  - q: Cancel current operation or quit application
-  - Features animated spinners, progress bar, and elapsed time tracking
-  - Visual indicators for success (✓), errors (✗), and running operations (animated spinner)
-  - Remains visible after operations complete for review - press ESC to return to menu
+CleanSys is organized into clean, modular components:
 
-- **Other**
-  - ?: Show/hide help
-  - q: Exit application
+```
+src/
+├── cleaners/          # Individual cleaner implementations
+│   ├── user_cleaners.rs
+│   └── system_cleaners.rs
+├── utils/             # Utility functions (permissions, formatting)
+├── app.rs             # Application state and logic
+├── events.rs          # Event handling (keyboard, resize)
+├── render.rs          # UI rendering logic
+├── pie_chart.rs       # Chart visualization component
+├── menu.rs            # Text-based interactive menu
+├── main.rs            # Entry point and TUI setup
+└── lib.rs             # Public API and documentation
+```
 
-## Contributing
+## 🖥️ Platform Support
+
+CleanSys supports Linux-based operating systems including:
+- Ubuntu/Debian (apt-based)
+- Arch Linux (pacman-based)
+- Fedora/RHEL (dnf/yum-based)
+- Other Linux distributions
+
+## 🧪 Testing
+
+Run the test suite:
+
+```bash
+# Run all tests
+cargo test
+
+# Run with output
+cargo test -- --nocapture
+
+# Run specific test module
+cargo test --test integration_tests
+```
+
+## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
@@ -218,6 +263,22 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 4. Push to the branch (`git push origin feature/amazing-feature`)
 5. Open a Pull Request
 
-## License
+## 📄 License
 
 This project is licensed under the MIT License - see the LICENSE file for details.
+
+## 🔗 Links
+
+- [Repository](https://github.com/sorinirimies/cleansys)
+- [Crates.io](https://crates.io/crates/cleansys)
+- [Documentation](https://docs.rs/cleansys)
+
+## 🙏 Acknowledgments
+
+- [Ratatui](https://github.com/ratatui-org/ratatui) - Terminal UI framework
+- [tui-checkbox](https://crates.io/crates/tui-checkbox) - Checkbox widget library
+- [Crossterm](https://github.com/crossterm-rs/crossterm) - Cross-platform terminal manipulation
+
+---
+
+**Note**: Always review what will be cleaned before running system-level operations. While CleanSys is designed to be safe, it's good practice to understand what's being removed from your system.

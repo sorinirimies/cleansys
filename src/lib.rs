@@ -196,14 +196,23 @@
 #![allow(missing_docs)]
 #![doc(html_root_url = "https://docs.rs/cleansys/0.2.1")]
 
+/// Application state and logic for the TUI
+pub mod app;
+
 /// Cleaner implementations for system and user-level cleanup operations
 pub mod cleaners;
+
+/// Event handling for terminal input and resize events
+pub mod events;
 
 /// Menu system for text-based interactive interface
 pub mod menu;
 
-/// Terminal user interface components
-pub mod ui;
+/// Pie chart component for data visualization
+pub mod pie_chart;
+
+/// Rendering logic for the terminal UI
+pub mod render;
 
 /// Utility functions for permissions, formatting, and error handling
 pub mod utils;
