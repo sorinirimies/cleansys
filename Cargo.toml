@@ -8,7 +8,7 @@ readme = "README.md"
 repository = "https://github.com/sorinirimies/cleansys"
 license = "MIT"
 keywords = ["clean", "system", "linux", "cleanup", "cache"]
-categories = ["command-line-utilities", "os", "filesystem", "development-tools", "system cleaning", "OS maintenance"]
+categories = ["command-line-utilities", "filesystem", "development-tools", "system cleaning", "OS maintenance"]
 
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
