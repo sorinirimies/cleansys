@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.6 - 2025-11-02
+### ✨ Features
+- feat: add password prompt, fix legend distribution, update categories
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.5...v0.2.6
+## 0.2.5 - 2025-11-02
+### 🔧 Chores
+- chore: bump version to 0.2.5
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.4...v0.2.5
 ## 0.2.4 - 2025-11-02
 ### ➕ Added
 - Add password prompt component and TUI sudo authentication
