@@ -202,6 +202,9 @@ pub mod app;
 /// Cleaner implementations for system and user-level cleanup operations
 pub mod cleaners;
 
+/// Reusable UI components
+pub mod components;
+
 /// Event handling for terminal input and resize events
 pub mod events;
 
@@ -219,5 +222,6 @@ pub mod utils;
 
 /// Re-export commonly used types for convenience
 pub use cleaners::{system_cleaners, user_cleaners};
+pub use components::password_prompt::PasswordPrompt;
 pub use menu::Menu;
 pub use utils::{check_root, print_error, print_header};

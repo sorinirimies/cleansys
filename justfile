@@ -1,10 +1,20 @@
-# CleanSys Development Tasks
+# CleanSys - Modern Terminal-Based System Cleaner for Linux
 # Install just: cargo install just
+# Install git-cliff: cargo install git-cliff
+# Install vhs: https://github.com/charmbracelet/vhs
 # Usage: just <task>
 
 # Default task - show available commands
 default:
     @just --list
+
+# Install required tools (just, git-cliff)
+install-tools:
+    @echo "Installing required tools..."
+    @command -v just >/dev/null 2>&1 || cargo install just
+    @command -v git-cliff >/dev/null 2>&1 || cargo install git-cliff
+    @echo "Note: VHS must be installed separately: https://github.com/charmbracelet/vhs"
+    @echo "✅ All tools installed!"
 
 # Build the project
 build:
@@ -50,23 +60,50 @@ clean:
 install:
     cargo install --path .
 
-# Generate changelog
-changelog:
+# Check if git-cliff is installed
+check-git-cliff:
+    @command -v git-cliff >/dev/null 2>&1 || { echo "❌ git-cliff not found. Install with: cargo install git-cliff"; exit 1; }
+
+# Generate full changelog from all tags
+changelog: check-git-cliff
+    @echo "Generating full changelog..."
     git-cliff -o CHANGELOG.md
     @echo "✅ Changelog generated!"
 
-# Generate changelog for unreleased commits
-changelog-unreleased:
-    git-cliff --unreleased -o CHANGELOG.md
+# Generate changelog for unreleased commits only
+changelog-unreleased: check-git-cliff
+    @echo "Generating unreleased changelog..."
+    git-cliff --unreleased --prepend CHANGELOG.md
     @echo "✅ Unreleased changelog generated!"
 
-# Generate changelog for specific version
-changelog-version version:
+# Generate changelog for specific version tag
+changelog-version version: check-git-cliff
+    @echo "Generating changelog for version {{version}}..."
     git-cliff --tag v{{version}} -o CHANGELOG.md
     @echo "✅ Changelog generated for version {{version}}!"
 
+# Preview changelog without writing to file
+changelog-preview: check-git-cliff
+    @git-cliff
+
+# Preview unreleased changes
+changelog-preview-unreleased: check-git-cliff
+    @git-cliff --unreleased
+
+# Generate changelog for latest tag only
+changelog-latest: check-git-cliff
+    @echo "Generating changelog for latest tag..."
+    git-cliff --latest -o CHANGELOG.md
+    @echo "✅ Latest changelog generated!"
+
+# Update changelog with all commits (force regenerate)
+changelog-update: check-git-cliff
+    @echo "Regenerating complete changelog from all tags..."
+    git-cliff --output CHANGELOG.md
+    @echo "✅ Changelog updated from all git history!"
+
 # Bump version (usage: just bump 0.2.5)
-bump version:
+bump version: check-git-cliff
     @echo "Bumping version to {{version}}..."
     @./scripts/bump_version.sh {{version}}
 
@@ -136,6 +173,45 @@ info:
     @echo "Author: Sorin Albu-Irimies"
     @echo "License: MIT"
 
+# Show git-cliff info
+cliff-info:
+    @echo "Git-cliff configuration:"
+    @echo "  Config file: cliff.toml"
+    @echo "  Installed: $(command -v git-cliff >/dev/null 2>&1 && echo '✅ Yes' || echo '❌ No (run: just install-tools)')"
+    @command -v git-cliff >/dev/null 2>&1 && git-cliff --version || true
+
 # View changelog
 view-changelog:
     @cat CHANGELOG.md
+
+# Check if VHS is installed
+check-vhs:
+    @command -v vhs >/dev/null 2>&1 || { echo "❌ VHS not found. Install from: https://github.com/charmbracelet/vhs"; exit 1; }
+
+# Run VHS to generate demo GIF
+vhs: check-vhs
+    @echo "Running VHS tape to generate demo..."
+    vhs demo/demo.tape
+    @echo "✅ Demo generated at demo/demo.gif"
+
+# Run VHS quick demo
+vhs-quick: check-vhs
+    @echo "Running VHS quick demo tape..."
+    vhs demo/demo-quick.tape
+    @echo "✅ Quick demo generated at demo/demo-quick.gif"
+
+# Run VHS showcase demo
+vhs-showcase: check-vhs
+    @echo "Running VHS showcase tape..."
+    vhs demo/demo-showcase.tape
+    @echo "✅ Showcase demo generated"
+
+# Generate all VHS demos
+vhs-all: vhs vhs-quick vhs-showcase
+    @echo "✅ All demos generated!"
+
+# Clean VHS outputs
+vhs-clean:
+    @echo "Cleaning VHS output files..."
+    @rm -f demo/*.gif
+    @echo "✅ VHS outputs cleaned!"

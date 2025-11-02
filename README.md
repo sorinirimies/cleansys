@@ -1,7 +1,10 @@
 # CleanSys - Modern Terminal-Based System Cleaner for Linux
 
-[![Crates.io](https://img.shields.io/crates/v/cleansys.svg)](https://crates.io/crates/cleansys)
+[![Crates.io](https://img.shields.io/crates/v/cleansys)](https://crates.io/crates/cleansys)
+[![Documentation](https://docs.rs/cleansys/badge.svg)](https://docs.rs/cleansys)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![Release](https://github.com/sorinirimies/cleansys/actions/workflows/release.yml/badge.svg)](https://github.com/sorinirimies/cleansys/actions/workflows/release.yml)
+[![CI](https://github.com/sorinirimies/cleansys/actions/workflows/ci.yml/badge.svg)](https://github.com/sorinirimies/cleansys/actions/workflows/ci.yml)
 
 **CleanSys** is a modern, terminal-based utility for Linux that helps you safely clean your system. It provides a beautiful interactive TUI to remove unnecessary files, clean caches, and free up disk space with real-time animations and detailed progress tracking.
 

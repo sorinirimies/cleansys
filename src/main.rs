@@ -5,6 +5,7 @@ use std::io;
 
 mod app;
 mod cleaners;
+mod components;
 mod events;
 mod menu;
 mod pie_chart;

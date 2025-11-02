@@ -2,8 +2,8 @@
 name = "cleansys"
 version = "0.2.3"
 edition = "2021"
-authors = ["Sorin <sorin@example.com>"]
-description = "A modern terminal-based utility for Linux system cleanup with interactive TUI"
+authors = ["Sorin Albu-Irimies <sorinirimies@gmail.com>"]
+description = "A modern terminal user interface for Linux system cleanup similar to BleachBit only faster, written in Rust and memory safe."
 readme = "README.md"
 repository = "https://github.com/sorinirimies/cleansys"
 license = "MIT"
@@ -25,6 +25,9 @@ crossterm = "0.26.1"
 unicode-width = "0.1.10"
 tui-textarea = "0.2.0"
 tui-checkbox = "0.3.3"
+regex = "1.10"
+libc = "0.2"
+once_cell = "1.19"
 
 [target.'cfg(unix)'.dependencies]
 users = "0.11"
@@ -33,3 +36,4 @@ users = "0.11"
 assert_cmd = "2.0"
 predicates = "3.0"
 tempfile = "3.8"
+once_cell = "1.19"

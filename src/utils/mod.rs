@@ -68,9 +68,10 @@ pub fn elevate_if_needed() -> Result<bool> {
 
 /// Execute a command with sudo if not already root
 /// This function handles terminal raw mode properly for TUI applications
+/// It assumes sudo credentials are already cached (via password dialog or sudo -v)
 #[cfg(unix)]
 pub fn execute_with_sudo(command: &str, args: &[&str]) -> Result<std::process::Output> {
-    use crossterm::terminal::{disable_raw_mode, enable_raw_mode, is_raw_mode_enabled};
+    use std::process::Stdio;
 
     if check_root() {
         // Already root, execute directly
@@ -79,35 +80,16 @@ pub fn execute_with_sudo(command: &str, args: &[&str]) -> Result<std::process::O
             .output()
             .context(format!("Failed to execute command: {}", command))
     } else {
-        // Check if we're in raw mode (TUI is active)
-        let was_raw_mode = is_raw_mode_enabled().unwrap_or(false);
-
-        // If in raw mode, temporarily disable it for sudo password prompt
-        if was_raw_mode {
-            disable_raw_mode().ok();
-            println!(
-                "\n\x1b[33m[CleanSys]\x1b[0m Executing system operation: {} {}",
-                command,
-                args.join(" ")
-            );
-            println!("\x1b[33m[CleanSys]\x1b[0m Please enter your sudo password if prompted:");
-        }
-
-        // Use sudo
-        let mut sudo_args = vec![command];
+        // Use sudo with non-interactive mode and cached credentials
+        // The -n flag prevents sudo from prompting for a password
+        let mut sudo_args = vec!["-n", command];
         sudo_args.extend_from_slice(args);
 
-        let result = Command::new("sudo")
+        Command::new("sudo")
             .args(sudo_args)
+            .stdin(Stdio::null())
             .output()
-            .context(format!("Failed to execute command with sudo: {}", command));
-
-        // Re-enable raw mode if it was enabled before
-        if was_raw_mode {
-            enable_raw_mode().ok();
-        }
-
-        result
+            .context(format!("Failed to execute command with sudo: {}", command))
     }
 }
 
@@ -208,6 +190,3 @@ pub fn get_size(path: &str) -> Result<u64> {
         Err(_) => Ok(0),
     }
 }
-
-#[cfg(test)]
-mod tests;

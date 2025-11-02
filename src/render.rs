@@ -53,6 +53,11 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     }
 
     render_footer(f, app, chunks[2]);
+
+    // Render password prompt as overlay if visible
+    if app.password_prompt.is_visible() {
+        app.password_prompt.render(f, f.size());
+    }
 }
 
 fn render_title<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
@@ -430,15 +435,8 @@ fn render_vertical_bar_chart<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect
     // Get real data from cleaned items
     let category_distribution = app.get_category_distribution();
 
-    // Create chart data from real cleaning results
-    let (chart_data, max_value, categories) = if category_distribution.is_empty() {
-        // Default data when no items have been cleaned yet
-        (
-            vec![(0.0, 0.0), (1.0, 0.0), (2.0, 0.0)],
-            1.0,
-            vec!["Trash", "Packages", "Caches"],
-        )
-    } else {
+    // Only show chart if we have real data
+    if !category_distribution.is_empty() {
         // Use real data, limit to top 6 categories to fit in chart
         let limited_data: Vec<_> = category_distribution.iter().take(6).collect();
         let max_count = limited_data
@@ -447,7 +445,7 @@ fn render_vertical_bar_chart<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect
             .max()
             .unwrap_or(1) as f64;
 
-        let data: Vec<(f64, f64)> = limited_data
+        let chart_data: Vec<(f64, f64)> = limited_data
             .iter()
             .enumerate()
             .map(|(i, (_, count, _))| (i as f64, *count as f64))
@@ -477,80 +475,78 @@ fn render_vertical_bar_chart<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect
             })
             .collect();
 
-        (data, max_count, category_names)
-    };
+        // Create dataset for the chart
+        let dataset = Dataset::default()
+            .name("Cleaned Items")
+            .marker(symbols::Marker::Block)
+            .style(
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
+            .data(&chart_data);
 
-    // Create dataset for bar chart
-    let dataset = Dataset::default()
-        .name("Cleaned Items")
-        .marker(symbols::Marker::Block)
-        .style(
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
-        .data(&chart_data);
+        // Create x-axis labels
+        let x_labels = if category_names.len() <= 3 {
+            vec![
+                Span::raw(category_names.first().unwrap_or(&"").to_string()),
+                Span::raw(category_names.get(1).unwrap_or(&"").to_string()),
+                Span::raw(category_names.get(2).unwrap_or(&"").to_string()),
+            ]
+        } else {
+            vec![
+                Span::raw(category_names.first().unwrap_or(&"").to_string()),
+                Span::raw(
+                    category_names
+                        .get(category_names.len() / 2)
+                        .unwrap_or(&"")
+                        .to_string(),
+                ),
+                Span::raw(category_names.last().unwrap_or(&"").to_string()),
+            ]
+        };
 
-    // Create x-axis labels
-    let x_labels = if categories.len() <= 3 {
-        vec![
-            Span::raw(categories.first().unwrap_or(&"").to_string()),
-            Span::raw(categories.get(1).unwrap_or(&"").to_string()),
-            Span::raw(categories.get(2).unwrap_or(&"").to_string()),
-        ]
-    } else {
-        vec![
-            Span::raw(categories.first().unwrap_or(&"").to_string()),
-            Span::raw(
-                categories
-                    .get(categories.len() / 2)
-                    .unwrap_or(&"")
-                    .to_string(),
-            ),
-            Span::raw(categories.last().unwrap_or(&"").to_string()),
-        ]
-    };
+        // Create y-axis labels
+        let y_max = (max_count * 1.1).max(1.0); // Add 10% padding, minimum 1
+        let y_labels = vec![
+            Span::raw("0"),
+            Span::raw(format!("{}", (y_max / 2.0) as u64)),
+            Span::raw(format!("{}", y_max as u64)),
+        ];
 
-    // Create y-axis labels
-    let y_max = (max_value * 1.1).max(1.0); // Add 10% padding, minimum 1
-    let y_labels = vec![
-        Span::raw("0"),
-        Span::raw(format!("{}", (y_max / 2.0) as u64)),
-        Span::raw(format!("{}", y_max as u64)),
-    ];
+        let chart = Chart::new(vec![dataset])
+            .block(
+                Block::default()
+                    .title(if area.width < 50 {
+                        "Items (Bar)"
+                    } else {
+                        "Items Distribution (Bar Chart)"
+                    })
+                    .title_style(
+                        Style::default()
+                            .fg(Color::Cyan)
+                            .add_modifier(Modifier::BOLD),
+                    )
+                    .borders(Borders::ALL)
+                    .border_style(Style::default().fg(Color::Cyan)),
+            )
+            .x_axis(
+                Axis::default()
+                    .title(if area.width >= 80 { "Categories" } else { "" })
+                    .style(Style::default().fg(Color::White))
+                    .bounds([0.0, (category_names.len().max(3) - 1) as f64])
+                    .labels(x_labels),
+            )
+            .y_axis(
+                Axis::default()
+                    .title(if area.width >= 80 { "Count" } else { "" })
+                    .style(Style::default().fg(Color::White))
+                    .bounds([0.0, y_max])
+                    .labels(y_labels),
+            );
 
-    let chart = Chart::new(vec![dataset])
-        .block(
-            Block::default()
-                .title(if area.width < 50 {
-                    "Items (Bar)"
-                } else {
-                    "Items Distribution (Bar Chart)"
-                })
-                .title_style(
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan)),
-        )
-        .x_axis(
-            Axis::default()
-                .title(if area.width >= 80 { "Categories" } else { "" })
-                .style(Style::default().fg(Color::White))
-                .bounds([0.0, (categories.len().max(3) - 1) as f64])
-                .labels(x_labels),
-        )
-        .y_axis(
-            Axis::default()
-                .title(if area.width >= 80 { "Count" } else { "" })
-                .style(Style::default().fg(Color::White))
-                .bounds([0.0, y_max])
-                .labels(y_labels),
-        );
-
-    f.render_widget(chart, area);
+        f.render_widget(chart, area);
+    }
 }
 
 fn render_operations_summary<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
@@ -656,63 +652,40 @@ fn render_operations_summary<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect
 fn render_pie_chart_distribution<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
     let category_distribution = app.get_category_distribution();
 
-    // Use real data if available, otherwise show sample data for demonstration
-    let data_to_use = if category_distribution.is_empty() {
-        vec![
-            ("Browser Caches".to_string(), 3, 314572800),
-            ("Package Caches".to_string(), 5, 82051072),
-            ("Trash Files".to_string(), 2, 5242880),
-            ("Temp Files".to_string(), 2, 84934656),
-            ("System Logs".to_string(), 1, 10485760),
-            ("App Caches".to_string(), 2, 786432),
-        ]
-    } else {
-        category_distribution
-    };
+    // Only show real data from actual cleaning operations
+    if !category_distribution.is_empty() {
+        // Create pie chart from distribution data
+        let pie_chart = create_pie_chart_from_distribution(
+            &category_distribution,
+            "Items Distribution (Count)",
+            false, // Use count-based distribution
+        );
 
-    // Create pie chart from distribution data
-    let pie_chart = create_pie_chart_from_distribution(
-        &data_to_use,
-        "Items Distribution (Count)",
-        false, // Use count-based distribution
-    );
+        let responsive_chart = pie_chart
+            .show_percentages(area.width >= 40)
+            .show_legend(area.width >= 50 || area.height >= 16);
 
-    let responsive_chart = pie_chart
-        .show_percentages(area.width >= 40)
-        .show_legend(area.width >= 50 || area.height >= 16);
-
-    responsive_chart.render(f, area);
+        responsive_chart.render(f, area);
+    }
 }
 
 fn render_pie_chart_size_distribution<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
     let category_distribution = app.get_category_distribution();
 
-    // Use real data if available, otherwise show sample data for demonstration
-    let data_to_use = if category_distribution.is_empty() {
-        vec![
-            ("Browser Caches".to_string(), 3, 314572800),
-            ("Package Caches".to_string(), 5, 82051072),
-            ("Trash Files".to_string(), 2, 5242880),
-            ("Temp Files".to_string(), 2, 84934656),
-            ("System Logs".to_string(), 1, 10485760),
-            ("App Caches".to_string(), 2, 786432),
-        ]
-    } else {
-        category_distribution
-    };
+    // Only show real data from actual cleaning operations
+    if !category_distribution.is_empty() {
+        let pie_chart = create_pie_chart_from_distribution(
+            &category_distribution,
+            "Items Distribution (Size)",
+            true, // Use size-based distribution
+        );
 
-    // Create pie chart from size-based distribution
-    let pie_chart = create_pie_chart_from_distribution(
-        &data_to_use,
-        "Size Distribution (Bytes)",
-        true, // Use size-based distribution
-    );
+        let responsive_chart = pie_chart
+            .show_percentages(area.width >= 40)
+            .show_legend(area.width >= 50 || area.height >= 16);
 
-    let responsive_chart = pie_chart
-        .show_percentages(area.width >= 40)
-        .show_legend(area.width >= 50 || area.height >= 16);
-
-    responsive_chart.render(f, area);
+        responsive_chart.render(f, area);
+    }
 }
 
 fn render_removed_items_window<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
@@ -762,56 +735,7 @@ fn render_removed_items_window<B: Backend>(f: &mut Frame<B>, app: &mut App, area
         // Get sample cleaned items for display plus additional entries for demo
         let filtered_items = app.get_filtered_detailed_items();
 
-        if filtered_items.is_empty() {
-            // Add sample removed items for demonstration
-            let sample_items = vec![
-            ("📄", "/home/user/.cache/pip/wheels/abc123.whl", "15.0 MB", "Package Manager Caches", "pip cache"),
-            ("📁", "/home/user/.cache/mozilla/firefox/profiles/", "100.0 MB", "Browser Caches", "firefox cache"),
-            ("📄", "/home/user/.local/share/Trash/files/document.pdf", "20.0 MB", "Trash", "trash"),
-            ("📄", "/home/user/.cache/google-chrome/Default/Cache/f_000001", "5.2 MB", "Browser Caches", "chrome cache"),
-            ("📁", "/home/user/.cache/npm/_cacache/content-v2/", "25.6 MB", "Package Manager Caches", "npm cache"),
-            ("📄", "/home/user/.cargo/registry/cache/github.com-1ecc6299db9ec823/serde-1.0.136.crate", "50.0 MB", "Package Manager Caches", "cargo cache"),
-            ("📄", "/tmp/temp_file_12345.tmp", "1.0 MB", "Temporary Files", "temp files"),
-            ("📄", "/home/user/.cache/thumbnails/large/abc123.png", "256 KB", "Thumbnail Caches", "thumbnails"),
-            ("📁", "/home/user/.cache/JetBrains/IntelliJIdea2023.1/", "45.8 MB", "Application Caches", "application cache"),
-            ("📄", "/home/user/.local/share/recently-used.xbel.bak", "32 KB", "Application Caches", "application cache"),
-            ("📄", "/home/user/.cache/fontconfig/CACHEDIR.TAG", "43 bytes", "Application Caches", "font cache"),
-            ("📁", "/home/user/.cache/yarn/v6/npm-lodash-4.17.21/", "1.5 MB", "Package Manager Caches", "yarn cache"),
-            ("📄", "/var/tmp/portage/temp_file", "2.1 MB", "Temporary Files", "portage temp"),
-            ("📄", "/home/user/.local/share/Trash/files/screenshot.png", "3.1 MB", "Trash", "trash"),
-            ("📁", "/home/user/.cache/gstreamer-1.0/", "512 KB", "Application Caches", "gstreamer cache"),
-        ];
-
-            for (index, (icon, path, size, category, cleaner)) in sample_items.iter().enumerate() {
-                // File path and size on one line
-                display_items.push(ListItem::new(Line::from(vec![
-                    Span::styled(format!("{} ", icon), Style::default().fg(Color::Yellow)),
-                    Span::styled(path.to_string(), Style::default().fg(Color::White)),
-                    Span::raw(" "),
-                    Span::styled(
-                        format!("({})", size),
-                        Style::default()
-                            .fg(Color::Green)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                ])));
-
-                // Category and cleaner info on next line (indented)
-                display_items.push(ListItem::new(Line::from(vec![
-                    Span::raw("   "),
-                    Span::styled("📂 ", Style::default().fg(Color::Blue)),
-                    Span::styled(category.to_string(), Style::default().fg(Color::Blue)),
-                    Span::raw(" • "),
-                    Span::styled("🔧 ", Style::default().fg(Color::Cyan)),
-                    Span::styled(cleaner.to_string(), Style::default().fg(Color::Cyan)),
-                ])));
-
-                // Add spacing between entries
-                if index < sample_items.len() - 1 {
-                    display_items.push(ListItem::new(Line::from(vec![])));
-                }
-            }
-        } else {
+        if !filtered_items.is_empty() {
             for (index, item) in filtered_items.iter().enumerate() {
                 let icon = match item.item_type {
                     CleanedItemType::File => "📄",
@@ -846,6 +770,59 @@ fn render_removed_items_window<B: Backend>(f: &mut Frame<B>, app: &mut App, area
                 if index < filtered_items.len() - 1 {
                     display_items.push(ListItem::new(Line::from(vec![])));
                 }
+            }
+        } else if !app.is_running && app.show_progress_screen && app.total_bytes_cleaned > 0 {
+            // Show summary when cleaning is complete but no detailed items
+            display_items.push(ListItem::new(Line::from(vec![
+                Span::styled("✅ ", Style::default().fg(Color::Green)),
+                Span::styled(
+                    "Cleaning completed successfully",
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ])));
+            display_items.push(ListItem::new(Line::from(vec![])));
+
+            display_items.push(ListItem::new(Line::from(vec![
+                Span::styled("📊 ", Style::default().fg(Color::Cyan)),
+                Span::styled("Total space freed: ", Style::default().fg(Color::White)),
+                Span::styled(
+                    format_size(app.total_bytes_cleaned),
+                    Style::default()
+                        .fg(Color::Green)
+                        .add_modifier(Modifier::BOLD),
+                ),
+            ])));
+            display_items.push(ListItem::new(Line::from(vec![])));
+
+            // Show which cleaners were executed
+            for category in &app.categories {
+                for item in &category.items {
+                    if item.bytes_cleaned > 0 {
+                        display_items.push(ListItem::new(Line::from(vec![
+                            Span::styled("🔧 ", Style::default().fg(Color::Yellow)),
+                            Span::styled(item.name.clone(), Style::default().fg(Color::White)),
+                            Span::raw(": "),
+                            Span::styled(
+                                format_size(item.bytes_cleaned),
+                                Style::default().fg(Color::Green),
+                            ),
+                        ])));
+                    }
+                }
+            }
+
+            if display_items.len() == 3 {
+                // No items were cleaned with bytes > 0
+                display_items.push(ListItem::new(Line::from(vec![])));
+                display_items.push(ListItem::new(Line::from(vec![
+                    Span::styled("ℹ️ ", Style::default().fg(Color::Blue)),
+                    Span::styled(
+                        "Detailed file list not available in TUI mode",
+                        Style::default().fg(Color::DarkGray),
+                    ),
+                ])));
             }
         }
     }

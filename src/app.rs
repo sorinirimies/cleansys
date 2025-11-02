@@ -2,11 +2,81 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crossterm::terminal;
 use ratatui::widgets::ListState;
+use std::io::Read;
+use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::sync::mpsc;
 use std::time::Instant;
 
+use crate::components::password_prompt::PasswordPrompt;
 use crate::utils::{check_root, format_size};
+use once_cell::sync::Lazy;
+use regex::Regex;
 use std::time::SystemTime;
+
+// Compile regex once at startup
+static SIZE_REGEX: Lazy<Regex> =
+    Lazy::new(|| Regex::new(r"(\d+\.?\d*)\s*(KB|MB|GB|bytes)").unwrap());
+
+/// Capture stdout/stderr during function execution
+fn capture_output<F, T>(f: F) -> Result<(T, String)>
+where
+    F: FnOnce() -> Result<T>,
+{
+    unsafe {
+        // Create pipes for stdout and stderr
+        let mut stdout_pipe: [i32; 2] = [0; 2];
+        let mut stderr_pipe: [i32; 2] = [0; 2];
+
+        if libc::pipe(stdout_pipe.as_mut_ptr()) != 0 {
+            return Err(anyhow::anyhow!("Failed to create stdout pipe"));
+        }
+        if libc::pipe(stderr_pipe.as_mut_ptr()) != 0 {
+            return Err(anyhow::anyhow!("Failed to create stderr pipe"));
+        }
+
+        // Save original stdout/stderr
+        let stdout_fd = std::io::stdout().as_raw_fd();
+        let stderr_fd = std::io::stderr().as_raw_fd();
+        let saved_stdout = libc::dup(stdout_fd);
+        let saved_stderr = libc::dup(stderr_fd);
+
+        // Redirect stdout/stderr to pipes
+        libc::dup2(stdout_pipe[1], stdout_fd);
+        libc::dup2(stderr_pipe[1], stderr_fd);
+        libc::close(stdout_pipe[1]);
+        libc::close(stderr_pipe[1]);
+
+        // Execute function
+        let result = f();
+
+        // Restore original stdout/stderr
+        libc::dup2(saved_stdout, stdout_fd);
+        libc::dup2(saved_stderr, stderr_fd);
+        libc::close(saved_stdout);
+        libc::close(saved_stderr);
+
+        // Read captured output
+        let mut stdout_output = Vec::new();
+        let mut stderr_output = Vec::new();
+
+        let mut stdout_file = std::fs::File::from_raw_fd(stdout_pipe[0]);
+        let mut stderr_file = std::fs::File::from_raw_fd(stderr_pipe[0]);
+
+        // Set non-blocking
+        let flags = libc::fcntl(stdout_pipe[0], libc::F_GETFL);
+        libc::fcntl(stdout_pipe[0], libc::F_SETFL, flags | libc::O_NONBLOCK);
+        let flags = libc::fcntl(stderr_pipe[0], libc::F_GETFL);
+        libc::fcntl(stderr_pipe[0], libc::F_SETFL, flags | libc::O_NONBLOCK);
+
+        let _ = stdout_file.read_to_end(&mut stdout_output);
+        let _ = stderr_file.read_to_end(&mut stderr_output);
+
+        let mut combined = String::from_utf8_lossy(&stdout_output).to_string();
+        combined.push_str(&String::from_utf8_lossy(&stderr_output));
+
+        result.map(|r| (r, combined))
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct DetailedCleanedItem {
@@ -24,6 +94,9 @@ pub enum CleanedItemType {
     Directory,
     Log,
 }
+
+/// Type alias for pending operations: (category_index, item_index, name, function, requires_root)
+pub type PendingOperation = (usize, usize, String, fn(bool) -> Result<u64>, bool);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ViewMode {
@@ -132,6 +205,9 @@ pub struct App {
     pub chart_type: ChartType,
     pub operation_logs: Vec<String>,
     pub show_progress_screen: bool,
+    pub password_prompt: PasswordPrompt,
+    pub needs_sudo: bool,
+    pub pending_operations: Vec<PendingOperation>,
 }
 
 impl Default for App {
@@ -186,6 +262,9 @@ impl App {
             chart_type: ChartType::PieCount,
             operation_logs: Vec::new(),
             show_progress_screen: false,
+            password_prompt: PasswordPrompt::new(),
+            needs_sudo: false,
+            pending_operations: Vec::new(),
         };
         app.item_list_state.select(Some(0));
 
@@ -225,7 +304,15 @@ impl App {
             std::collections::HashMap::new();
 
         for item in &self.detailed_cleaned_items {
-            let entry = category_map.entry(item.category.clone()).or_insert((0, 0));
+            // Create a unique key that combines cleaner name with category type
+            // This differentiates between user and system cleaners with the same name
+            let display_name = if item.category.contains("System") {
+                format!("{} (System)", item.cleaner_name)
+            } else {
+                item.cleaner_name.clone()
+            };
+
+            let entry = category_map.entry(display_name).or_insert((0, 0));
             entry.0 += 1;
             entry.1 += item.size;
         }
@@ -342,16 +429,35 @@ impl App {
 
         // Prepare the selected cleaners
         let mut selected_cleaners = Vec::new();
+        let mut has_root_operations = false;
 
         for (cat_idx, category) in self.categories.iter().enumerate() {
             for (item_idx, item) in category.items.iter().enumerate() {
                 if item.selected {
-                    // Include all selected cleaners - sudo will be prompted by execute_with_sudo when needed
+                    // Include all selected cleaners - sudo will be prompted when needed
                     let name = item.name.clone();
                     let function = item.function;
                     selected_cleaners.push((cat_idx, item_idx, name, function, item.requires_root));
+                    if item.requires_root {
+                        has_root_operations = true;
+                    }
                 }
             }
+        }
+
+        if selected_cleaners.is_empty() {
+            self.operation_logs
+                .push("No cleaners selected. Please select at least one cleaner.".to_string());
+            return Ok(());
+        }
+
+        // Check if we need sudo and prompt for password
+        if has_root_operations && !self.is_root {
+            self.needs_sudo = true;
+            self.password_prompt.show();
+            // Store the selected cleaners for later execution after authentication
+            self.pending_operations = selected_cleaners.clone();
+            return Ok(());
         }
 
         // Start processing
@@ -364,7 +470,16 @@ impl App {
         self.demo_operations_completed = 0;
         self.result_messages.clear();
         self.operation_logs.clear();
+        self.detailed_cleaned_items.clear(); // Clear previous cleaning results
         self.current_cleaner_index = 0;
+
+        // Reset bytes_cleaned for all items to start fresh
+        for category in &mut self.categories {
+            for item in &mut category.items {
+                item.bytes_cleaned = 0;
+                item.status = None;
+            }
+        }
 
         // Set all selected cleaners to Pending
         for (cat_idx, item_idx, _, _, _) in &selected_cleaners {
@@ -458,37 +573,121 @@ impl App {
             for (cat_idx, item_idx, name, function, requires_root) in running_operations {
                 self.operation_logs.push(format!("Starting: {}", name));
 
-                // Execute operation - sudo authentication should have been handled during startup
-                let result: anyhow::Result<u64> = if requires_root && !self.is_root {
+                // Check if operation requires root and we don't have it
+                let result: anyhow::Result<u64> = if requires_root
+                    && !self.is_root
+                    && !self.password_prompt.is_authenticated()
+                {
+                    // Show password prompt and pause operations
+                    self.needs_sudo = true;
+                    self.password_prompt.show();
+                    self.is_running = false;
                     self.operation_logs
-                        .push(format!("❌ {}: Root privileges required", name));
-                    Err(anyhow::anyhow!(
-                        "Root privileges required. Run 'sudo cleansys' for system operations."
-                    ))
+                        .push(format!("🔒 {}: Waiting for sudo authentication...", name));
+                    // Return error to mark this operation as pending
+                    Err(anyhow::anyhow!("Waiting for sudo authentication"))
                 } else {
                     self.operation_logs.push(format!("🔄 Executing: {}", name));
-                    match function(true) {
-                        Ok(bytes) => {
+
+                    // Capture output during execution
+                    let captured_result = capture_output(|| function(true));
+
+                    let result = match captured_result {
+                        Ok((bytes, output)) => {
                             self.operation_logs
                                 .push(format!("✅ {}: Cleaned {} bytes", name, bytes));
+
+                            // Parse output for cleaned files and add to detailed items
+                            let category_name = self.categories[cat_idx].name.clone();
+                            let items_before = self.detailed_cleaned_items.len();
+
+                            for line in output.lines() {
+                                // Look for lines indicating files were removed
+                                if line.contains("Removed")
+                                    || line.contains("cleaned")
+                                    || line.contains("Cleaning")
+                                    || line.contains("freed")
+                                {
+                                    // Try to extract file path
+                                    if let Some(path_start) = line.find("/") {
+                                        let path_end = line[path_start..]
+                                            .find(|c: char| {
+                                                c == '"' || c == '\'' || c.is_whitespace()
+                                            })
+                                            .map(|i| path_start + i)
+                                            .unwrap_or(line.len());
+                                        let path = line[path_start..path_end].trim().to_string();
+
+                                        if !path.is_empty() && path.len() > 1 {
+                                            // Extract size if present using pre-compiled regex
+                                            let extracted_size = if let Some(cap) =
+                                                SIZE_REGEX.captures(line)
+                                            {
+                                                let num: f64 = cap
+                                                    .get(1)
+                                                    .and_then(|m| m.as_str().parse().ok())
+                                                    .unwrap_or(0.0);
+                                                let unit = cap
+                                                    .get(2)
+                                                    .map(|m| m.as_str())
+                                                    .unwrap_or("bytes");
+                                                match unit {
+                                                    "KB" => (num * 1024.0) as u64,
+                                                    "MB" => (num * 1024.0 * 1024.0) as u64,
+                                                    "GB" => (num * 1024.0 * 1024.0 * 1024.0) as u64,
+                                                    _ => num as u64,
+                                                }
+                                            } else {
+                                                bytes / 10 // Estimate
+                                            };
+
+                                            let item_type = if path.ends_with('/')
+                                                || line.contains("directory")
+                                            {
+                                                CleanedItemType::Directory
+                                            } else {
+                                                CleanedItemType::File
+                                            };
+
+                                            self.add_detailed_cleaned_item(
+                                                path,
+                                                extracted_size,
+                                                category_name.clone(),
+                                                name.clone(),
+                                                item_type,
+                                            );
+                                        }
+                                    }
+
+                                    // Also add to operation logs for visibility
+                                    if !line.trim().is_empty() {
+                                        self.operation_logs.push(format!("  → {}", line.trim()));
+                                    }
+                                }
+                            }
+
+                            // Fallback: If no detailed items were captured from this cleaner's output, create a summary item
+                            let items_after = self.detailed_cleaned_items.len();
+                            if items_after == items_before && bytes > 0 {
+                                // No items were parsed from output, create a summary item for this cleaner
+                                self.add_detailed_cleaned_item(
+                                    format!("{} (cleaned files)", name),
+                                    bytes,
+                                    category_name,
+                                    name.clone(),
+                                    CleanedItemType::Directory,
+                                );
+                            }
+
                             Ok(bytes)
                         }
                         Err(e) => {
                             self.operation_logs.push(format!("❌ {}: {}", name, e));
-                            // For user operations, provide fallback simulation
-                            if !requires_root {
-                                let simulated =
-                                    (1024 * 1024 * (2 + (cat_idx + item_idx) % 10)) as u64;
-                                self.operation_logs.push(format!(
-                                    "📊 {}: Using simulated data ({} bytes)",
-                                    name, simulated
-                                ));
-                                Ok(simulated)
-                            } else {
-                                Err(e)
-                            }
+                            Err(e)
                         }
-                    }
+                    };
+
+                    result
                 };
 
                 // Process result
@@ -563,6 +762,80 @@ impl App {
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) -> Result<bool> {
+        // If password prompt is visible, handle password input first
+        if self.password_prompt.is_visible() {
+            match key.code {
+                KeyCode::Enter => {
+                    // Submit password and authenticate
+                    match self.password_prompt.submit() {
+                        Ok(true) => {
+                            // Authentication successful, proceed with operations
+                            self.needs_sudo = false;
+                            self.password_prompt.hide();
+
+                            // Now start the actual cleaning operations
+                            let selected_cleaners = self.pending_operations.clone();
+                            self.pending_operations.clear();
+
+                            if !selected_cleaners.is_empty() {
+                                // Start processing
+                                self.is_running = true;
+                                self.show_progress_screen = true;
+                                self.operation_start_time = Some(Instant::now());
+                                self.operation_end_time = None;
+                                self.total_bytes_cleaned = 0;
+                                self.demo_operation_timer = Some(Instant::now());
+                                self.demo_operations_completed = 0;
+                                self.result_messages.clear();
+                                self.operation_logs.clear();
+                                self.detailed_cleaned_items.clear();
+                                self.current_cleaner_index = 0;
+
+                                // Reset bytes_cleaned for all items to start fresh
+                                for category in &mut self.categories {
+                                    for item in &mut category.items {
+                                        item.bytes_cleaned = 0;
+                                    }
+                                }
+
+                                // Set all selected cleaners to Pending
+                                for (cat_idx, item_idx, _, _, _) in &selected_cleaners {
+                                    self.categories[*cat_idx].items[*item_idx].status =
+                                        Some(Status::Pending);
+                                }
+
+                                self.update_counters();
+                            }
+                        }
+                        Ok(false) => {
+                            // Authentication failed, stay on prompt
+                        }
+                        Err(e) => {
+                            self.operation_logs
+                                .push(format!("❌ Authentication error: {}", e));
+                            self.password_prompt.hide();
+                            self.needs_sudo = false;
+                            self.pending_operations.clear();
+                        }
+                    }
+                }
+                KeyCode::Esc => {
+                    // Cancel password prompt
+                    self.password_prompt.cancel();
+                    self.needs_sudo = false;
+                    self.pending_operations.clear();
+                }
+                KeyCode::Char(c) => {
+                    self.password_prompt.add_char(c);
+                }
+                KeyCode::Backspace => {
+                    self.password_prompt.remove_char();
+                }
+                _ => {}
+            }
+            return Ok(false);
+        }
+
         match (key.code, key.modifiers) {
             // Quit
             (KeyCode::Char('q'), _) => {
