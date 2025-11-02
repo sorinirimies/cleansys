@@ -2,11 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## 0.2.4 - 2025-11-02
+### ➕ Added
+- Add password prompt component and TUI sudo authentication
 ### 📚 Documentation
 - docs: update README and CHANGELOG for v0.2.3
 ### 📦 Other Changes
 - Remove os from categories in Cargo.toml
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.3...v0.2.4
 ## 0.2.3 - 2025-10-31
 ### 📚 Documentation
 - docs: update README and CHANGELOG for v0.2.2
