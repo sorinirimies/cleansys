@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.6 - 2025-11-02
+### ✨ Features
+- feat: add password prompt, fix legend distribution, update categories
+### 📚 Documentation
+- docs: update README and CHANGELOG for v0.2.5
+### 📦 Other Changes
+- Merge remote-tracking branch 'origin/main'
+### 🔧 Chores
+- chore: bump version to 0.2.6
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.5...v0.2.6
 ## 0.2.5 - 2025-11-02
 ### 🐛 Bug Fixes
 - Fix crates.io categories and update dependencies in Cargo.lock
@@ -88,13 +98,16 @@ All notable changes to this project will be documented in this file.
 ## 0.0.6 - 2025-10-02
 ### 📦 Other Changes
 - keep cargolock
+### 🔧 Chores
+- chore: bump version to 0.0.5
+- chore: bump version to 0.0.6
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.5...v0.0.6
+## 0.0.5 - 2025-10-02
 ### 🔄 Updated
 - update readme
 ### 🔧 Chores
 - chore: bump version to 0.0.5
-- chore: bump version to 0.0.5
-- chore: bump version to 0.0.6
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.4...v0.0.6
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.4...v0.0.5
 ## 0.0.4 - 2025-06-05
 ### 📦 Other Changes
 - Improves progress screen behavior and controls
