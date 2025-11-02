@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## 0.2.4 - 2025-11-02
 ### ➕ Added
 - Add password prompt component and TUI sudo authentication
+## [Unreleased]
+### 🐛 Bug Fixes
+- Fix invalid crates.io categories (removed "system cleaning" and "OS maintenance")
+- Fix dependency compilation issues by updating Cargo.lock (indexmap, winnow)
 ### 📚 Documentation
 - docs: update README and CHANGELOG for v0.2.3
 ### 📦 Other Changes
