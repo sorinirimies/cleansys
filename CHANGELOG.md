@@ -2,27 +2,24 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.2.6 - 2025-11-02
-### ✨ Features
-- feat: add password prompt, fix legend distribution, update categories
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.5...v0.2.6
 ## 0.2.5 - 2025-11-02
+### 🐛 Bug Fixes
+- Fix crates.io categories and update dependencies in Cargo.lock
+### 📦 Other Changes
+- Remove invalid categories from Cargo.toml
+- Bump version to 0.2.5
 ### 🔧 Chores
+- chore: bump version to 0.2.4
 - chore: bump version to 0.2.5
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.4...v0.2.5
 ## 0.2.4 - 2025-11-02
 ### ➕ Added
 - Add password prompt component and TUI sudo authentication
-### 🐛 Bug Fixes
-- Fix crates.io categories and update dependencies in Cargo.lock
 ### 📚 Documentation
 - docs: update README and CHANGELOG for v0.2.3
 ### 📦 Other Changes
 - Remove os from categories in Cargo.toml
-- Remove invalid categories from Cargo.toml
-- Bump version to 0.2.5
 ### 🔧 Chores
-- chore: bump version to 0.2.4
 - chore: bump version to 0.2.4
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.3...v0.2.4
 ## 0.2.3 - 2025-10-31
@@ -91,16 +88,13 @@ All notable changes to this project will be documented in this file.
 ## 0.0.6 - 2025-10-02
 ### 📦 Other Changes
 - keep cargolock
-### 🔧 Chores
-- chore: bump version to 0.0.5
-- chore: bump version to 0.0.6
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.5...v0.0.6
-## 0.0.5 - 2025-10-02
 ### 🔄 Updated
 - update readme
 ### 🔧 Chores
 - chore: bump version to 0.0.5
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.4...v0.0.5
+- chore: bump version to 0.0.5
+- chore: bump version to 0.0.6
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.4...v0.0.6
 ## 0.0.4 - 2025-06-05
 ### 📦 Other Changes
 - Improves progress screen behavior and controls
