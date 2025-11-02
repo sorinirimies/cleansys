@@ -15,6 +15,7 @@ All notable changes to this project will be documented in this file.
 - Bump version to 0.2.5
 ### 🔧 Chores
 - chore: bump version to 0.2.4
+- chore: bump version to 0.2.4
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.3...v0.2.4
 ## 0.2.3 - 2025-10-31
 ### 📚 Documentation
