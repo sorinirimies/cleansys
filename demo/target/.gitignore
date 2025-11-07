@@ -1,0 +1,5 @@
+# Ignore all generated GIF files
+*.gif
+
+# But track this .gitignore file
+!.gitignore

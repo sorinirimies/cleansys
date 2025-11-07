@@ -188,30 +188,30 @@ view-changelog:
 check-vhs:
     @command -v vhs >/dev/null 2>&1 || { echo "❌ VHS not found. Install from: https://github.com/charmbracelet/vhs"; exit 1; }
 
-# Run VHS to generate demo GIF
+# Run VHS to generate main demo GIF
 vhs: check-vhs
     @echo "Running VHS tape to generate demo..."
     vhs demo/demo.tape
-    @echo "✅ Demo generated at demo/demo.gif"
+    @echo "✅ Demo generated at demo/target/demo.gif"
 
-# Run VHS quick demo
-vhs-quick: check-vhs
-    @echo "Running VHS quick demo tape..."
-    vhs demo/demo-quick.tape
-    @echo "✅ Quick demo generated at demo/demo-quick.gif"
+# Run VHS userland cleaners demo
+vhs-userland: check-vhs
+    @echo "Running VHS userland cleaners demo tape..."
+    vhs demo/userland-cleaners.tape
+    @echo "✅ Userland cleaners demo generated at demo/target/userland-cleaners.gif"
 
-# Run VHS showcase demo
-vhs-showcase: check-vhs
-    @echo "Running VHS showcase tape..."
-    vhs demo/demo-showcase.tape
-    @echo "✅ Showcase demo generated"
+# Run VHS system cleaners demo
+vhs-system: check-vhs
+    @echo "Running VHS system cleaners demo tape..."
+    vhs demo/system-cleaners.tape
+    @echo "✅ System cleaners demo generated at demo/target/system-cleaners.gif"
 
 # Generate all VHS demos
-vhs-all: vhs vhs-quick vhs-showcase
+vhs-all: vhs vhs-userland vhs-system
     @echo "✅ All demos generated!"
 
 # Clean VHS outputs
 vhs-clean:
     @echo "Cleaning VHS output files..."
-    @rm -f demo/*.gif
+    @rm -f demo/target/*.gif
     @echo "✅ VHS outputs cleaned!"

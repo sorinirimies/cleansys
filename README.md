@@ -8,6 +8,11 @@
 
 **CleanSys** is a modern, terminal-based utility for Linux that helps you safely clean your system. It provides a beautiful interactive TUI to remove unnecessary files, clean caches, and free up disk space with real-time animations and detailed progress tracking.
 
+## 🎬 Demo
+
+### Main Demo
+![CleanSys Demo](demo
+
 ## ✨ Features
 
 ### 🎨 Modern Terminal UI
@@ -276,11 +281,44 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - [Crates.io](https://crates.io/crates/cleansys)
 - [Documentation](https://docs.rs/cleansys)
 
+## 🎥 Demo Creation
+
+CleanSys uses [VHS](https://github.com/charmbracelet/vhs) to create terminal session recordings. The demo tapes showcase:
+
+- **`demo.tape`**: Main demo showing both user and system cleaners
+- **`userland-cleaners.tape`**: Detailed walkthrough of user-level cleaning (no root required)
+- **`system-cleaners.tape`**: Detailed walkthrough of system-level cleaning (requires authentication)
+
+### Generating Demos
+
+```bash
+# Install VHS (requires Go)
+# See: https://github.com/charmbracelet/vhs#installation
+
+# Generate main demo
+just vhs
+
+# Generate userland cleaners demo
+just vhs-userland
+
+# Generate system cleaners demo
+just vhs-system
+
+# Generate all demos
+just vhs-all
+
+# Clean generated demos
+just vhs-clean
+```
+
+All generated GIF files are output to `demo/target/` and are git-ignored.
+
 ## 🙏 Acknowledgments
 
 - [Ratatui](https://github.com/ratatui-org/ratatui) - Terminal UI framework
 - [tui-checkbox](https://crates.io/crates/tui-checkbox) - Checkbox widget library
 - [Crossterm](https://github.com/crossterm-rs/crossterm) - Cross-platform terminal manipulation
+- [VHS](https://github.com/charmbracelet/vhs) - Terminal session recorder for creating demos
 
 ---
 

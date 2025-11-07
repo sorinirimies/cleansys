@@ -1,81 +1,144 @@
-# CleanSys Demo - Modern System Cleaner for Linux
+# CleanSys Demo - Interactive TUI in Action
 
-Output demo.gif
+Output demo/target/demo.gif
 
 Set FontSize 13
 Set Width 1200
 Set Height 700
 Set Padding 10
 Set Theme "Catppuccin Mocha"
-Set TypingSpeed 50ms
+Set TypingSpeed 30ms
+Set PlaybackSpeed 1.0
 
 Hide
-Type "clear && cd cleansys"
+Type "clear"
 Enter
 Sleep 500ms
 Show
 
-# Title
-Type "# CleanSys - Modern System Cleaner for Linux" Sleep 500ms
+Type "echo 'CleanSys - Modern System Cleaner for Linux'"
+Enter
+Sleep 1s
+Type "echo 'Interactive Terminal UI Demo'"
 Enter
 Sleep 1s
 
-# Show version
-Type "cargo run -- --version"
+Type "clear"
+Enter
+Sleep 500ms
+
+Type "cargo run"
+Enter
+
+# Wait for app to load
+Sleep 5s
+
+# Navigate down
+Down
+Sleep 400ms
+Down
+Sleep 400ms
+Down
+Sleep 400ms
+
+# Select item
+Space
+Sleep 600ms
+
+# Navigate more
+Down
+Sleep 400ms
+Down
+Sleep 400ms
+
+# Select another
+Space
+Sleep 600ms
+
+# Go back up
+Up
+Sleep 400ms
+Up
+Sleep 400ms
+
+# Toggle
+Space
+Sleep 600ms
+
+# More navigation
+Down
+Sleep 400ms
+Down
+Sleep 400ms
+Down
+Sleep 400ms
+
+# Select
+Space
+Sleep 600ms
+
+# Show selection
+Sleep 1500ms
+
+# Cycle chart
+Type "c"
+Sleep 1500ms
+
+# Cycle again
+Type "c"
+Sleep 1500ms
+
+# Navigate
+Down
+Sleep 400ms
+Space
+Sleep 600ms
+
+# Show help
+Type "?"
+Sleep 2500ms
+
+# Close help
+Escape
+Sleep 1000ms
+
+# Final view
+Sleep 2000ms
+
+# Exit
+Type "q"
+Sleep 1000ms
+
+Type "clear"
+Enter
+Sleep 500ms
+
+Type "echo ''"
+Enter
+Type "echo '✨ CleanSys Features:'"
+Enter
+Sleep 400ms
+Type "echo '  • Beautiful Interactive TUI'"
+Enter
+Sleep 400ms
+Type "echo '  • User & System Cleaners'"
+Enter
+Sleep 400ms
+Type "echo '  • Multiple Chart Views (Bar/Pie)'"
+Enter
+Sleep 400ms
+Type "echo '  • Keyboard Navigation (↑↓ Space Enter)'"
+Enter
+Sleep 400ms
+Type "echo '  • Safe Cleaning Operations'"
+Enter
+Sleep 400ms
+Type "echo '  • Real-time Progress Tracking'"
 Enter
 Sleep 2s
 
-# Show help
-Type "cargo run -- --help"
+Type "echo ''"
 Enter
-Sleep 4s
-
-# List available cleaners
-Type "cargo run -- list"
+Type "echo '📦 Install: cargo install cleansys'"
 Enter
-Sleep 5s
-
-# Show the TUI
-Type "# Starting Interactive TUI..."
-Enter
-Sleep 1s
-Type "cargo run"
-Enter
-Sleep 3s
-
-# Let the TUI run and show interface
-Sleep 5s
-
-# Final screen
-Sleep 3s
-
-Hide
-Type "q"
-Sleep 500ms
-Type "clear"
-Enter
-Show
-
-Type "# ✨ CleanSys Features:"
-Enter
-Sleep 500ms
-Type "# • Interactive TUI with real-time progress"
-Enter
-Sleep 500ms
-Type "# • Password prompt for system cleaners"
-Enter
-Sleep 500ms
-Type "# • Support for Debian, Fedora, and Arch Linux"
-Enter
-Sleep 500ms
-Type "# • Safe kernel cleanup"
-Enter
-Sleep 500ms
-Type "# • Beautiful charts and statistics"
-Enter
-Sleep 1s
-Type ""
-Enter
-Type "# Repository: https://github.com/sorinirimies/cleansys"
-Enter
-Sleep 3s
+Sleep 2s
