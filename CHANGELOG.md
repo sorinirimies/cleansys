@@ -14,6 +14,7 @@ All notable changes to this project will be documented in this file.
 - Update to ratatui 0.29 and crossterm 0.28, switch pie chart to
 ### 🔧 Chores
 - chore: bump version to 0.2.6
+- chore: bump version to 0.2.7
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.6...v0.2.7
 ## 0.2.6 - 2025-11-02
 ### ✨ Features
