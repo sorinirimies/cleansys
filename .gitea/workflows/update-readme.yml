@@ -18,9 +18,18 @@ jobs:
           fetch-depth: 0
           ref: main
 
+      - name: Setup Rust
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          profile: minimal
+          override: true
+
       - name: Install git-cliff
-        run: |
-          cargo install git-cliff
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: git-cliff
 
       - name: Extract version from tag
         id: version
