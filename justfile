@@ -148,19 +148,22 @@ push:
 push-tags:
     git push --tags
 
-# Full release workflow: bump version and push
+# Full release workflow: bump version and push to GitHub (same as release)
 release version: (bump version)
-    @echo "Pushing to remote..."
+    @echo "Pushing to GitHub..."
     git push origin main
     @echo "Pushing tag v{{version}}..."
     git push origin v{{version}}
     @echo "Verifying tag was pushed..."
     @if git ls-remote --tags origin | grep -q "refs/tags/v{{version}}"; then \
-        echo "✅ Release v{{version}} complete! Release workflow should trigger shortly."; \
+        echo "✅ Release v{{version}} complete on GitHub! Release workflow should trigger shortly."; \
     else \
         echo "⚠️  Warning: Tag v{{version}} may not have been pushed successfully!"; \
         exit 1; \
     fi
+
+# Full release workflow: bump version and push to GitHub (alias)
+release-github version: (release version)
 
 # Show current version
 version:
@@ -263,3 +266,19 @@ setup-gitea url:
     git remote add gitea {{url}}
     @echo "✅ Gitea remote added!"
     @echo "Test with: git push gitea main"
+
+# Full release workflow: bump version and push to Gitea
+release-gitea version: (bump version)
+    @echo "Pushing to Gitea..."
+    git push gitea main
+    git push gitea v{{version}}
+    @echo "✅ Release v{{version}} complete on Gitea!"
+
+# Full release workflow: bump version and push to both GitHub and Gitea
+release-all version: (bump version)
+    @echo "Pushing to both GitHub and Gitea..."
+    git push origin main
+    git push gitea main
+    git push origin v{{version}}
+    git push gitea v{{version}}
+    @echo "✅ Release v{{version}} complete on both remotes!"
