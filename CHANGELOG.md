@@ -2,7 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.2.6 - 2025-11-02
+## 0.2.6 - 2025-11-13
+### ➕ Added
+- Add Gitea dual-hosting scripts and justfile commands
+### 📚 Documentation
+- docs: update README and CHANGELOG for v0.2.6
+### 📦 Other Changes
+- Revamp demo system: add user/system tapes, update VHS tasks
+### 🔄 Updated
+- update gitea migration files
+- Update to ratatui 0.29 and crossterm 0.28, switch pie chart to
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.6...v0.2.6
+## 0.2.6 - 2025-11-13
 ### ✨ Features
 - feat: add password prompt, fix legend distribution, update categories
 ### 📚 Documentation
@@ -99,13 +110,16 @@ All notable changes to this project will be documented in this file.
 ## 0.0.6 - 2025-10-02
 ### 📦 Other Changes
 - keep cargolock
+### 🔧 Chores
+- chore: bump version to 0.0.5
+- chore: bump version to 0.0.6
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.5...v0.0.6
+## 0.0.5 - 2025-10-02
 ### 🔄 Updated
 - update readme
 ### 🔧 Chores
 - chore: bump version to 0.0.5
-- chore: bump version to 0.0.5
-- chore: bump version to 0.0.6
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.4...v0.0.6
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.4...v0.0.5
 ## 0.0.4 - 2025-06-05
 ### 📦 Other Changes
 - Improves progress screen behavior and controls
