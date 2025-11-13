@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.8 - 2025-11-13
+### 🔧 Chores
+- chore: bump version to 0.2.7
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.7...v0.2.8
 ## 0.2.7 - 2025-11-13
 ### ➕ Added
 - Add Gitea dual-hosting scripts and justfile commands
