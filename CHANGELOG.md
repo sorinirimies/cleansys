@@ -2,6 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.3.2 - 2025-11-13
+### 🔄 CI
+- ci: fix git-cliff installation by adding Rust toolchain setup
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.3.1...v0.3.2
+## 0.3.1 - 2025-11-13
+### 🔧 Chores
+- chore: bump version to 0.3.1
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.3.0...v0.3.1
 ## 0.3.0 - 2025-11-13
 ### 🔧 Chores
 - chore: bump version to 0.3.0
