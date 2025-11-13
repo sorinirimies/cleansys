@@ -2,9 +2,14 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.2.9 - 2025-11-13
+### ➕ Added
+- Add Gitea CI, release, and README update workflows
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.8...v0.2.9
 ## 0.2.8 - 2025-11-13
 ### 🔧 Chores
 - chore: bump version to 0.2.7
+- chore: bump version to 0.2.8
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.7...v0.2.8
 ## 0.2.7 - 2025-11-13
 ### ➕ Added

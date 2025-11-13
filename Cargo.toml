@@ -1,6 +1,6 @@
 [package]
 name = "cleansys"
-version = "0.2.8"
+version = "0.2.9"
 edition = "2021"
 authors = ["Sorin Albu-Irimies <sorinirimies@gmail.com>"]
 description = "A modern terminal user interface for Linux system cleanup similar to BleachBit only faster, written in Rust and memory safe."
