@@ -1,6 +1,5 @@
 use anyhow::Result;
 use ratatui::{
-    backend::Backend,
     layout::Rect,
     style::{Color, Modifier, Style},
     text::{Line, Span},
@@ -114,7 +113,7 @@ impl PasswordPrompt {
     }
 
     /// Render the password prompt as an overlay
-    pub fn render<B: Backend>(&self, f: &mut Frame<B>, area: Rect) {
+    pub fn render(&self, f: &mut Frame, area: Rect) {
         if !self.visible {
             return;
         }

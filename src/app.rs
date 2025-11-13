@@ -456,7 +456,7 @@ impl App {
             self.needs_sudo = true;
             self.password_prompt.show();
             // Store the selected cleaners for later execution after authentication
-            self.pending_operations = selected_cleaners.clone();
+            self.pending_operations.clone_from(&selected_cleaners);
             return Ok(());
         }
 
@@ -748,9 +748,7 @@ impl App {
         // Mark all operations as cancelled
         for category in &mut self.categories {
             for item in &mut category.items {
-                if item.selected
-                    && matches!(item.status, Some(Status::Running) | Some(Status::Pending))
-                {
+                if item.selected && matches!(item.status, Some(Status::Running | Status::Pending)) {
                     item.status = Some(Status::Error("Operation cancelled by user".to_string()));
                     item.selected = false; // Deselect the item
                 }
@@ -892,7 +890,7 @@ impl App {
                 }
             }
             // Help dialog
-            (KeyCode::Char('?'), _) | (KeyCode::Char('h'), _) => {
+            (KeyCode::Char('?' | 'h'), _) => {
                 self.toggle_help();
             }
 
@@ -1326,56 +1324,56 @@ impl App {
         let sample_items = vec![
             (
                 "/home/user/.cache/pip/wheels/abc123.whl",
-                15728640,
+                15_728_640,
                 "Package Manager Caches",
                 "pip cache",
                 CleanedItemType::File,
             ),
             (
                 "/home/user/.cache/npm/_cacache/content-v2/sha512/",
-                8388608,
+                8_388_608,
                 "Package Manager Caches",
                 "npm cache",
                 CleanedItemType::Directory,
             ),
             (
                 "/home/user/.local/share/Trash/files/old_document.pdf",
-                2097152,
+                2_097_152,
                 "Trash",
                 "trash",
                 CleanedItemType::File,
             ),
             (
                 "/home/user/.cache/mozilla/firefox/profiles/",
-                104857600,
+                104_857_600,
                 "Browser Caches",
                 "firefox cache",
                 CleanedItemType::Directory,
             ),
             (
                 "/home/user/.cargo/registry/cache/github.com-1ecc6299db9ec823/",
-                52428800,
+                52_428_800,
                 "Package Manager Caches",
                 "cargo cache",
                 CleanedItemType::Directory,
             ),
             (
                 "/tmp/temp_file_12345.tmp",
-                1048576,
+                1_048_576,
                 "Temporary Files",
                 "temp files",
                 CleanedItemType::File,
             ),
             (
                 "/home/user/.cache/thumbnails/large/abc123.png",
-                262144,
+                262_144,
                 "Thumbnail Caches",
                 "thumbnails",
                 CleanedItemType::File,
             ),
             (
                 "/var/log/old_system.log",
-                10485760,
+                10_485_760,
                 "System Logs",
                 "system logs",
                 CleanedItemType::Log,
@@ -1389,42 +1387,42 @@ impl App {
             ),
             (
                 "/home/user/.cache/google-chrome/Default/Cache/",
-                209715200,
+                209_715_200,
                 "Browser Caches",
                 "chrome cache",
                 CleanedItemType::Directory,
             ),
             (
                 "/home/user/.npm/_cacache/tmp/",
-                4194304,
+                4_194_304,
                 "Package Manager Caches",
                 "npm cache",
                 CleanedItemType::Directory,
             ),
             (
                 "/home/user/.cache/yarn/v6/npm-lodash-4.17.21/",
-                1572864,
+                1_572_864,
                 "Package Manager Caches",
                 "yarn cache",
                 CleanedItemType::Directory,
             ),
             (
                 "/var/tmp/portage/",
-                83886080,
+                83_886_080,
                 "Temporary Files",
                 "portage temp",
                 CleanedItemType::Directory,
             ),
             (
                 "/home/user/.local/share/Trash/files/screenshot.png",
-                3145728,
+                3_145_728,
                 "Trash",
                 "trash",
                 CleanedItemType::File,
             ),
             (
                 "/home/user/.cache/fontconfig/",
-                524288,
+                524_288,
                 "Application Caches",
                 "font cache",
                 CleanedItemType::Directory,

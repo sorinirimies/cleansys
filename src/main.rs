@@ -138,7 +138,7 @@ fn run_tui() -> Result<()> {
 
     let result = loop {
         // Draw UI
-        if let Err(e) = terminal.draw(|f| ui::<CrosstermBackend<io::Stdout>>(f, &mut app)) {
+        if let Err(e) = terminal.draw(|f| ui(f, &mut app)) {
             break Err(e.into());
         }
 
@@ -162,7 +162,7 @@ fn run_tui() -> Result<()> {
                 // Handle terminal resize
                 app.handle_resize(width, height);
                 // Force immediate redraw on resize
-                if let Err(e) = terminal.draw(|f| ui::<CrosstermBackend<io::Stdout>>(f, &mut app)) {
+                if let Err(e) = terminal.draw(|f| ui(f, &mut app)) {
                     break Err(e.into());
                 }
             }

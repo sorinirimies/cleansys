@@ -1,5 +1,4 @@
 use ratatui::{
-    backend::Backend,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     symbols,
@@ -14,7 +13,7 @@ use crate::app::{App, ChartType, CleanedItemType, Status};
 use crate::pie_chart::create_pie_chart_from_distribution;
 use crate::utils::format_size;
 
-pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
+pub fn ui(f: &mut Frame, app: &mut App) {
     // Update animation frame if needed
     app.update_animation();
 
@@ -40,7 +39,7 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
             Constraint::Min(min_content_height), // Main content
             Constraint::Length(footer_height),   // Footer
         ])
-        .split(f.size());
+        .split(f.area());
 
     render_title(f, app, chunks[0]);
 
@@ -56,11 +55,11 @@ pub fn ui<B: Backend>(f: &mut Frame<B>, app: &mut App) {
 
     // Render password prompt as overlay if visible
     if app.password_prompt.is_visible() {
-        app.password_prompt.render(f, f.size());
+        app.password_prompt.render(f, f.area());
     }
 }
 
-fn render_title<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
+fn render_title(f: &mut Frame, app: &App, area: Rect) {
     // Adjust title content based on terminal width
     let title_lines = if app.terminal_width < 80 {
         // Narrow terminals: shortened version with dimensions indicator
@@ -118,7 +117,7 @@ fn render_title<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
     f.render_widget(title, area);
 }
 
-fn render_main_content<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
+fn render_main_content(f: &mut Frame, app: &mut App, area: Rect) {
     // Adjust layout based on terminal width
     let (categories_percent, content_percent) = if app.terminal_width < 80 {
         // Narrow terminals: give more space to content
@@ -148,12 +147,12 @@ fn render_main_content<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) 
     }
 }
 
-fn render_progress_screen<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
+fn render_progress_screen(f: &mut Frame, app: &mut App, area: Rect) {
     // Render both progress and details in a unified view
     render_unified_progress_view(f, app, area);
 }
 
-fn render_unified_progress_view<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
+fn render_unified_progress_view(f: &mut Frame, app: &mut App, area: Rect) {
     // Update app counters first
     app.update_counters();
 
@@ -192,7 +191,7 @@ fn render_unified_progress_view<B: Backend>(f: &mut Frame<B>, app: &mut App, are
     render_removed_items_window(f, app, main_chunks[1]);
 }
 
-fn render_combined_progress_overview<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
+fn render_combined_progress_overview(f: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .title("📊 Progress Overview & Operations")
         .title_style(
@@ -234,7 +233,7 @@ fn render_combined_progress_overview<B: Backend>(f: &mut Frame<B>, app: &App, ar
     f.render_widget(block, area);
 }
 
-fn render_progress_stats_and_chart<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
+fn render_progress_stats_and_chart(f: &mut Frame, app: &App, area: Rect) {
     let elapsed_time = app.get_elapsed_time();
     let total_ops = app.operation_count;
     let completed_ops = total_ops.saturating_sub(app.errors_count);
@@ -363,7 +362,7 @@ fn render_progress_stats_and_chart<B: Backend>(f: &mut Frame<B>, app: &App, area
     }
 }
 
-fn render_ultra_compact_view<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
+fn render_ultra_compact_view(f: &mut Frame, app: &App, area: Rect) {
     let elapsed_time = app.get_elapsed_time();
     let total_ops = app.operation_count;
     let completed_ops = total_ops.saturating_sub(app.errors_count);
@@ -431,7 +430,7 @@ fn render_ultra_compact_view<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect
     f.render_widget(para, area);
 }
 
-fn render_vertical_bar_chart<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
+fn render_vertical_bar_chart(f: &mut Frame, app: &App, area: Rect) {
     // Get real data from cleaned items
     let category_distribution = app.get_category_distribution();
 
@@ -549,7 +548,7 @@ fn render_vertical_bar_chart<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect
     }
 }
 
-fn render_operations_summary<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
+fn render_operations_summary(f: &mut Frame, app: &App, area: Rect) {
     // Split into user and system operations columns
     let columns = Layout::default()
         .direction(Direction::Horizontal)
@@ -649,7 +648,7 @@ fn render_operations_summary<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect
     f.render_widget(system_list, columns[2]);
 }
 
-fn render_pie_chart_distribution<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
+fn render_pie_chart_distribution(f: &mut Frame, app: &App, area: Rect) {
     let category_distribution = app.get_category_distribution();
 
     // Only show real data from actual cleaning operations
@@ -669,7 +668,7 @@ fn render_pie_chart_distribution<B: Backend>(f: &mut Frame<B>, app: &App, area: 
     }
 }
 
-fn render_pie_chart_size_distribution<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
+fn render_pie_chart_size_distribution(f: &mut Frame, app: &App, area: Rect) {
     let category_distribution = app.get_category_distribution();
 
     // Only show real data from actual cleaning operations
@@ -688,7 +687,7 @@ fn render_pie_chart_size_distribution<B: Backend>(f: &mut Frame<B>, app: &App, a
     }
 }
 
-fn render_removed_items_window<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
+fn render_removed_items_window(f: &mut Frame, app: &mut App, area: Rect) {
     let title = if app.is_running {
         "📋 Operation Progress"
     } else if app.show_progress_screen {
@@ -840,7 +839,7 @@ fn render_removed_items_window<B: Backend>(f: &mut Frame<B>, app: &mut App, area
     f.render_widget(block, area);
 }
 
-fn render_categories<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
+fn render_categories(f: &mut Frame, app: &App, area: Rect) {
     // Add icons to category names
     let categories: Vec<ListItem> = app
         .categories
@@ -874,7 +873,7 @@ fn render_categories<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
     f.render_widget(categories_list, area);
 }
 
-fn render_cleaners<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
+fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
     let current_category = &app.categories[app.category_index];
 
     let items: Vec<ListItem> = current_category
@@ -979,7 +978,7 @@ fn render_cleaners<B: Backend>(f: &mut Frame<B>, app: &mut App, area: Rect) {
     f.render_stateful_widget(items_list, area, &mut app.item_list_state);
 }
 
-fn render_details<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
+fn render_details(f: &mut Frame, app: &App, area: Rect) {
     let current_category = &app.categories[app.category_index];
 
     if let Some(selected) = app.item_list_state.selected() {
@@ -1051,7 +1050,7 @@ fn render_details<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
     }
 }
 
-fn render_footer<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
+fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .borders(Borders::TOP)
         .border_style(Style::default().fg(Color::DarkGray));
@@ -1258,7 +1257,7 @@ fn render_footer<B: Backend>(f: &mut Frame<B>, app: &App, area: Rect) {
     f.render_widget(block, area);
 }
 
-fn render_help<B: Backend>(f: &mut Frame<B>, area: Rect) {
+fn render_help(f: &mut Frame, area: Rect) {
     let help_text = vec![
         Line::from(vec![Span::styled(
             "🔍 Cleansys Help",
