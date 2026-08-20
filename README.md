@@ -253,30 +253,48 @@ System cleaners (root required):
 
 ## 🏗️ Architecture
 
-CleanSys is organized into clean, modular components:
+CleanSys is a Cargo workspace of three crates — see [Project Structure](#-project-structure) above. Rough internal layout:
 
 ```
-src/
-├── cleaners/          # Individual cleaner implementations
-│   ├── user_cleaners.rs
-│   └── system_cleaners.rs
-├── utils/             # Utility functions (permissions, formatting)
-├── app.rs             # Application state and logic
-├── events.rs          # Event handling (keyboard, resize)
-├── render.rs          # UI rendering logic
-├── pie_chart.rs       # Chart visualization component
-├── menu.rs            # Text-based interactive menu
-├── main.rs            # Entry point and TUI setup
-└── lib.rs             # Public API and documentation
+crates/
+├── cleansys-core/           # Shared, framework-free logic
+│   └── src/
+│       ├── cleaners/        # user_cleaners.rs, system_cleaners.rs, cleaned_item.rs
+│       ├── model.rs         # CleanerItem, CleanerCategory, Status, load_categories()
+│       ├── auth.rs          # Sudo authentication helper
+│       └── utils.rs         # Permissions, formatting, confirmation prompts
+├── cleansys-tui/            # Ratatui TUI + CLI (binary: cleansys)
+│   └── src/
+│       ├── app.rs           # Application state and key-handling logic
+│       ├── events.rs        # Terminal input/resize event handling
+│       ├── render.rs        # UI rendering logic
+│       ├── pie_chart.rs     # Chart visualization component
+│       ├── menu.rs          # Text-based interactive menu
+│       └── components/      # Reusable widgets (password prompt)
+└── cleansys-gui/            # Iced desktop GUI (binary: cleansys-gui)
+    └── src/
+        ├── state.rs          # Application state
+        ├── update.rs         # Elm-style update logic
+        ├── view.rs           # Rendering (tabs, cards, activity log)
+        └── icons.rs          # Bootstrap icon glyph constants
 ```
 
 ## 🖥️ Platform Support
 
-CleanSys supports Linux-based operating systems including:
-- Ubuntu/Debian (apt-based)
-- Arch Linux (pacman-based)
-- Fedora/RHEL (dnf/yum-based)
-- Other Linux distributions
+| Platform | `cleansys` (TUI/CLI) | `cleansys-gui` | Notes |
+|----------|:---:|:---:|-------|
+| Linux (x86_64, aarch64) | ✅ | ✅ | Primary target — full cleaner support (apt/pacman/dnf, journalctl, etc.) |
+| macOS (Intel + Apple Silicon) | ✅ builds & runs | ✅ builds & runs | Both binaries build and run natively; the *cleaner implementations* are Linux-specific by design (this is a Linux cache/cleanup tool), so `cleansys-gui` is handy for developing/previewing the UI on macOS |
+| Windows (x86_64) | ✅ builds & runs | ✅ builds & runs | Same as macOS — compiles and runs cleanly (verified via cross-compilation to `x86_64-pc-windows-gnu`/`-msvc`), cleaner backends are Linux-specific |
+
+Windowing / desktop-environment support for `cleansys-gui` (via [Iced](https://iced.rs)/winit):
+- **Linux**: X11 and Wayland (both enabled by default)
+- **macOS**: native Cocoa/AppKit windowing (Intel + Apple Silicon, universal binary in releases)
+- **Windows**: native Win32 windowing
+
+The terminal UI (`cleansys`, via [Ratatui](https://github.com/ratatui-org/ratatui)/[Crossterm](https://github.com/crossterm-rs/crossterm)) works in any terminal emulator on any of the three platforms.
+
+See [Releases](https://github.com/sorinirimies/cleansys/releases) for pre-built binaries: Linux `.deb`/`.rpm`/AppImage, Windows NSIS installer, and a universal macOS `.dmg`.
 
 ## 🧪 Testing
 
@@ -345,11 +363,29 @@ just vhs-clean
 
 All generated GIF files are output to `demo/target/` and are git-ignored.
 
+## 🗺️ Roadmap / Ideas
+
+Things that would be natural next steps for the project (contributions welcome!):
+
+- **Cross-platform cleaner backends** — today's cleaner implementations target Linux (apt/pacman/dnf, journalctl, XDG cache dirs). Adding macOS (`~/Library/Caches`, Homebrew cache, Xcode derived data) and Windows (`%TEMP%`, `%LOCALAPPDATA%`, WinSxS) cleaner sets would let the GUI/TUI shells (which already build and run everywhere) actually clean on those platforms too.
+- **Dry-run / preview mode** — estimate reclaimed space and list affected files before actually deleting anything, in both TUI and GUI.
+- **Scheduled/background cleaning** — a small daemon or OS-native scheduler (systemd timer / launchd / Task Scheduler) integration to auto-clean on a cadence.
+- **Settings persistence** — remember last selection, custom include/exclude paths, and preferred chart/view mode across runs (`cleansys-core::utils` already has a `directories`-based config dir helper to build on).
+- **Pluggable/custom cleaners** — user-defined cleaner rules via a TOML config (glob patterns + safety checks), loaded by `cleansys-core` and shared by both front-ends.
+- **Notifications** — desktop notification (via `notify-rust` or similar) when a long-running clean finishes.
+- **GUI disk-usage chart** — port the TUI's pie/bar chart (`tui-piechart`) to an Iced `Canvas` widget in `cleansys-gui` for visual parity.
+- **Light theme / theme picker** for the GUI, and a `--theme` flag for the TUI.
+- **Localization (i18n)** for both UIs.
+- **JSON output** for `cleansys list` / `cleansys user --yes` etc., to make the CLI scriptable.
+- **AUR / winget / Homebrew formulae** for easier installation (AUR `PKGBUILD` scaffold already included under `packaging/aur/`).
+
 ## 🙏 Acknowledgments
 
 - [Ratatui](https://github.com/ratatui-org/ratatui) - Terminal UI framework
 - [tui-checkbox](https://crates.io/crates/tui-checkbox) - Checkbox widget library
 - [Crossterm](https://github.com/crossterm-rs/crossterm) - Cross-platform terminal manipulation
+- [Iced](https://iced.rs) - Cross-platform Rust GUI framework powering `cleansys-gui`
+- [iced_fonts](https://crates.io/crates/iced_fonts) - Bootstrap icon font for the GUI
 - [VHS](https://github.com/charmbracelet/vhs) - Terminal session recorder for creating demos
 
 ---

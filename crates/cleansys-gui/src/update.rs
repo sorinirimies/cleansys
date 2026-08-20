@@ -38,6 +38,13 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        Message::SwitchCategoryTab(idx) => {
+            if idx < state.categories.len() {
+                state.active_tab = idx;
+            }
+            Task::none()
+        }
+
         Message::ClearLog => {
             state.logs.clear();
             Task::none()
@@ -193,4 +200,207 @@ fn start_pending_operations(state: &mut CleanSysGui) -> Task<Message> {
     }
 
     Task::batch(tasks)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::state::CleanSysGui;
+
+    #[test]
+    fn toggle_item_flips_selection() {
+        let mut state = CleanSysGui::new();
+        assert!(!state.categories[0].items[0].selected);
+
+        let _ = update(&mut state, Message::ToggleItem(0, 0));
+        assert!(state.categories[0].items[0].selected);
+
+        let _ = update(&mut state, Message::ToggleItem(0, 0));
+        assert!(!state.categories[0].items[0].selected);
+    }
+
+    #[test]
+    fn toggle_item_out_of_range_is_a_no_op() {
+        let mut state = CleanSysGui::new();
+        // Should not panic.
+        let _ = update(&mut state, Message::ToggleItem(99, 99));
+    }
+
+    #[test]
+    fn select_all_and_deselect_all_category() {
+        let mut state = CleanSysGui::new();
+        let _ = update(&mut state, Message::SelectAllCategory(0));
+        assert!(state.categories[0].items.iter().all(|i| i.selected));
+
+        let _ = update(&mut state, Message::DeselectAllCategory(0));
+        assert!(state.categories[0].items.iter().all(|i| !i.selected));
+    }
+
+    #[test]
+    fn switch_category_tab_updates_active_tab() {
+        let mut state = CleanSysGui::new();
+        assert_eq!(state.active_tab, 0);
+        let _ = update(&mut state, Message::SwitchCategoryTab(1));
+        assert_eq!(state.active_tab, 1);
+    }
+
+    #[test]
+    fn switch_category_tab_ignores_out_of_range_index() {
+        let mut state = CleanSysGui::new();
+        let _ = update(&mut state, Message::SwitchCategoryTab(99));
+        assert_eq!(state.active_tab, 0);
+    }
+
+    #[test]
+    fn clear_log_empties_logs() {
+        let mut state = CleanSysGui::new();
+        state.push_log("hello");
+        let _ = update(&mut state, Message::ClearLog);
+        assert!(state.logs.is_empty());
+    }
+
+    #[test]
+    fn run_selected_with_nothing_selected_logs_message_and_does_not_run() {
+        let mut state = CleanSysGui::new();
+        let _ = update(&mut state, Message::RunSelected);
+        assert!(!state.is_running);
+        assert!(state.logs.iter().any(|l| l.contains("No items selected")));
+    }
+
+    #[test]
+    fn run_selected_with_user_only_selection_starts_immediately() {
+        let mut state = CleanSysGui::new();
+        state.categories[0].items[0].selected = true;
+        let _ = update(&mut state, Message::RunSelected);
+
+        assert!(state.is_running);
+        assert!(!state.needs_password);
+        assert!(matches!(
+            state.categories[0].items[0].status,
+            Some(Status::Running)
+        ));
+    }
+
+    #[test]
+    fn run_selected_with_root_item_shows_password_dialog_when_not_root() {
+        let mut state = CleanSysGui::new();
+        state.is_root = false;
+        state.categories[1].items[0].selected = true;
+
+        let _ = update(&mut state, Message::RunSelected);
+
+        assert!(state.needs_password);
+        assert!(!state.is_running);
+        assert_eq!(state.pending_root_ops, vec![(1, 0)]);
+    }
+
+    #[test]
+    fn run_selected_with_root_item_runs_immediately_when_already_root() {
+        let mut state = CleanSysGui::new();
+        state.is_root = true;
+        state.categories[1].items[0].selected = true;
+
+        let _ = update(&mut state, Message::RunSelected);
+
+        assert!(!state.needs_password);
+        assert!(state.is_running);
+    }
+
+    #[test]
+    fn password_cancel_clears_dialog_state() {
+        let mut state = CleanSysGui::new();
+        state.needs_password = true;
+        state.password_input = "secret".to_string();
+        state.password_error = Some("nope".to_string());
+        state.pending_root_ops = vec![(1, 0)];
+
+        let _ = update(&mut state, Message::PasswordCancel);
+
+        assert!(!state.needs_password);
+        assert!(state.password_input.is_empty());
+        assert!(state.password_error.is_none());
+        assert!(state.pending_root_ops.is_empty());
+    }
+
+    #[test]
+    fn password_changed_updates_input() {
+        let mut state = CleanSysGui::new();
+        let _ = update(&mut state, Message::PasswordChanged("hunter2".to_string()));
+        assert_eq!(state.password_input, "hunter2");
+    }
+
+    #[test]
+    fn authentication_failure_sets_error_and_clears_input() {
+        let mut state = CleanSysGui::new();
+        state.needs_password = true;
+        state.password_input = "wrong".to_string();
+        let _ = update(&mut state, Message::AuthenticationResult(false));
+
+        assert!(state.password_error.is_some());
+        assert!(state.password_input.is_empty());
+        assert!(state.needs_password);
+    }
+
+    #[test]
+    fn authentication_success_hides_dialog_and_marks_root() {
+        let mut state = CleanSysGui::new();
+        state.needs_password = true;
+        state.is_root = false;
+        state.pending_root_ops = vec![(1, 0)];
+        state.categories[1].items[0].selected = true;
+
+        let _ = update(&mut state, Message::AuthenticationResult(true));
+
+        assert!(!state.needs_password);
+        assert!(state.is_root);
+        assert!(state.is_running);
+    }
+
+    #[test]
+    fn operation_finished_success_updates_item_and_totals() {
+        let mut state = CleanSysGui::new();
+        state.categories[0].items[0].status = Some(Status::Running);
+        state.is_running = true;
+
+        let _ = update(&mut state, Message::OperationFinished(0, 0, Ok(2048)));
+
+        assert_eq!(state.total_bytes_cleaned, 2048);
+        assert!(matches!(
+            state.categories[0].items[0].status,
+            Some(Status::Success(_))
+        ));
+        // No other items are pending/running, so the run should be marked done.
+        assert!(!state.is_running);
+    }
+
+    #[test]
+    fn operation_finished_error_updates_item_status() {
+        let mut state = CleanSysGui::new();
+        state.categories[0].items[0].status = Some(Status::Running);
+        state.is_running = true;
+
+        let _ = update(
+            &mut state,
+            Message::OperationFinished(0, 0, Err("boom".to_string())),
+        );
+
+        assert!(matches!(
+            state.categories[0].items[0].status,
+            Some(Status::Error(ref msg)) if msg == "boom"
+        ));
+        assert!(!state.is_running);
+    }
+
+    #[test]
+    fn operation_finished_keeps_running_while_others_pending() {
+        let mut state = CleanSysGui::new();
+        state.categories[0].items[0].status = Some(Status::Running);
+        state.categories[0].items[1].status = Some(Status::Pending);
+        state.is_running = true;
+
+        let _ = update(&mut state, Message::OperationFinished(0, 0, Ok(10)));
+
+        // Another item is still pending, so the overall run isn't finished yet.
+        assert!(state.is_running);
+    }
 }

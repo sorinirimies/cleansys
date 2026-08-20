@@ -2,7 +2,9 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crossterm::terminal;
 use ratatui::widgets::ListState;
+#[cfg(unix)]
 use std::io::Read;
+#[cfg(unix)]
 use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::sync::mpsc;
 use std::time::Instant;
@@ -17,7 +19,14 @@ use std::time::SystemTime;
 static SIZE_REGEX: Lazy<Regex> =
     Lazy::new(|| Regex::new(r"(\d+\.?\d*)\s*(KB|MB|GB|bytes)").unwrap());
 
-/// Capture stdout/stderr during function execution
+/// Capture stdout/stderr during function execution.
+///
+/// Uses raw POSIX pipe redirection on Unix so cleaner functions that `println!`
+/// their progress can have that output parsed into [`DetailedCleanedItem`]s.
+/// On non-Unix targets (Windows) there is no cheap portable equivalent, so we
+/// just run the function directly without capturing output — the TUI still
+/// works, it just won't populate the detailed-items view from stdout text.
+#[cfg(unix)]
 fn capture_output<F, T>(f: F) -> Result<(T, String)>
 where
     F: FnOnce() -> Result<T>,
@@ -76,6 +85,15 @@ where
 
         result.map(|r| (r, combined))
     }
+}
+
+/// Non-Unix fallback: just run `f` without capturing stdout/stderr.
+#[cfg(not(unix))]
+fn capture_output<F, T>(f: F) -> Result<(T, String)>
+where
+    F: FnOnce() -> Result<T>,
+{
+    f().map(|r| (r, String::new()))
 }
 
 #[derive(Debug, Clone)]

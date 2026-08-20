@@ -9,6 +9,8 @@ pub enum Message {
     SelectAllCategory(usize),
     /// Deselect every item in a category.
     DeselectAllCategory(usize),
+    /// Switch the active category tab.
+    SwitchCategoryTab(usize),
     /// Kick off cleaning of all currently-selected items.
     RunSelected,
     /// The password field in the sudo authentication dialog changed.

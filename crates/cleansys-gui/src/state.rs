@@ -22,6 +22,8 @@ pub struct CleanSysGui {
     pub password_error: Option<String>,
     /// Operations queued to run once sudo authentication succeeds.
     pub pending_root_ops: Vec<(usize, usize)>,
+    /// Index of the currently active category tab.
+    pub active_tab: usize,
 }
 
 impl Default for CleanSysGui {
@@ -43,6 +45,7 @@ impl CleanSysGui {
             password_input: String::new(),
             password_error: None,
             pending_root_ops: Vec::new(),
+            active_tab: 0,
         }
     }
 
@@ -53,6 +56,14 @@ impl CleanSysGui {
             .flat_map(|c| &c.items)
             .filter(|i| i.selected)
             .count()
+    }
+
+    /// Number of currently selected items within a specific category.
+    pub fn selected_count_in(&self, cat_idx: usize) -> usize {
+        self.categories
+            .get(cat_idx)
+            .map(|c| c.items.iter().filter(|i| i.selected).count())
+            .unwrap_or(0)
     }
 
     /// True if any selected item requires root and we don't already have it.
@@ -82,5 +93,92 @@ impl CleanSysGui {
                 }
             }
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn new_loads_categories_and_defaults() {
+        let state = CleanSysGui::new();
+        assert_eq!(state.categories.len(), 2);
+        assert_eq!(state.active_tab, 0);
+        assert_eq!(state.selected_count(), 0);
+        assert!(state.logs.is_empty());
+        assert_eq!(state.total_bytes_cleaned, 0);
+        assert!(!state.is_running);
+        assert!(!state.needs_password);
+    }
+
+    #[test]
+    fn selected_count_tracks_selections() {
+        let mut state = CleanSysGui::new();
+        assert_eq!(state.selected_count(), 0);
+        state.categories[0].items[0].selected = true;
+        assert_eq!(state.selected_count(), 1);
+        assert_eq!(state.selected_count_in(0), 1);
+        assert_eq!(state.selected_count_in(1), 0);
+        state.categories[1].items[0].selected = true;
+        assert_eq!(state.selected_count(), 2);
+    }
+
+    #[test]
+    fn selected_count_in_out_of_range_is_zero() {
+        let state = CleanSysGui::new();
+        assert_eq!(state.selected_count_in(99), 0);
+    }
+
+    #[test]
+    fn selection_needs_root_when_not_root_and_system_item_selected() {
+        let mut state = CleanSysGui::new();
+        state.is_root = false;
+        assert!(!state.selection_needs_root());
+
+        // Category 1 is "System Cleaners" — all items require root.
+        state.categories[1].items[0].selected = true;
+        assert!(state.selection_needs_root());
+    }
+
+    #[test]
+    fn selection_needs_root_false_when_already_root() {
+        let mut state = CleanSysGui::new();
+        state.is_root = true;
+        state.categories[1].items[0].selected = true;
+        assert!(!state.selection_needs_root());
+    }
+
+    #[test]
+    fn selection_needs_root_false_for_user_only_selection() {
+        let mut state = CleanSysGui::new();
+        state.is_root = false;
+        state.categories[0].items[0].selected = true;
+        assert!(!state.selection_needs_root());
+    }
+
+    #[test]
+    fn push_log_caps_at_500_entries() {
+        let mut state = CleanSysGui::new();
+        for i in 0..600 {
+            state.push_log(format!("line {i}"));
+        }
+        assert_eq!(state.logs.len(), 500);
+        // Oldest entries should have been evicted; the log should end with the
+        // most recent line.
+        assert_eq!(state.logs.last().unwrap(), "line 599");
+    }
+
+    #[test]
+    fn mark_selected_pending_only_affects_selected_items() {
+        let mut state = CleanSysGui::new();
+        state.categories[0].items[0].selected = true;
+        state.mark_selected_pending();
+
+        assert!(matches!(
+            state.categories[0].items[0].status,
+            Some(Status::Pending)
+        ));
+        assert!(state.categories[0].items[1].status.is_none());
     }
 }

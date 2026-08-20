@@ -1,0 +1,47 @@
+# Maintainer: Sorin Albu-Irimies <sorinirimies@gmail.com>
+pkgbase=cleansys
+pkgname=('cleansys' 'cleansys-gui')
+pkgver=0.4.0
+pkgrel=1
+pkgdesc="Modern system cleaner for Linux — terminal UI/CLI and desktop GUI"
+arch=('x86_64' 'aarch64')
+url="https://github.com/sorinirimies/cleansys"
+license=('MIT')
+makedepends=('rust' 'cargo' 'pkg-config')
+source=("$pkgbase-$pkgver.tar.gz::https://github.com/sorinirimies/cleansys/archive/refs/tags/v$pkgver.tar.gz")
+sha256sums=('SKIP')
+
+# Required for the GUI binary
+_gui_deps=('libxkbcommon' 'wayland' 'libgl' 'fontconfig')
+
+prepare() {
+    cd "$pkgbase-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable
+    cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+    cd "$pkgbase-$pkgver"
+    export RUSTUP_TOOLCHAIN=stable
+    export CARGO_TARGET_DIR=target
+    cargo build --frozen --release --package cleansys-tui
+    cargo build --frozen --release --package cleansys-gui
+}
+
+package_cleansys() {
+    pkgdesc="CleanSys — terminal UI and CLI system cleaner for Linux (Ratatui)"
+    depends=('gcc-libs')
+    cd "$pkgbase-$pkgver"
+    install -Dm755 "target/release/cleansys" "$pkgdir/usr/bin/cleansys"
+    install -Dm644 "LICENSE" "$pkgdir/usr/share/licenses/cleansys/LICENSE"
+    install -Dm644 "README.md" "$pkgdir/usr/share/doc/cleansys/README.md"
+}
+
+package_cleansys-gui() {
+    pkgdesc="CleanSys GUI — desktop system cleaner for Linux (Iced)"
+    depends=("${_gui_deps[@]}")
+    cd "$pkgbase-$pkgver"
+    install -Dm755 "target/release/cleansys-gui" "$pkgdir/usr/bin/cleansys-gui"
+    install -Dm644 "LICENSE" "$pkgdir/usr/share/licenses/cleansys-gui/LICENSE"
+    install -Dm644 "README.md" "$pkgdir/usr/share/doc/cleansys-gui/README.md"
+}

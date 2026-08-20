@@ -155,6 +155,34 @@ vhs-clean:
     @rm -f demo/target/*.gif
     @echo "✅ VHS outputs cleaned!"
 
+# ── Packaging ────────────────────────────────────────────────────────
+
+# Build Linux .deb and .rpm packages (requires dpkg-deb + alien; run locally on Linux)
+package-linux version: build-release
+    nu scripts/ci/package_linux.nu {{ version }} $(rustc -vV | grep host | cut -d' ' -f2)
+
+# Build Linux AppImages (requires appimagetool in PATH)
+package-appimage version:
+    bash scripts/ci/package_appimage.sh {{ version }} $(rustc -vV | grep host | cut -d' ' -f2)
+
+# Cross-compile Windows .exe from Linux (requires mingw-w64)
+# Install: sudo pacman -S mingw-w64-gcc   OR   sudo apt install gcc-mingw-w64-x86-64
+package-windows version:
+    rustup target add x86_64-pc-windows-gnu
+    cargo build --release -p cleansys-tui -p cleansys-gui --target x86_64-pc-windows-gnu
+    mkdir -p dist
+    cp target/x86_64-pc-windows-gnu/release/cleansys.exe     dist/cleansys-tui-x86_64-windows.exe
+    cp target/x86_64-pc-windows-gnu/release/cleansys-gui.exe dist/cleansys-gui-x86_64-windows.exe
+
+# Update AUR PKGBUILD to a new version
+update-aur version:
+    bash scripts/ci/update_aur.sh {{ version }}
+
+# Note: macOS universal DMG is built automatically by GitHub Actions (macos-latest runner)
+# Note: Windows NSIS installer is built by GitHub Actions (windows-latest runner)
+#       and cross-compiled via mingw-w64 by Gitea CI (no Windows machine needed)
+# Note: Linux aarch64 is cross-compiled by both GitHub Actions and Gitea CI
+
 # ── Documentation ─────────────────────────────────────────────────────────────
 
 # Generate and open docs for the TUI crate
@@ -190,7 +218,7 @@ changelog-latest: _check-git-cliff
 
 # Validate that a version string will produce a valid vX.Y.Z tag.
 validate-tag version: _check-nu
-    @nu -c $'if not ("{{version}}" | parse --regex \'^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.]+)?$\' | is-empty) { print "✅ valid version" } else { print "❌ invalid version: {{version}}"; exit 1 }'
+    @nu scripts/ci/validate_tag.nu "v{{version}}" 2>&1 >/dev/null
 
 _check-version-changed version: _check-nu
     #!/usr/bin/env sh
@@ -207,6 +235,10 @@ bump version: (validate-tag version) (_check-version-changed version) check-rele
     nu scripts/bump_version.nu --yes {{ version }}
 
 # ── Publish (crates.io) ───────────────────────────────────────────────────────
+
+# Run the full pre-publish readiness check (fmt, clippy, tests, docs, dry-run)
+check-publish: _check-nu
+    nu scripts/check_publish.nu
 
 # Dry-run publish for all three crates (in dependency order)
 publish-dry: check-all
@@ -381,3 +413,12 @@ release-all version: (bump version)
     else
         echo "✅ Release v{{version}} pushed to GitHub and Gitea!"
     fi
+
+# Manually re-trigger the Release workflow for an existing tag via the gh CLI.
+release-retrigger version:
+    @command -v gh >/dev/null 2>&1 || { \
+        echo "❌ GitHub CLI (gh) not found. Install from https://cli.github.com"; exit 1; \
+    }
+    @echo "Manually dispatching Release workflow for tag v{{version}}…"
+    gh workflow run release.yml --field tag=v{{version}}
+    @echo "✅ Dispatched — check progress at: https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/actions"

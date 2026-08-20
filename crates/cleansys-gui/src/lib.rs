@@ -19,6 +19,9 @@ pub mod update;
 /// View (rendering) logic.
 pub mod view;
 
+/// Bootstrap icon font glyph constants.
+pub mod icons;
+
 pub use message::Message;
 pub use state::CleanSysGui;
 pub use update::update;

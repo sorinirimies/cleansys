@@ -4,137 +4,352 @@ on:
   push:
     tags:
       - "v*"
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to release (e.g. v0.7.7)"
+        required: true
+        default: ""
 
 permissions:
   contents: write
+  packages: write
+
+concurrency:
+  group: release
+  cancel-in-progress: true
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  build:
-    name: Build and release
+  # ── 0. Validate tag ──────────────────────────────────────────────────────────
+  validate:
+    name: Validate tag
+    runs-on: ubuntu-latest
+    outputs:
+      tag: ${{ steps.resolve.outputs.tag }}
+      version: ${{ steps.resolve.outputs.version }}
+    steps:
+      - name: Resolve and validate tag
+        id: resolve
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ github.event.inputs.tag }}"
+          else
+            TAG="${{ github.ref_name }}"
+          fi
+          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "❌ Tag '${TAG}' does not match vX.Y.Z — aborting."
+            exit 1
+          fi
+          VERSION="${TAG#v}"
+          echo "tag=${TAG}"         >> "$GITHUB_OUTPUT"
+          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+  # ── 1. Quality gate ───────────────────────────────────────────────────────────
+  test:
+    name: Test & lint
+    needs: validate
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-
-      - name: Install Linux GUI system libraries
+          ref: ${{ needs.validate.outputs.tag }}
+      - name: Install Linux GUI libraries
         run: |
           sudo apt-get update -qq
           sudo apt-get install -y --no-install-recommends \
-            pkg-config \
-            libxkbcommon-dev \
-            libx11-dev \
-            libxrandr-dev \
-            libxinerama-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libwayland-dev \
-            libgl1-mesa-dev \
-            libfontconfig1-dev \
-            libssl-dev
+            pkg-config libxkbcommon-dev libx11-dev libxrandr-dev \
+            libxinerama-dev libxcursor-dev libxi-dev libwayland-dev \
+            libgl1-mesa-dev libfontconfig1-dev libssl-dev
+      - name: Install Rust stable
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+      - name: Install Nushell
+        run: cargo install nu --locked
+      - name: Quality gate
+        run: nu scripts/ci/quality_gate.nu
+
+  # ── 2. Linux builds (native + aarch64 cross) ──────────────────────────────────
+  build-linux:
+    name: Build Linux — ${{ matrix.target }}
+    needs: [validate, test]
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            cross: false
+          - target: aarch64-unknown-linux-gnu
+            cross: true
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Install Linux GUI libraries + packaging tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libx11-dev libxrandr-dev \
+            libxinerama-dev libxcursor-dev libxi-dev libwayland-dev \
+            libgl1-mesa-dev libfontconfig1-dev libssl-dev \
+            gcc-aarch64-linux-gnu dpkg-dev rpm
+
+      - name: Install Rust stable + target
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          . "$HOME/.cargo/env"
+          rustup target add ${{ matrix.target }}
+
+      - name: Configure aarch64 cross-linker
+        if: matrix.cross == true
+        run: |
+          mkdir -p ~/.cargo
+          echo '[target.aarch64-unknown-linux-gnu]' >> ~/.cargo/config.toml
+          echo 'linker = "aarch64-linux-gnu-gcc"'   >> ~/.cargo/config.toml
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+
+      - name: Build TUI
+        run: cargo build --release -p cleansys-tui --target ${{ matrix.target }}
+
+      - name: Build GUI
+        run: cargo build --release -p cleansys-gui --target ${{ matrix.target }}
+
+      - name: Install Nushell
+        run: cargo install nu --locked
+
+      - name: Build .deb and .rpm
+        run: nu scripts/ci/package_linux.nu ${{ needs.validate.outputs.version }} ${{ matrix.target }}
+
+      - name: Install appimagetool
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: |
+          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage \
+            -O /tmp/appimagetool
+          chmod +x /tmp/appimagetool
+          sudo cp /tmp/appimagetool /usr/local/bin/appimagetool
+
+      - name: Build AppImage
+        if: matrix.target == 'x86_64-unknown-linux-gnu'
+        run: bash scripts/ci/package_appimage.sh ${{ needs.validate.outputs.version }} ${{ matrix.target }}
+
+      - name: Stage raw binaries
+        run: |
+          mkdir -p dist
+          cp target/${{ matrix.target }}/release/cleansys-gui  dist/cleansys-gui-${{ matrix.target }} || true
+          cp target/${{ matrix.target }}/release/cleansys      dist/cleansys-tui-${{ matrix.target }} || true
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-${{ matrix.target }}
+          path: dist/
+          retention-days: 1
+
+  # ── 3. Windows cross-compile from Linux (mingw-w64) ───────────────────────────
+  # No Windows machine needed — mingw-w64 cross-compiles .exe on Linux.
+  build-windows:
+    name: Build Windows x86_64 (cross from Linux)
+    needs: [validate, test]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Install mingw-w64 cross-compiler
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            gcc-mingw-w64-x86-64 mingw-w64 nsis
+
+      - name: Install Rust stable + Windows target
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          . "$HOME/.cargo/env"
+          rustup target add x86_64-pc-windows-gnu
+
+      - name: Configure Windows cross-linker
+        run: |
+          mkdir -p ~/.cargo
+          echo '[target.x86_64-pc-windows-gnu]'           >> ~/.cargo/config.toml
+          echo 'linker = "x86_64-w64-mingw32-gcc"'        >> ~/.cargo/config.toml
+          echo 'ar = "x86_64-w64-mingw32-ar"'             >> ~/.cargo/config.toml
+
+      - name: Cache Cargo
+        uses: Swatinem/rust-cache@v2
+        with:
+          key: x86_64-pc-windows-gnu
+
+      - name: Build TUI for Windows
+        run: cargo build --release -p cleansys-tui --target x86_64-pc-windows-gnu
+
+      - name: Build GUI for Windows
+        run: cargo build --release -p cleansys-gui --target x86_64-pc-windows-gnu
+
+      - name: Stage Windows binaries and build zip
+        run: |
+          mkdir -p dist
+          cp target/x86_64-pc-windows-gnu/release/cleansys-gui.exe     dist/cleansys-gui-x86_64-windows.exe
+          cp target/x86_64-pc-windows-gnu/release/cleansys.exe dist/cleansys-tui-x86_64-windows.exe
+          cd dist
+          zip cleansys-${{ needs.validate.outputs.version }}-x86_64-windows.zip \
+            cleansys-gui-x86_64-windows.exe \
+            cleansys-tui-x86_64-windows.exe
+
+      - name: Upload Windows artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-x86_64
+          path: dist/
+          retention-days: 1
+
+  # ── 4. Create Gitea Release ───────────────────────────────────────────────────
+  release:
+    name: Create Release
+    needs: [validate, build-linux, build-windows]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+          fetch-depth: 0
 
       - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - name: Install git-cliff
         run: cargo install git-cliff --locked
+      - name: Install Nushell
+        run: cargo install nu --locked
+      - name: Generate release notes
+        run: nu scripts/ci/release_notes.nu ${{ needs.validate.outputs.tag }}
 
-      - name: Update version and generate changelog
-        run: |
-          VERSION=${GITHUB_REF_NAME#v}
-          echo "Updating version to: $VERSION"
-
-          # Update the workspace version (workspace.package.version)
-          sed -i "s/^version    = \".*\"/version    = \"$VERSION\"/" Cargo.toml
-
-          git-cliff --config cliff.toml --latest --output CHANGELOG.md
-
-          LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          if [ -n "$LAST_TAG" ]; then
-            git-cliff --config cliff.toml "${LAST_TAG}..${{ github.ref_name }}" --strip header > CLIFF_CHANGES.md
-          else
-            git-cliff --config cliff.toml --tag "${{ github.ref_name }}" --strip header > CLIFF_CHANGES.md
-          fi
-
-          echo "# CleanSys ${VERSION}" > RELEASE_CHANGELOG.md
-          echo "" >> RELEASE_CHANGELOG.md
-          echo "## 🚀 What's New" >> RELEASE_CHANGELOG.md
-          echo "" >> RELEASE_CHANGELOG.md
-          if [ -n "$LAST_TAG" ]; then
-            echo "### 📝 Changes since ${LAST_TAG}:" >> RELEASE_CHANGELOG.md
-          else
-            echo "### 🎉 Initial Release" >> RELEASE_CHANGELOG.md
-          fi
-          echo "" >> RELEASE_CHANGELOG.md
-          cat CLIFF_CHANGES.md >> RELEASE_CHANGELOG.md
-
-          echo "" >> RELEASE_CHANGELOG.md
-          echo "## 📦 Installation" >> RELEASE_CHANGELOG.md
-          echo "" >> RELEASE_CHANGELOG.md
-          echo '```bash' >> RELEASE_CHANGELOG.md
-          echo "cargo install cleansys-tui   # terminal UI + CLI" >> RELEASE_CHANGELOG.md
-          echo "cargo install cleansys-gui   # desktop GUI (Iced)" >> RELEASE_CHANGELOG.md
-          echo '```' >> RELEASE_CHANGELOG.md
-          echo "" >> RELEASE_CHANGELOG.md
-          echo "## 🚀 Quick Start" >> RELEASE_CHANGELOG.md
-          echo "" >> RELEASE_CHANGELOG.md
-          echo '```bash' >> RELEASE_CHANGELOG.md
-          echo "# Run the terminal UI (user-level cleaning)" >> RELEASE_CHANGELOG.md
-          echo "cleansys" >> RELEASE_CHANGELOG.md
-          echo "" >> RELEASE_CHANGELOG.md
-          echo "# Run the terminal UI (system-level cleaning)" >> RELEASE_CHANGELOG.md
-          echo "sudo cleansys" >> RELEASE_CHANGELOG.md
-          echo "" >> RELEASE_CHANGELOG.md
-          echo "# Launch the desktop GUI" >> RELEASE_CHANGELOG.md
-          echo "cleansys-gui" >> RELEASE_CHANGELOG.md
-          echo '```' >> RELEASE_CHANGELOG.md
-
-          echo "Generated release notes:"
-          cat RELEASE_CHANGELOG.md
-
-      - name: Build release binaries
-        run: |
-          cargo build --release -p cleansys-tui
-          cargo build --release -p cleansys-gui
-
-      - name: Package binaries
-        run: |
-          tar -C target/release -czvf cleansys-tui-${{ github.ref_name }}-linux-x86_64.tar.gz cleansys
-          tar -C target/release -czvf cleansys-gui-${{ github.ref_name }}-linux-x86_64.tar.gz cleansys-gui
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v1
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
         with:
-          body_path: RELEASE_CHANGELOG.md
-          files: |
-            cleansys-tui-${{ github.ref_name }}-linux-x86_64.tar.gz
-            cleansys-gui-${{ github.ref_name }}-linux-x86_64.tar.gz
-            LICENSE
-            README.md
-            CHANGELOG.md
+          path: artifacts/
 
-      - name: Publish to crates.io
-        if: env.CRATES_IO_TOKEN != ''
-        env:
-          CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+      - name: Flatten artifact directories
         run: |
-          echo "Publishing to crates.io..."
-          cargo publish --token $CRATES_IO_TOKEN -p cleansys-core --allow-dirty
-          sleep 30
-          cargo publish --token $CRATES_IO_TOKEN -p cleansys-tui --allow-dirty
-          cargo publish --token $CRATES_IO_TOKEN -p cleansys-gui --allow-dirty
+          cd artifacts
+          find . -mindepth 2 -type f -exec mv {} . \; 2>/dev/null || true
+          find . -empty -type d -delete 2>/dev/null || true
 
-      - name: Skip crates.io publish
-        if: env.CRATES_IO_TOKEN == ''
-        env:
-          CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+      - name: List artifacts
+        run: ls -lh artifacts/
+
+      - name: Create Gitea Release
         run: |
-          echo "⚠️  CRATES_IO_TOKEN not set. Skipping crates.io publication."
-          echo "To publish to crates.io, add CRATES_IO_TOKEN to your GitHub secrets."
+          TAG="${{ needs.validate.outputs.tag }}"
+          GITEA_URL="${{ github.server_url }}"
+          REPO="${{ github.repository }}"
+          TOKEN="${{ secrets.GITHUB_TOKEN }}"
+
+          RELEASE_BODY=$(python3 -c 'import sys,json; print(json.dumps(open("RELEASE_NOTES.md").read()))')
+          RESPONSE=$(curl -s -X POST \
+            "${GITEA_URL}/api/v1/repos/${REPO}/releases" \
+            -H "Authorization: token ${TOKEN}" \
+            -H "Content-Type: application/json" \
+            -d "{\"tag_name\":\"${TAG}\",\"name\":\"${TAG}\",\"body\":${RELEASE_BODY},\"draft\":false,\"prerelease\":false}")
+
+          RELEASE_ID=$(echo "$RESPONSE" | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])' 2>/dev/null)
+          if [ -z "$RELEASE_ID" ] || [ "$RELEASE_ID" = "None" ]; then
+            echo "❌ Failed to create release: $RESPONSE"; exit 1
+          fi
+
+          for file in artifacts/* LICENSE README.md CHANGELOG.md; do
+            [ -f "$file" ] || continue
+            FILENAME=$(basename "$file")
+            echo "📦 Uploading ${FILENAME}..."
+            curl -s -X POST \
+              "${GITEA_URL}/api/v1/repos/${REPO}/releases/${RELEASE_ID}/assets?name=${FILENAME}" \
+              -H "Authorization: token ${TOKEN}" \
+              -H "Content-Type: application/octet-stream" \
+              --data-binary "@${file}" > /dev/null
+          done
+          echo "✅ Release ${TAG} published."
+
+  # ── 5. Publish to crates.io ───────────────────────────────────────────────────
+  publish:
+    name: Publish to crates.io
+    needs: [validate, release]
+    runs-on: ubuntu-latest
+    env:
+      HAS_TOKEN: ${{ secrets.CRATES_IO_TOKEN != '' }}
+    steps:
+      - name: Skip (no token)
+        if: env.HAS_TOKEN != 'true'
+        run: echo "⏭️  CRATES_IO_TOKEN not set — skipping."
+
+      - uses: actions/checkout@v4
+        if: env.HAS_TOKEN == 'true'
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+
+      - name: Install Linux GUI libraries
+        if: env.HAS_TOKEN == 'true'
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config libxkbcommon-dev libx11-dev libxrandr-dev \
+            libxinerama-dev libxcursor-dev libxi-dev libwayland-dev \
+            libgl1-mesa-dev libfontconfig1-dev libssl-dev
+
+      - name: Install Rust stable
+        if: env.HAS_TOKEN == 'true'
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+      - name: Cache Cargo
+        if: env.HAS_TOKEN == 'true'
+        uses: Swatinem/rust-cache@v2
+
+      - name: Publish cleansys-core
+        if: env.HAS_TOKEN == 'true'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          V="${{ needs.validate.outputs.version }}"
+          cargo info cleansys-core@$V 2>/dev/null | grep -q "^cleansys-core" \
+            && echo "⏭️  Already published." || {
+              cp README.md crates/cleansys-core/README.md
+              cargo publish -p cleansys-core --allow-dirty && sleep 30
+            }
+
+      - name: Publish cleansys (GUI)
+        if: env.HAS_TOKEN == 'true'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          V="${{ needs.validate.outputs.version }}"
+          cargo info cleansys-gui@$V 2>/dev/null | grep -q "^cleansys-gui" \
+            && echo "⏭️  Already published." || {
+              cp README.md crates/cleansys-gui/README.md
+              cargo publish -p cleansys-gui --allow-dirty && sleep 20
+            }
+
+      - name: Publish cleansys-tui
+        if: env.HAS_TOKEN == 'true'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          V="${{ needs.validate.outputs.version }}"
+          cargo info cleansys-tui@$V 2>/dev/null | grep -q "^cleansys-tui" \
+            && echo "⏭️  Already published." || {
+              cp README.md crates/cleansys-tui/README.md
+              cargo publish -p cleansys-tui --allow-dirty
+            }
