@@ -1,5 +1,8 @@
 //! Cleaner modules for system and user-level cleanup operations.
 
+/// Individual cleaned item / cleaning result data structures.
+pub mod cleaned_item;
+
 /// System-level cleaners that require root privileges.
 pub mod system_cleaners;
 

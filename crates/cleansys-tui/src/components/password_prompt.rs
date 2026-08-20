@@ -6,8 +6,6 @@ use ratatui::{
     widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
 };
-use std::io::Write;
-use std::process::{Command, Stdio};
 
 /// Password prompt component for sudo authentication
 pub struct PasswordPrompt {
@@ -72,24 +70,11 @@ impl PasswordPrompt {
         self.password_input.pop();
     }
 
-    /// Verify the password using sudo
+    /// Verify the password using sudo (delegates to shared core logic).
     pub fn verify_password(&mut self) -> Result<bool> {
-        // Try to authenticate with sudo using the provided password
-        let mut child = Command::new("sudo")
-            .arg("-S")
-            .arg("-v")
-            .stdin(Stdio::piped())
-            .stdout(Stdio::null())
-            .stderr(Stdio::null())
-            .spawn()?;
+        let authenticated = cleansys_core::authenticate_sudo(&self.password_input)?;
 
-        if let Some(mut stdin) = child.stdin.take() {
-            writeln!(stdin, "{}", self.password_input)?;
-        }
-
-        let status = child.wait()?;
-
-        if status.success() {
+        if authenticated {
             self.authenticated = true;
             self.visible = false;
             self.password_input.clear();

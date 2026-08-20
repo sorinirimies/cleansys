@@ -8,116 +8,114 @@ on:
 permissions:
   contents: write
 
+env:
+  CARGO_TERM_COLOR: always
+
 jobs:
   build:
     name: Build and release
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Set up Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: stable
-          profile: minimal
-          override: true
+      - name: Install Linux GUI system libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            libxkbcommon-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libwayland-dev \
+            libgl1-mesa-dev \
+            libfontconfig1-dev \
+            libssl-dev
 
-      - name: Cache dependencies
-        uses: actions/cache@v3
-        with:
-          path: |
-            ~/.cargo/registry
-            ~/.cargo/git
-            target
-          key: ${{ runner.os }}-cargo-${{ hashFiles('**/Cargo.lock') }}
-          restore-keys: |
-            ${{ runner.os }}-cargo-
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
 
-      - name: Install cliff
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: git-cliff
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+
+      - name: Install git-cliff
+        run: cargo install git-cliff --locked
 
       - name: Update version and generate changelog
         run: |
-          # Extract version from tag (remove 'v' prefix)
           VERSION=${GITHUB_REF_NAME#v}
           echo "Updating version to: $VERSION"
 
-          # Update Cargo.toml version
-          sed -i "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
+          # Update the workspace version (workspace.package.version)
+          sed -i "s/^version    = \".*\"/version    = \"$VERSION\"/" Cargo.toml
 
-          # Update full changelog with git-cliff
           git-cliff --config cliff.toml --latest --output CHANGELOG.md
 
-          # Generate release notes with git-cliff
           LAST_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-
-          # Generate release changelog using git-cliff
           if [ -n "$LAST_TAG" ]; then
-            # Generate changelog between tags
-            git-cliff --config cliff.toml ${LAST_TAG}..${{ github.ref_name }} --strip header > CLIFF_CHANGES.md
+            git-cliff --config cliff.toml "${LAST_TAG}..${{ github.ref_name }}" --strip header > CLIFF_CHANGES.md
           else
-            # Generate changelog for first release
-            git-cliff --config cliff.toml --tag ${{ github.ref_name }} --strip header > CLIFF_CHANGES.md
+            git-cliff --config cliff.toml --tag "${{ github.ref_name }}" --strip header > CLIFF_CHANGES.md
           fi
 
-          # Create the release note template
           echo "# CleanSys ${VERSION}" > RELEASE_CHANGELOG.md
           echo "" >> RELEASE_CHANGELOG.md
           echo "## 🚀 What's New" >> RELEASE_CHANGELOG.md
           echo "" >> RELEASE_CHANGELOG.md
-
           if [ -n "$LAST_TAG" ]; then
             echo "### 📝 Changes since ${LAST_TAG}:" >> RELEASE_CHANGELOG.md
-            echo "" >> RELEASE_CHANGELOG.md
           else
             echo "### 🎉 Initial Release" >> RELEASE_CHANGELOG.md
-            echo "" >> RELEASE_CHANGELOG.md
           fi
-
-          # Add the git-cliff generated changes to the release notes
+          echo "" >> RELEASE_CHANGELOG.md
           cat CLIFF_CHANGES.md >> RELEASE_CHANGELOG.md
 
-          # Add installation and quick start info
           echo "" >> RELEASE_CHANGELOG.md
           echo "## 📦 Installation" >> RELEASE_CHANGELOG.md
           echo "" >> RELEASE_CHANGELOG.md
-          echo "\`\`\`bash" >> RELEASE_CHANGELOG.md
-          echo "cargo install cleansys" >> RELEASE_CHANGELOG.md
-          echo "\`\`\`" >> RELEASE_CHANGELOG.md
+          echo '```bash' >> RELEASE_CHANGELOG.md
+          echo "cargo install cleansys-tui   # terminal UI + CLI" >> RELEASE_CHANGELOG.md
+          echo "cargo install cleansys-gui   # desktop GUI (Iced)" >> RELEASE_CHANGELOG.md
+          echo '```' >> RELEASE_CHANGELOG.md
           echo "" >> RELEASE_CHANGELOG.md
           echo "## 🚀 Quick Start" >> RELEASE_CHANGELOG.md
           echo "" >> RELEASE_CHANGELOG.md
-          echo "\`\`\`bash" >> RELEASE_CHANGELOG.md
-          echo "# Run user-level cleaners" >> RELEASE_CHANGELOG.md
+          echo '```bash' >> RELEASE_CHANGELOG.md
+          echo "# Run the terminal UI (user-level cleaning)" >> RELEASE_CHANGELOG.md
           echo "cleansys" >> RELEASE_CHANGELOG.md
           echo "" >> RELEASE_CHANGELOG.md
-          echo "# Run system-level cleaners" >> RELEASE_CHANGELOG.md
+          echo "# Run the terminal UI (system-level cleaning)" >> RELEASE_CHANGELOG.md
           echo "sudo cleansys" >> RELEASE_CHANGELOG.md
-          echo "\`\`\`" >> RELEASE_CHANGELOG.md
+          echo "" >> RELEASE_CHANGELOG.md
+          echo "# Launch the desktop GUI" >> RELEASE_CHANGELOG.md
+          echo "cleansys-gui" >> RELEASE_CHANGELOG.md
+          echo '```' >> RELEASE_CHANGELOG.md
 
-          # Show the generated release notes
           echo "Generated release notes:"
           cat RELEASE_CHANGELOG.md
 
-      - name: Build release
-        run: cargo build --release
-
-      - name: Package binary
+      - name: Build release binaries
         run: |
-          tar -C target/release -czvf cleansys-${{ github.ref_name }}-linux-x86_64.tar.gz cleansys
+          cargo build --release -p cleansys-tui
+          cargo build --release -p cleansys-gui
+
+      - name: Package binaries
+        run: |
+          tar -C target/release -czvf cleansys-tui-${{ github.ref_name }}-linux-x86_64.tar.gz cleansys
+          tar -C target/release -czvf cleansys-gui-${{ github.ref_name }}-linux-x86_64.tar.gz cleansys-gui
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v1
         with:
           body_path: RELEASE_CHANGELOG.md
           files: |
-            cleansys-${{ github.ref_name }}-linux-x86_64.tar.gz
+            cleansys-tui-${{ github.ref_name }}-linux-x86_64.tar.gz
+            cleansys-gui-${{ github.ref_name }}-linux-x86_64.tar.gz
             LICENSE
             README.md
             CHANGELOG.md
@@ -128,7 +126,10 @@ jobs:
           CRATES_IO_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
           echo "Publishing to crates.io..."
-          cargo publish --token $CRATES_IO_TOKEN --allow-dirty
+          cargo publish --token $CRATES_IO_TOKEN -p cleansys-core --allow-dirty
+          sleep 30
+          cargo publish --token $CRATES_IO_TOKEN -p cleansys-tui --allow-dirty
+          cargo publish --token $CRATES_IO_TOKEN -p cleansys-gui --allow-dirty
 
       - name: Skip crates.io publish
         if: env.CRATES_IO_TOKEN == ''

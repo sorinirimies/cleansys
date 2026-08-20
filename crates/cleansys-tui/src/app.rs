@@ -8,7 +8,7 @@ use std::sync::mpsc;
 use std::time::Instant;
 
 use crate::components::password_prompt::PasswordPrompt;
-use crate::utils::{check_root, format_size};
+use cleansys_core::{check_root, format_size, CleanerCategory, Status};
 use once_cell::sync::Lazy;
 use regex::Regex;
 use std::time::SystemTime;
@@ -131,42 +131,8 @@ pub enum ChartType {
     PieSize,
 }
 
-pub enum Status {
-    Running,
-    Success(String),
-    Error(String),
-    Pending,
-}
-
-impl Status {
-    pub fn get_animation_frame(&self, frame: usize) -> &'static str {
-        match self {
-            Status::Running => {
-                const SPINNER: &[&str] = &["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
-                SPINNER[frame % SPINNER.len()]
-            }
-            Status::Success(_) => "✓",
-            Status::Error(_) => "✗",
-            Status::Pending => "•",
-        }
-    }
-}
-
-pub struct CleanerItem {
-    pub name: String,
-    pub description: String,
-    pub requires_root: bool,
-    pub selected: bool,
-    pub function: fn(bool) -> Result<u64>,
-    pub bytes_cleaned: u64,
-    pub status: Option<Status>,
-}
-
-pub struct CleanerCategory {
-    pub name: String,
-    pub description: String, // Retained for future use in detailed view
-    pub items: Vec<CleanerItem>,
-}
+// `Status`, `CleanerItem`, and `CleanerCategory` now live in `cleansys-core`
+// so the TUI and GUI front-ends share the exact same domain model.
 
 pub struct App {
     pub categories: Vec<CleanerCategory>,
@@ -322,7 +288,7 @@ impl App {
             .map(|(name, (count, size))| (name, count, size))
             .collect();
 
-        categories.sort_by(|a, b| b.2.cmp(&a.2)); // Sort by size descending
+        categories.sort_by_key(|b| std::cmp::Reverse(b.2)); // Sort by size descending
         categories
     }
 
@@ -1037,19 +1003,16 @@ impl App {
                     }
                 }
             }
-            (KeyCode::End, _) => {
-                if !self.show_help {
-                    if self.is_running || self.show_progress_screen {
-                        if !self.detailed_cleaned_items.is_empty() {
-                            let last_index =
-                                (self.detailed_cleaned_items.len() * 3).saturating_sub(1);
-                            self.detailed_list_scroll_state.select(Some(last_index));
-                        }
-                    } else {
-                        let len = self.categories[self.category_index].items.len();
-                        if len > 0 {
-                            self.item_list_state.select(Some(len - 1));
-                        }
+            (KeyCode::End, _) if !self.show_help => {
+                if self.is_running || self.show_progress_screen {
+                    if !self.detailed_cleaned_items.is_empty() {
+                        let last_index = (self.detailed_cleaned_items.len() * 3).saturating_sub(1);
+                        self.detailed_list_scroll_state.select(Some(last_index));
+                    }
+                } else {
+                    let len = self.categories[self.category_index].items.len();
+                    if len > 0 {
+                        self.item_list_state.select(Some(len - 1));
                     }
                 }
             }
@@ -1303,9 +1266,9 @@ impl App {
         // Sort based on current sort mode
         match self.sort_mode {
             SortMode::Name => items.sort_by(|a, b| a.path.cmp(&b.path)),
-            SortMode::Size => items.sort_by(|a, b| b.size.cmp(&a.size)), // Largest first
+            SortMode::Size => items.sort_by_key(|b| std::cmp::Reverse(b.size)), // Largest first
             SortMode::Category => items.sort_by(|a, b| a.category.cmp(&b.category)),
-            SortMode::Status => items.sort_by(|a, b| b.timestamp.cmp(&a.timestamp)), // Most recent first
+            SortMode::Status => items.sort_by_key(|b| std::cmp::Reverse(b.timestamp)), // Most recent first
         }
 
         items

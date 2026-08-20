@@ -1,0 +1,45 @@
+[package]
+name = "cleansys-tui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "CleanSys — modern terminal user interface for Linux system cleanup (Ratatui TUI + CLI)"
+readme = "README.md"
+categories = ["command-line-utilities", "filesystem", "os", "development-tools", "config"]
+keywords = ["clean", "system", "linux", "cleanup", "cache"]
+
+[lib]
+name = "cleansys_tui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "cleansys"
+path = "src/main.rs"
+
+[dependencies]
+cleansys-core = { workspace = true }
+clap          = { workspace = true }
+colored       = { workspace = true }
+log           = { workspace = true }
+env_logger    = { workspace = true }
+anyhow        = { workspace = true }
+indicatif     = { workspace = true }
+serde         = { workspace = true }
+toml          = { workspace = true }
+ratatui       = { workspace = true }
+crossterm     = { workspace = true }
+unicode-width = { workspace = true }
+tui-textarea  = { workspace = true }
+tui-checkbox  = { workspace = true }
+tui-piechart  = { workspace = true }
+regex         = { workspace = true }
+libc          = { workspace = true }
+once_cell     = { workspace = true }
+
+[dev-dependencies]
+assert_cmd = { workspace = true }
+predicates = { workspace = true }
+tempfile   = { workspace = true }
+once_cell  = { workspace = true }

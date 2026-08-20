@@ -1,173 +1,286 @@
-# CleanSys - Modern Terminal-Based System Cleaner for Linux
-# Install just: cargo install just
-# Install git-cliff: cargo install git-cliff
-# Install vhs: https://github.com/charmbracelet/vhs
+# CleanSys workspace — task runner
+# Install just:      cargo install just
+# Install nu:         cargo install nu   (https://www.nushell.sh)
+# Install git-cliff:  cargo install git-cliff
+# Install vhs:        brew install vhs  OR  go install github.com/charmbracelet/vhs@latest
 # Usage: just <task>
 
-# Default task - show available commands
+# ── Default ───────────────────────────────────────────────────────────────────
+
 default:
     @just --list
 
-# Install required tools (just, git-cliff)
+# ── Tool checks ───────────────────────────────────────────────────────────────
+
+_check-git-cliff:
+    @command -v git-cliff >/dev/null 2>&1 || { \
+        echo "❌ git-cliff not found. Install with: cargo install git-cliff"; exit 1; \
+    }
+
+# Check nu (nushell) is available
+_check-nu:
+    @command -v nu >/dev/null 2>&1 || { \
+        echo "❌ nu (nushell) not found. Install: https://www.nushell.sh"; exit 1; \
+    }
+
+_check-vhs:
+    @command -v vhs >/dev/null 2>&1 || { \
+        echo "❌ vhs not found."; \
+        echo "   macOS:      brew install vhs"; \
+        echo "   Any:        go install github.com/charmbracelet/vhs@latest"; \
+        exit 1; \
+    }
+
+# Install all recommended development tools
 install-tools:
-    @echo "Installing required tools..."
-    @command -v just >/dev/null 2>&1 || cargo install just
-    @command -v git-cliff >/dev/null 2>&1 || cargo install git-cliff
+    @echo "Installing development tools…"
+    @command -v git-cliff >/dev/null 2>&1 || cargo install git-cliff --locked
+    @command -v nu >/dev/null 2>&1 || cargo install nu --locked
     @echo "Note: VHS must be installed separately: https://github.com/charmbracelet/vhs"
     @echo "✅ All tools installed!"
 
-# Build the project
+# ── Build ─────────────────────────────────────────────────────────────────────
+
+# Build the entire workspace (dev)
 build:
-    cargo build
+    cargo build --workspace
 
-# Build release version
+# Build only the core library (dev)
+build-core:
+    cargo build -p cleansys-core
+
+# Build only the TUI/CLI crate (dev)
+build-tui:
+    cargo build -p cleansys-tui
+
+# Build only the GUI crate (dev)
+build-gui:
+    cargo build -p cleansys-gui
+
+# Build release binaries for TUI and GUI
 build-release:
-    cargo build --release
+    cargo build --release -p cleansys-tui
+    cargo build --release -p cleansys-gui
 
-# Run the application
-run:
-    cargo run
+# ── Run ───────────────────────────────────────────────────────────────────────
 
-# Run tests
+# Launch the Ratatui terminal UI (default `cleansys` binary)
+run-tui:
+    cargo run -p cleansys-tui
+
+# Launch the Iced desktop GUI
+run-gui:
+    cargo run -p cleansys-gui
+
+# Alias: default run launches the TUI (matches historical `cleansys` behavior)
+run: run-tui
+
+# ── Test ──────────────────────────────────────────────────────────────────────
+
+# Run the full workspace test suite
 test:
-    cargo test
+    cargo test --workspace --locked --all-features --all-targets
 
-# Check code without building
+# Test only the core library
+test-core:
+    cargo test -p cleansys-core --all-features
+
+# Test only the TUI crate
+test-tui:
+    cargo test -p cleansys-tui --all-features
+
+# Test only the GUI crate
+test-gui:
+    cargo test -p cleansys-gui --all-features
+
+# Run Nu script tests
+test-nu: _check-nu
+    nu scripts/tests/run_all.nu
+
+# Run both Rust and Nu tests
+test-all-nu: test test-nu
+    @echo "✅ All Rust and Nu tests passed!"
+
+# ── Code quality ──────────────────────────────────────────────────────────────
+
+# Check without building
 check:
-    cargo check
+    cargo check --workspace
 
-# Format code
+# Format all code
 fmt:
-    cargo fmt
+    cargo fmt --all
 
-# Check if code is formatted
+# Check formatting without modifying files
 fmt-check:
-    cargo fmt --check
+    cargo fmt --all -- --check
 
-# Run clippy linter
+# Run clippy across the workspace
 clippy:
-    cargo clippy -- -D warnings
+    cargo clippy --workspace --all-targets --all-features -- -D warnings -A deprecated
 
-# Run all checks (fmt, clippy, test)
-check-all: fmt-check clippy test
+# Run all quality checks (format, clippy, test, nu) — must pass before a release.
+# Auto-formats first, then verifies no changes remain (catches unstaged format diffs).
+check-all: fmt clippy test test-nu
+    @echo "🔍 Verifying formatting is clean…"
+    cargo fmt --all -- --check
     @echo "✅ All checks passed!"
 
-# Clean build artifacts
+# Full pre-release quality gate — everything in check-all plus a release build.
+check-release: check-all build-release
+    @echo "✅ Release quality gate passed (fmt + clippy + test + nu + release build)!"
+
+# ── VHS Demo GIFs ─────────────────────────────────────────────────────────────
+
+vhs: _check-vhs
+    @echo "Running VHS tape to generate demo…"
+    vhs demo/demo.tape
+    @echo "✅ Demo generated at demo/target/demo.gif"
+
+vhs-userland: _check-vhs
+    @echo "Running VHS userland cleaners demo tape…"
+    vhs demo/userland-cleaners.tape
+    @echo "✅ Userland cleaners demo generated at demo/target/userland-cleaners.gif"
+
+vhs-system: _check-vhs
+    @echo "Running VHS system cleaners demo tape…"
+    vhs demo/system-cleaners.tape
+    @echo "✅ System cleaners demo generated at demo/target/system-cleaners.gif"
+
+vhs-all: vhs vhs-userland vhs-system
+    @echo "✅ All demos generated!"
+
+vhs-clean:
+    @echo "Cleaning VHS output files…"
+    @rm -f demo/target/*.gif
+    @echo "✅ VHS outputs cleaned!"
+
+# ── Documentation ─────────────────────────────────────────────────────────────
+
+# Generate and open docs for the TUI crate
+doc-tui:
+    cargo doc --no-deps -p cleansys-tui --open
+
+# Generate and open docs for the GUI crate
+doc-gui:
+    cargo doc --no-deps -p cleansys-gui --open
+
+# Generate docs for the full workspace (no browser)
+doc:
+    cargo doc --no-deps --workspace
+
+# ── Changelog ─────────────────────────────────────────────────────────────────
+
+changelog: _check-git-cliff
+    @echo "Generating full changelog…"
+    git-cliff --output CHANGELOG.md
+    @echo "✅ CHANGELOG.md updated."
+
+changelog-unreleased: _check-git-cliff
+    git-cliff --unreleased --prepend CHANGELOG.md
+    @echo "✅ Unreleased changes prepended."
+
+changelog-preview: _check-git-cliff
+    @git-cliff --unreleased
+
+changelog-latest: _check-git-cliff
+    @git-cliff --latest
+
+# ── Version bump ─────────────────────────────────────────────────────────────
+
+# Validate that a version string will produce a valid vX.Y.Z tag.
+validate-tag version: _check-nu
+    @nu -c $'if not ("{{version}}" | parse --regex \'^\\d+\\.\\d+\\.\\d+(-[a-zA-Z0-9.]+)?$\' | is-empty) { print "✅ valid version" } else { print "❌ invalid version: {{version}}"; exit 1 }'
+
+_check-version-changed version: _check-nu
+    #!/usr/bin/env sh
+    current=$(nu scripts/version.nu)
+    if [ "$current" = "{{version}}" ]; then
+        echo "❌ Version {{version}} is already the current version. Nothing to bump."
+        exit 1
+    fi
+    echo "✅ Version will change: $current → {{version}}"
+
+# Bump the workspace version, regenerate Cargo.lock + CHANGELOG.md, commit and tag.
+# Validation runs first (cheap), quality gate runs second (expensive).
+bump version: (validate-tag version) (_check-version-changed version) check-release _check-git-cliff
+    nu scripts/bump_version.nu --yes {{ version }}
+
+# ── Publish (crates.io) ───────────────────────────────────────────────────────
+
+# Dry-run publish for all three crates (in dependency order)
+publish-dry: check-all
+    @echo "Dry-run: cleansys-core"
+    cargo publish --dry-run -p cleansys-core
+    @echo "Dry-run: cleansys-tui"
+    cargo publish --dry-run -p cleansys-tui
+    @echo "Dry-run: cleansys-gui"
+    cargo publish --dry-run -p cleansys-gui
+
+# Publish all three in dependency order: core → tui → gui.
+publish: check-all publish-core publish-tui publish-gui
+    @echo "✅ cleansys-core, cleansys-tui, and cleansys-gui published to crates.io!"
+
+publish-core:
+    @echo "📦 Publishing cleansys-core…"
+    cargo publish -p cleansys-core
+    @echo "⏳ Waiting 30 s for the index to propagate…"
+    sleep 30
+
+publish-tui:
+    @echo "📦 Publishing cleansys-tui…"
+    cargo publish -p cleansys-tui
+
+publish-gui:
+    @echo "📦 Publishing cleansys-gui…"
+    cargo publish -p cleansys-gui
+
+# Show what would be released without making any changes
+release-preview: _check-git-cliff
+    @echo "Current version: $(just version)"
+    @echo ""
+    @echo "Unreleased commits:"
+    @git-cliff --unreleased
+    @echo ""
+    @echo "Published crates:  cleansys-tui  •  cleansys-gui"
+    @echo "Internal crate:    cleansys-core (publish = false-able)"
+
+# ── Housekeeping ──────────────────────────────────────────────────────────────
+
 clean:
     cargo clean
 
-# Install the application locally
-install:
-    cargo install --path .
-
-# Check if git-cliff is installed
-check-git-cliff:
-    @command -v git-cliff >/dev/null 2>&1 || { echo "❌ git-cliff not found. Install with: cargo install git-cliff"; exit 1; }
-
-# Generate full changelog from all tags
-changelog: check-git-cliff
-    @echo "Generating full changelog..."
-    git-cliff -o CHANGELOG.md
-    @echo "✅ Changelog generated!"
-
-# Generate changelog for unreleased commits only
-changelog-unreleased: check-git-cliff
-    @echo "Generating unreleased changelog..."
-    git-cliff --unreleased --prepend CHANGELOG.md
-    @echo "✅ Unreleased changelog generated!"
-
-# Generate changelog for specific version tag
-changelog-version version: check-git-cliff
-    @echo "Generating changelog for version {{version}}..."
-    git-cliff --tag v{{version}} -o CHANGELOG.md
-    @echo "✅ Changelog generated for version {{version}}!"
-
-# Preview changelog without writing to file
-changelog-preview: check-git-cliff
-    @git-cliff
-
-# Preview unreleased changes
-changelog-preview-unreleased: check-git-cliff
-    @git-cliff --unreleased
-
-# Generate changelog for latest tag only
-changelog-latest: check-git-cliff
-    @echo "Generating changelog for latest tag..."
-    git-cliff --latest -o CHANGELOG.md
-    @echo "✅ Latest changelog generated!"
-
-# Update changelog with all commits (force regenerate)
-changelog-update: check-git-cliff
-    @echo "Regenerating complete changelog from all tags..."
-    git-cliff --output CHANGELOG.md
-    @echo "✅ Changelog updated from all git history!"
-
-# Bump version (usage: just bump 0.2.5)
-bump version: check-git-cliff
-    @echo "Bumping version to {{version}}..."
-    @./scripts/bump_version.sh {{version}}
-
-# Quick release: format, check, test, and build
-release-check: fmt clippy test build-release
-    @echo "✅ Ready for release!"
-
-# Publish to crates.io (dry run)
-publish-dry:
-    cargo publish --dry-run
-
-# Publish to crates.io
-publish:
-    cargo publish
-
-# Update dependencies
 update:
     cargo update
 
-# Show outdated dependencies
+update-deps:
+    @echo "⬆️  Updating dependencies…"
+    cargo update
+    @echo "🔍 Running quality gate…"
+    cargo fmt --all -- --check
+    cargo clippy --workspace --all-targets --all-features -- -D warnings -A deprecated
+    cargo test --workspace --locked --all-features --all-targets
+    @echo "✅ All checks passed — committing dependency updates…"
+    git add Cargo.lock
+    git diff --cached --quiet || git commit -m "chore: update dependencies"
+    git push origin main
+    @echo "✅ Dependency updates pushed to GitHub."
+
+# Upgrade workspace dependency *pins* (Cargo.toml constraints) via cargo-edit,
+# then cross-check (fmt/clippy/test/doc). Install cargo-edit first: cargo install cargo-edit
+upgrade-deps: _check-nu
+    nu scripts/upgrade_deps.nu
+
+# Dry-run: list outdated dependencies without changing anything
+upgrade-deps-check: _check-nu
+    nu scripts/upgrade_deps.nu --check
+
 outdated:
     cargo outdated
 
-# Generate documentation
-doc:
-    cargo doc --no-deps --open
-
-# Watch and auto-run on file changes (requires cargo-watch)
-watch:
-    cargo watch -x run
-
-# Git: commit current changes
-commit message:
-    git add .
-    git commit -m "{{message}}"
-
-# Git: push to origin
-push:
-    git push origin main
-
-# Git: push tags
-push-tags:
-    git push --tags
-
-# Full release workflow: bump version and push to GitHub (same as release)
-release version: (bump version)
-    @echo "Pushing to GitHub..."
-    git push origin main
-    @echo "Pushing tag v{{version}}..."
-    git push origin v{{version}}
-    @echo "Verifying tag was pushed..."
-    @if git ls-remote --tags origin | grep -q "refs/tags/v{{version}}"; then \
-        echo "✅ Release v{{version}} complete on GitHub! Release workflow should trigger shortly."; \
-    else \
-        echo "⚠️  Warning: Tag v{{version}} may not have been pushed successfully!"; \
-        exit 1; \
-    fi
-
-# Full release workflow: bump version and push to GitHub (alias)
-release-github version: (release version)
-
-# Show current version
-version:
-    @grep '^version = ' Cargo.toml | head -1 | sed 's/version = "\(.*\)"/\1/'
+# Show the current workspace version
+version: _check-nu
+    @nu scripts/version.nu
 
 # Show project info
 info:
@@ -176,109 +289,95 @@ info:
     @echo "Author: Sorin Albu-Irimies"
     @echo "License: MIT"
 
-# Show git-cliff info
-cliff-info:
-    @echo "Git-cliff configuration:"
-    @echo "  Config file: cliff.toml"
-    @echo "  Installed: $(command -v git-cliff >/dev/null 2>&1 && echo '✅ Yes' || echo '❌ No (run: just install-tools)')"
-    @command -v git-cliff >/dev/null 2>&1 && git-cliff --version || true
-
-# View changelog
 view-changelog:
     @cat CHANGELOG.md
 
-# Check if VHS is installed
-check-vhs:
-    @command -v vhs >/dev/null 2>&1 || { echo "❌ VHS not found. Install from: https://github.com/charmbracelet/vhs"; exit 1; }
+# Show all configured remotes
+remotes:
+    @git remote -v
 
-# Run VHS to generate main demo GIF
-vhs: check-vhs
-    @echo "Running VHS tape to generate demo..."
-    vhs demo/demo.tape
-    @echo "✅ Demo generated at demo/target/demo.gif"
+# ── Git remotes & pushing ────────────────────────────────────────────────────
 
-# Run VHS userland cleaners demo
-vhs-userland: check-vhs
-    @echo "Running VHS userland cleaners demo tape..."
-    vhs demo/userland-cleaners.tape
-    @echo "✅ Userland cleaners demo generated at demo/target/userland-cleaners.gif"
+push:
+    git push origin main
 
-# Run VHS system cleaners demo
-vhs-system: check-vhs
-    @echo "Running VHS system cleaners demo tape..."
-    vhs demo/system-cleaners.tape
-    @echo "✅ System cleaners demo generated at demo/target/system-cleaners.gif"
-
-# Generate all VHS demos
-vhs-all: vhs vhs-userland vhs-system
-    @echo "✅ All demos generated!"
-
-# Clean VHS outputs
-vhs-clean:
-    @echo "Cleaning VHS output files..."
-    @rm -f demo/target/*.gif
-    @echo "✅ VHS outputs cleaned!"
-
-# ============================================================================
-# Gitea Dual-Hosting Commands
-# ============================================================================
-
-# Git: push to Gitea
 push-gitea:
     git push gitea main
 
-# Git: push to both GitHub and Gitea
 push-all:
-    git push origin main
-    git push gitea main
-    @echo "✅ Pushed to both GitHub and Gitea!"
+    #!/usr/bin/env sh
+    failed=""
+    git push origin main || failed="$failed origin"
+    git push gitea main  || failed="$failed gitea"
+    if [ -n "$failed" ]; then
+        echo "⚠️  Failed to push to:$failed"
+    else
+        echo "✅ Pushed to GitHub and Gitea!"
+    fi
 
-# Git: push tags to both remotes
+push-tags:
+    git push origin --tags
+
 push-tags-all:
     git push origin --tags
     git push gitea --tags
     @echo "✅ Tags pushed to both GitHub and Gitea!"
 
-# Push release to both GitHub and Gitea
-push-release-all:
-    @echo "Pushing release to both GitHub and Gitea..."
-    git push origin main
-    git push gitea main
-    git push origin --tags
-    git push gitea --tags
-    @echo "✅ Release pushed to both remotes!"
+pull:
+    git pull origin main
 
-# Sync Gitea with GitHub (force)
+pull-gitea:
+    git pull gitea main
+
+# Push the latest commit and all tags to every remote (no bump).
+push-release-all: check-all
+    #!/usr/bin/env sh
+    failed=""
+    git push --follow-tags origin main || failed="$failed origin"
+    git push --follow-tags gitea main  || failed="$failed gitea"
+    if [ -n "$failed" ]; then
+        echo "⚠️  Failed to push to:$failed"
+    else
+        echo "✅ Latest commit + tags pushed to all remotes."
+    fi
+
+# Force-sync Gitea with GitHub
 sync-gitea:
-    @echo "Syncing Gitea with GitHub..."
     git push gitea main --force
     git push gitea --tags --force
-    @echo "✅ Gitea synced!"
+    @echo "✅ Gitea synced with GitHub."
 
-# Show configured remotes
-remotes:
-    @echo "Configured git remotes:"
-    @git remote -v
+# Add a Gitea remote and optionally push — interactive (nu script)
+setup-gitea url: _check-nu
+    nu scripts/setup_gitea.nu {{ url }}
 
-# Setup Gitea remote (provide your Gitea URL)
-setup-gitea url:
-    @echo "Adding Gitea remote..."
-    git remote add gitea {{url}}
-    @echo "✅ Gitea remote added!"
-    @echo "Test with: git push gitea main"
+# Migrate this project to dual GitHub + Gitea hosting (interactive)
+migrate-gitea: _check-nu
+    nu scripts/migrate_to_gitea.nu
 
-# Full release workflow: bump version and push to Gitea
+# ── Release workflows ─────────────────────────────────────────────────────────
+
+# Bump, commit, tag, then push to GitHub — triggers the Release workflow.
+release version: (bump version)
+    @echo "Pushing release v{{version}} to GitHub…"
+    git push --follow-tags origin main
+    @echo "✅ Release v{{version}} pushed — Release workflow will trigger automatically."
+
+# Bump, commit, tag, then push to Gitea only.
 release-gitea version: (bump version)
-    @echo "Pushing to Gitea..."
-    git push gitea main
-    git push gitea v{{version}}
-    @echo "✅ Release v{{version}} complete on Gitea!"
+    @echo "Pushing release v{{version}} to Gitea…"
+    git push --follow-tags gitea main
+    @echo "✅ Release v{{version}} live on Gitea."
 
-# Full release workflow: bump version and push to both GitHub and Gitea
+# Bump, commit, tag, then push to all remotes.
 release-all version: (bump version)
-    @echo "Pushing to both GitHub and Gitea..."
-    git push origin main
-    git push gitea main
-    git push origin v{{version}}
-    git push gitea v{{version}}
-    @echo "✅ Release v{{version}} complete on both remotes!"
+    #!/usr/bin/env sh
+    echo "Pushing release v{{version}} to all remotes…"
+    failed=""
+    git push --follow-tags origin main || failed="$failed origin"
+    git push --follow-tags gitea main  || failed="$failed gitea"
+    if [ -n "$failed" ]; then
+        echo "⚠️  Release v{{version}} failed to push to:$failed"
+    else
+        echo "✅ Release v{{version}} pushed to GitHub and Gitea!"
+    fi

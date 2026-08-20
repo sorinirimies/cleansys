@@ -6,7 +6,17 @@
 [![Release](https://github.com/sorinirimies/cleansys/actions/workflows/release.yml/badge.svg)](https://github.com/sorinirimies/cleansys/actions/workflows/release.yml)
 [![CI](https://github.com/sorinirimies/cleansys/actions/workflows/ci.yml/badge.svg)](https://github.com/sorinirimies/cleansys/actions/workflows/ci.yml)
 
-**CleanSys** is a modern, terminal-based utility for Linux that helps you safely clean your system. It provides a beautiful interactive TUI to remove unnecessary files, clean caches, and free up disk space with real-time animations and detailed progress tracking.
+**CleanSys** is a modern Linux system-cleanup utility available as both a terminal UI (Ratatui) and a desktop GUI (Iced). It helps you safely remove unnecessary files, clean caches, and free up disk space with real-time progress tracking.
+
+## 🧱 Project Structure
+
+CleanSys is a Cargo workspace with three crates:
+
+| Crate | Binary | Description |
+|-------|--------|-------------|
+| [`cleansys-core`](crates/cleansys-core) | *(library)* | Framework-free domain logic: cleaners, permission checks, formatting, sudo auth — shared by both front-ends |
+| [`cleansys-tui`](crates/cleansys-tui) | `cleansys` | Ratatui terminal UI + CLI (the original CleanSys experience) |
+| [`cleansys-gui`](crates/cleansys-gui) | `cleansys-gui` | Iced desktop GUI |
 
 ## 🎬 Demo
 
@@ -52,7 +62,11 @@
 ### From crates.io
 
 ```bash
-cargo install cleansys
+# Terminal UI + CLI
+cargo install cleansys-tui
+
+# Desktop GUI
+cargo install cleansys-gui
 ```
 
 ### From source
@@ -60,8 +74,16 @@ cargo install cleansys
 ```bash
 git clone https://github.com/sorinirimies/cleansys
 cd cleansys
-cargo install --path .
+
+# Build everything
+cargo build --workspace --release
+
+# Or install just one front-end
+cargo install --path crates/cleansys-tui
+cargo install --path crates/cleansys-gui
 ```
+
+See [`justfile`](justfile) for the full list of development tasks (`just --list`).
 
 ## 🚀 Usage
 
@@ -76,6 +98,16 @@ cleansys
 # System-level cleaning (requires root)
 sudo cleansys
 ```
+
+### Desktop GUI
+
+Prefer a graphical interface? Launch the Iced-based desktop app instead:
+
+```bash
+cleansys-gui
+```
+
+It presents the exact same cleaners as the TUI (shared via `cleansys-core`) with checkboxes per category, a "Run selected" button, and a live activity log. System cleaners will prompt for your sudo password the first time they're needed.
 
 ### Command-Line Interface
 

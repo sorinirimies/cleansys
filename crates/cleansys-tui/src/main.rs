@@ -3,27 +3,18 @@ use clap::{Parser, Subcommand};
 use log::debug;
 use std::io;
 
-mod app;
-mod cleaners;
-mod components;
-mod events;
-mod menu;
-mod pie_chart;
-mod render;
-mod utils;
-
-use app::{App, CleanerCategory, CleanerItem};
-use cleaners::{system_cleaners, user_cleaners};
+use cleansys_core::utils::elevate_if_needed;
+use cleansys_core::{check_root, print_error, print_header, system_cleaners, user_cleaners};
+use cleansys_tui::app::App;
+use cleansys_tui::events::{Config, Event, Events};
+use cleansys_tui::menu::Menu;
+use cleansys_tui::render::ui;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,
     terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
 };
-use events::{Config, Event, Events};
-use menu::Menu;
 use ratatui::{prelude::CrosstermBackend, Terminal};
-use render::ui;
-use utils::{check_root, elevate_if_needed, print_error, print_header};
 
 #[derive(Parser)]
 #[command(
@@ -75,46 +66,7 @@ fn setup_logger(verbose: bool) {
 }
 
 fn load_cleaners(app: &mut App) {
-    // Add user cleaners
-    let mut user_items = Vec::new();
-    for cleaner in user_cleaners::get_cleaners() {
-        user_items.push(CleanerItem {
-            name: cleaner.name.to_string(),
-            description: cleaner.description.to_string(),
-            requires_root: false,
-            selected: false,
-            function: cleaner.function,
-            bytes_cleaned: 0,
-            status: None,
-        });
-    }
-
-    // Add system cleaners
-    let mut system_items = Vec::new();
-    for cleaner in system_cleaners::get_cleaners() {
-        system_items.push(CleanerItem {
-            name: cleaner.name.to_string(),
-            description: cleaner.description.to_string(),
-            requires_root: true,
-            selected: false,
-            function: cleaner.function,
-            bytes_cleaned: 0,
-            status: None,
-        });
-    }
-
-    app.categories = vec![
-        CleanerCategory {
-            name: "User Land Cleaners".to_string(),
-            description: "Clean user-specific files and caches".to_string(),
-            items: user_items,
-        },
-        CleanerCategory {
-            name: "System Cleaners".to_string(),
-            description: "Clean system files and caches (requires root)".to_string(),
-            items: system_items,
-        },
-    ];
+    app.categories = cleansys_core::load_categories();
 }
 
 fn run_tui() -> Result<()> {

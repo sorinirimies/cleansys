@@ -1,0 +1,30 @@
+[package]
+name = "cleansys-gui"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "CleanSys — desktop GUI for Linux system cleanup (Iced)"
+readme = "README.md"
+categories = ["gui", "filesystem", "os"]
+keywords = ["clean", "system", "linux", "cleanup", "gui"]
+
+[lib]
+name = "cleansys_gui"
+path = "src/lib.rs"
+
+[[bin]]
+name = "cleansys-gui"
+path = "src/main.rs"
+
+[dependencies]
+cleansys-core = { workspace = true }
+iced          = { workspace = true }
+iced_fonts    = { workspace = true }
+anyhow        = { workspace = true }
+log           = { workspace = true }
+env_logger    = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

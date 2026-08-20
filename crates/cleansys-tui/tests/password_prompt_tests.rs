@@ -2,7 +2,7 @@
 //!
 //! These tests verify the password prompt functionality in src/components/password_prompt.rs
 
-use cleansys::PasswordPrompt;
+use cleansys_tui::PasswordPrompt;
 
 #[test]
 fn test_password_prompt_creation() {

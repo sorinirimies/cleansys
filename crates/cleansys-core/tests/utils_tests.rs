@@ -2,7 +2,7 @@
 //!
 //! These tests verify the utility functions in src/utils/mod.rs
 
-use cleansys::utils::*;
+use cleansys_core::utils::*;
 use std::fs::File;
 use std::io::Write;
 use tempfile::TempDir;

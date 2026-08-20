@@ -9,9 +9,9 @@ use ratatui::{
 // Using tui-checkbox library for consistent checkbox symbols across the application
 use tui_checkbox::{symbols as checkbox_symbols, Checkbox};
 
-use crate::app::{App, ChartType, CleanedItemType, Status};
+use crate::app::{App, ChartType, CleanedItemType};
 use crate::pie_chart::create_pie_chart_from_distribution;
-use crate::utils::format_size;
+use cleansys_core::{format_size, Status};
 
 pub fn ui(f: &mut Frame, app: &mut App) {
     // Update animation frame if needed
@@ -237,11 +237,10 @@ fn render_progress_stats_and_chart(f: &mut Frame, app: &App, area: Rect) {
     let elapsed_time = app.get_elapsed_time();
     let total_ops = app.operation_count;
     let completed_ops = total_ops.saturating_sub(app.errors_count);
-    let progress_percent = if total_ops > 0 {
-        (completed_ops * 100) / total_ops
-    } else {
-        0
-    };
+    let progress_percent = completed_ops
+        .checked_mul(100)
+        .and_then(|v| v.checked_div(total_ops))
+        .unwrap_or(0);
 
     // Responsive layout based on terminal width - give chart much more space
     let show_chart = area.width >= 80; // Hide chart on narrow terminals
@@ -366,11 +365,10 @@ fn render_ultra_compact_view(f: &mut Frame, app: &App, area: Rect) {
     let elapsed_time = app.get_elapsed_time();
     let total_ops = app.operation_count;
     let completed_ops = total_ops.saturating_sub(app.errors_count);
-    let progress_percent = if total_ops > 0 {
-        (completed_ops * 100) / total_ops
-    } else {
-        0
-    };
+    let progress_percent = completed_ops
+        .checked_mul(100)
+        .and_then(|v| v.checked_div(total_ops))
+        .unwrap_or(0);
 
     // Ultra-compact single block with essential info only
     let compact_lines = vec![
@@ -987,7 +985,7 @@ fn render_details(f: &mut Frame, app: &App, area: Rect) {
 
             let mut text = vec![
                 Line::from(vec![Span::styled(
-                    format!("{} Keyboard Controls", &item.name),
+                    format!("{} Keyboard Controls", item.name),
                     Style::default()
                         .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD),

@@ -1,0 +1,23 @@
+[package]
+name = "cleansys-core"
+version.workspace = true
+edition.workspace = true
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "Shared core logic for CleanSys — cleaners, domain model, and utilities shared by the TUI and GUI"
+readme = "README.md"
+categories = ["command-line-utilities", "filesystem", "os"]
+keywords = ["clean", "system", "linux", "cleanup", "cache"]
+
+[dependencies]
+anyhow      = { workspace = true }
+colored     = { workspace = true }
+log         = { workspace = true }
+directories = { workspace = true }
+
+[target.'cfg(unix)'.dependencies]
+users = { workspace = true }
+
+[dev-dependencies]
+tempfile = { workspace = true }

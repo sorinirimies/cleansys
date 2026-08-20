@@ -6,21 +6,55 @@ This document describes the testing strategy and test suite for CleanSys. The pr
 
 ## Test Structure
 
+CleanSys is a Cargo workspace of three crates, each with its own test suite,
+plus a Nushell test suite for the release/automation scripts:
+
 ```
 cleansys/
-├── src/
-│   └── utils/
-│       ├── mod.rs
-│       └── tests.rs         # Unit tests for utils module
-└── tests/
-    └── integration_tests.rs # Integration tests
+├── crates/
+│   ├── cleansys-core/
+│   │   ├── src/
+│   │   │   ├── model.rs        # unit tests (load_categories, Status)
+│   │   │   └── auth.rs         # unit tests (sudo auth)
+│   │   └── tests/
+│   │       └── utils_tests.rs  # unit tests for check_root/format_size/get_size
+│   ├── cleansys-tui/
+│   │   └── tests/
+│   │       ├── integration_tests.rs   # CLI end-to-end tests
+│   │       └── password_prompt_tests.rs
+│   └── cleansys-gui/            # GUI crate (compile-checked in CI)
+└── scripts/
+    └── tests/
+        ├── run_all.nu                 # runs every test_*.nu file
+        ├── test_version.nu
+        ├── test_bump_version.nu
+        └── test_workspace_structure.nu
 ```
 
 ## Running Tests
 
-### All Tests
+### All Rust Tests (workspace)
 ```bash
-cargo test
+cargo test --workspace
+```
+
+### Nu Script Tests
+```bash
+nu scripts/tests/run_all.nu
+# or
+just test-nu
+```
+
+### All Tests (Rust + Nu)
+```bash
+just test-all-nu
+```
+
+### Single Crate
+```bash
+cargo test -p cleansys-core
+cargo test -p cleansys-tui
+cargo test -p cleansys-gui
 ```
 
 ### Unit Tests Only

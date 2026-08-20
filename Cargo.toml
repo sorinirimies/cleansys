@@ -1,40 +1,63 @@
-[package]
-name = "cleansys"
-version = "0.3.2"
-edition = "2021"
-authors = ["Sorin Albu-Irimies <sorinirimies@gmail.com>"]
-description = "A modern terminal user interface for Linux system cleanup similar to BleachBit only faster, written in Rust and memory safe."
-readme = "README.md"
+[workspace]
+members = [
+    "crates/cleansys-core",
+    "crates/cleansys-gui",
+    "crates/cleansys-tui",
+]
+resolver = "2"
+
+[workspace.package]
+version    = "0.4.0"
+edition    = "2021"
+authors    = ["Sorin Albu-Irimies <sorinirimies@gmail.com>"]
+license    = "MIT"
 repository = "https://github.com/sorinirimies/cleansys"
-license = "MIT"
-keywords = ["clean", "system", "linux", "cleanup", "cache"]
-categories = ["command-line-utilities", "filesystem", "os", "development-tools", "config"]
 
-[dependencies]
-clap = { version = "4.4", features = ["derive"] }
-colored = "2.0"
-log = "0.4"
-env_logger = "0.10"
-anyhow = "1.0"
+# ── Shared dependency versions ─────────────────────────────────────────────────
+# Pin versions here once; each crate's Cargo.toml references them with
+# `{ workspace = true }` so there is a single source of truth.
+
+[workspace.dependencies]
+# Core / shared
+anyhow      = "1.0"
+colored     = "2.0"
+log         = "0.4"
+env_logger  = "0.10"
 directories = "5.0"
-indicatif = "0.17"
-serde = { version = "1.0", features = ["derive"] }
-toml = "0.8"
-ratatui = "0.29.0"
-crossterm = "0.28.0"
+serde       = { version = "1.0", features = ["derive"] }
+toml        = "0.8"
+regex       = "1.10"
+once_cell   = "1.19"
+users       = "0.11"
+
+# TUI (Ratatui)
+ratatui       = "0.29.0"
+crossterm     = "0.28.0"
 unicode-width = "0.1.10"
-tui-textarea = "0.2.0"
-tui-checkbox = "0.3.3"
-tui-piechart = "0.1.8"
-regex = "1.10"
-libc = "0.2"
-once_cell = "1.19"
+tui-textarea  = "0.2.0"
+tui-checkbox  = "0.3.3"
+tui-piechart  = "0.1.8"
+libc          = "0.2"
+indicatif     = "0.17"
+clap          = { version = "4.4", features = ["derive"] }
 
-[target.'cfg(unix)'.dependencies]
-users = "0.11"
+# GUI (Iced)
+iced       = { version = "0.14", features = ["advanced"] }
+iced_fonts = { version = "0.3", features = ["bootstrap"] }
 
-[dev-dependencies]
+# Dev dependencies
 assert_cmd = "2.0"
 predicates = "3.0"
-tempfile = "3.8"
-once_cell = "1.19"
+tempfile   = "3.8"
+
+# Internal crates
+cleansys-core = { path = "crates/cleansys-core", version = "0.4.0" }
+
+[profile.dev]
+opt-level = 0
+
+[profile.release]
+opt-level     = 3
+lto           = "thin"
+codegen-units = 1
+strip         = "symbols"

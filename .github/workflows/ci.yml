@@ -14,24 +14,30 @@ env:
 # ensure that the workflow is only triggered once per PR, subsequent pushes to the PR will cancel
 # and restart the workflow. See https://docs.github.com/en/actions/using-jobs/using-concurrency
 concurrency:
-  group: ${{ github.workflow }}-${{ github.head_ref || github.run_id }}
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
+# ── Shared setup ───────────────────────────────────────────────────────────────
+# GUI jobs need the native libraries that Iced links against on Linux.
+# TUI/core jobs (ratatui/crossterm, plain Rust) need no extra system deps.
+
 jobs:
+  # ── 1. Formatting ────────────────────────────────────────────────────────────
   fmt:
     name: fmt
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install Rust stable
+      - uses: actions/checkout@v4
+      - name: Install Rust stable + rustfmt
         uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt
-      - name: check formatting
-        run: cargo fmt -- --check
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
+      - name: Check formatting (workspace)
+        run: cargo fmt --all -- --check
+
+  # ── 2. Clippy ────────────────────────────────────────────────────────────────
   clippy:
     name: clippy
     runs-on: ubuntu-latest
@@ -39,48 +45,139 @@ jobs:
       contents: read
       checks: write
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      - name: Install Rust stable
+      - uses: actions/checkout@v4
+      - name: Install Linux GUI system libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            libxkbcommon-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libwayland-dev \
+            libgl1-mesa-dev \
+            libfontconfig1-dev \
+            libssl-dev
+      - name: Install Rust stable + clippy
         uses: dtolnay/rust-toolchain@stable
         with:
           components: clippy
-      - name: Run clippy action
-        uses: clechasseur/rs-clippy-check@v4
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
+      - name: Run clippy (workspace)
+        run: cargo clippy --workspace --all-targets --all-features -- -D warnings -A deprecated
+
+  # ── 3. Tests ─────────────────────────────────────────────────────────────────
+  test:
+    name: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux GUI system libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            libxkbcommon-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libwayland-dev \
+            libgl1-mesa-dev \
+            libfontconfig1-dev \
+            libssl-dev
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+      - name: cargo generate-lockfile
+        if: hashFiles('Cargo.lock') == ''
+        run: cargo generate-lockfile
+      - name: cargo test --workspace
+        run: cargo test --workspace --locked --all-features --all-targets
+
+  # ── 4. Build (dev) ───────────────────────────────────────────────────────────
+  build:
+    name: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Linux GUI system libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            libxkbcommon-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libwayland-dev \
+            libgl1-mesa-dev \
+            libfontconfig1-dev \
+            libssl-dev
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+      - name: Build core (dev)
+        run: cargo build -p cleansys-core
+      - name: Build TUI (dev)
+        run: cargo build -p cleansys-tui
+      - name: Build GUI (dev)
+        run: cargo build -p cleansys-gui
+
+  # ── 5. Docs ──────────────────────────────────────────────────────────────────
   doc:
-    # run docs generation on nightly rather than stable. This enables features like
-    # https://doc.rust-lang.org/beta/unstable-book/language-features/doc-cfg.html which allows an
-    # API be documented as only available in some specific platforms.
+    # run docs generation on nightly so doc(cfg) etc. are available.
     name: doc
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Install Linux GUI system libraries
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends \
+            pkg-config \
+            libxkbcommon-dev \
+            libx11-dev \
+            libxrandr-dev \
+            libxinerama-dev \
+            libxcursor-dev \
+            libxi-dev \
+            libwayland-dev \
+            libgl1-mesa-dev \
+            libfontconfig1-dev \
+            libssl-dev
       - name: Install Rust nightly
         uses: dtolnay/rust-toolchain@nightly
-      - name: Run cargo doc
-        run: cargo doc --no-deps --all-features
-        env:
-          RUSTDOCFLAGS: --cfg docsrs
-  test:
-    runs-on: ubuntu-latest
-    name: test
-    steps:
-      # if your project needs OpenSSL, uncomment this to fix Windows builds.
-      # it's commented out by default as the install command takes 5-10m.
-      # - run: echo "VCPKG_ROOT=$env:VCPKG_INSTALLATION_ROOT" | Out-File -FilePath $env:GITHUB_ENV -Append
-      #   if: runner.os == 'Windows'
-      # - run: vcpkg install openssl:x64-windows-static-md
-      #   if: runner.os == 'Windows'
-      - uses: actions/checkout@v4
-      - name: Install Rust
-        uses: dtolnay/rust-toolchain@stable
-      # enable this ci template to run regardless of whether the lockfile is checked in or not
-      - name: cargo generate-lockfile
-        if: hashFiles('Cargo.lock') == ''
-        run: cargo generate-lockfile
-      - name: cargo test --locked
-        run: cargo test --locked --all-features --all-targets
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
+      - name: cargo doc (workspace)
+        run: cargo doc --no-deps --workspace --all-features
+        env:
+          RUSTDOCFLAGS: --cfg docsrs
+
+  # ── 6. Nu script tests ───────────────────────────────────────────────────────
+  test-nu:
+    name: test-nu
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
+      - name: Cache Cargo dependencies
+        uses: Swatinem/rust-cache@v2
+      - name: Generate lockfile (if absent)
+        if: hashFiles('Cargo.lock') == ''
+        run: cargo generate-lockfile
+      - name: Install Nushell
+        run: cargo install nu --locked
+      - name: Run Nu script tests
+        run: nu scripts/tests/run_all.nu

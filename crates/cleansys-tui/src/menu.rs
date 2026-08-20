@@ -3,8 +3,10 @@ use colored::*;
 use std::collections::HashMap;
 use std::io::{self, Write};
 
-use crate::cleaners::{system_cleaners, user_cleaners};
-use crate::utils::{check_root, confirm, print_error, print_header, print_success, print_warning};
+use cleansys_core::utils::{print_success, print_warning};
+use cleansys_core::{
+    check_root, confirm, format_size, print_error, print_header, system_cleaners, user_cleaners,
+};
 
 pub struct MenuItem {
     id: usize,
@@ -163,7 +165,7 @@ impl Menu {
                             print_success(&format!(
                                 "{} completed: freed {}",
                                 item.name,
-                                crate::utils::format_size(bytes)
+                                format_size(bytes)
                             ));
                         }
                         Err(err) => {
@@ -182,10 +184,7 @@ impl Menu {
         }
 
         print_header("CLEANING COMPLETE");
-        print_success(&format!(
-            "Total space freed: {}",
-            crate::utils::format_size(total_saved)
-        ));
+        print_success(&format!("Total space freed: {}", format_size(total_saved)));
 
         Ok(())
     }
