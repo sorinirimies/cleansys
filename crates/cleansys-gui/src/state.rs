@@ -2,6 +2,8 @@
 
 use cleansys_core::{CleanerCategory, Status};
 
+use crate::theme::ThemeColors;
+
 /// Top-level state for the CleanSys GUI application.
 pub struct CleanSysGui {
     /// Cleaner categories and items (shared domain model from `cleansys-core`).
@@ -24,6 +26,8 @@ pub struct CleanSysGui {
     pub pending_root_ops: Vec<(usize, usize)>,
     /// Index of the currently active category tab.
     pub active_tab: usize,
+    /// Index of the currently selected UI theme (see `cleansys_core::THEME_NAMES`).
+    pub theme_index: usize,
 }
 
 impl Default for CleanSysGui {
@@ -35,6 +39,7 @@ impl Default for CleanSysGui {
 impl CleanSysGui {
     /// Construct a fresh application state with all known cleaners loaded.
     pub fn new() -> Self {
+        let settings = cleansys_core::load_settings().unwrap_or_default();
         Self {
             categories: cleansys_core::load_categories(),
             logs: Vec::new(),
@@ -46,6 +51,7 @@ impl CleanSysGui {
             password_error: None,
             pending_root_ops: Vec::new(),
             active_tab: 0,
+            theme_index: settings.theme_index(),
         }
     }
 
@@ -92,6 +98,38 @@ impl CleanSysGui {
                     item.status = Some(Status::Pending);
                 }
             }
+        }
+    }
+
+    /// Derive the full [`ThemeColors`] from the currently active core theme.
+    ///
+    /// Call this at the top of view functions: `let c = state.colors();`
+    pub fn colors(&self) -> ThemeColors {
+        ThemeColors::from_core(&cleansys_core::theme_by_index(self.theme_index))
+    }
+
+    /// Return a custom `iced::Theme` derived from the active core theme, for
+    /// the top-level `iced::application(...).theme(...)` callback.
+    pub fn iced_theme(&self) -> iced::Theme {
+        crate::theme::iced_theme_for(self.theme_index)
+    }
+
+    /// The display name of the currently active theme.
+    pub fn current_theme_name(&self) -> &'static str {
+        cleansys_core::THEME_NAMES
+            .get(self.theme_index)
+            .copied()
+            .unwrap_or("Default")
+    }
+
+    /// Persist the currently selected theme to `settings.json` (best-effort;
+    /// failures are logged but never surfaced to the UI).
+    pub fn save_theme(&self) {
+        let settings = cleansys_core::Settings {
+            theme_name: Some(self.current_theme_name().to_string()),
+        };
+        if let Err(e) = cleansys_core::save_settings(&settings) {
+            log::warn!("failed to save theme preference: {e}");
         }
     }
 }
@@ -180,5 +218,35 @@ mod tests {
             Some(Status::Pending)
         ));
         assert!(state.categories[0].items[1].status.is_none());
+    }
+
+    #[test]
+    fn theme_index_defaults_in_range() {
+        let state = CleanSysGui::new();
+        assert!(state.theme_index < cleansys_core::THEME_COUNT);
+    }
+
+    #[test]
+    fn current_theme_name_matches_index() {
+        let mut state = CleanSysGui::new();
+        state.theme_index = cleansys_core::theme_index_by_name("Dracula");
+        assert_eq!(state.current_theme_name(), "Dracula");
+    }
+
+    #[test]
+    fn current_theme_name_falls_back_for_out_of_range_index() {
+        let mut state = CleanSysGui::new();
+        state.theme_index = 9999;
+        assert_eq!(state.current_theme_name(), "Default");
+    }
+
+    #[test]
+    fn colors_does_not_panic_for_any_theme() {
+        let mut state = CleanSysGui::new();
+        for i in 0..cleansys_core::THEME_COUNT {
+            state.theme_index = i;
+            let _ = state.colors();
+            let _ = state.iced_theme();
+        }
     }
 }

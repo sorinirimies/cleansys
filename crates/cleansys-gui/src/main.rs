@@ -9,6 +9,7 @@ fn main() -> iced::Result {
 
     iced::application(boot, update, view)
         .title("CleanSys")
+        .theme(|state: &CleanSysGui| state.iced_theme())
         .settings(iced::Settings {
             fonts: vec![iced_fonts::BOOTSTRAP_FONT_BYTES.into()],
             ..Default::default()

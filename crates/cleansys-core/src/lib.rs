@@ -23,6 +23,12 @@ pub mod cleaners;
 /// Framework-agnostic domain model (cleaner items, categories, run status).
 pub mod model;
 
+/// Persisted user preferences (theme, etc.), shared by the TUI and GUI.
+pub mod settings;
+
+/// Platform-agnostic UI theme presets, shared by the TUI and GUI.
+pub mod theme;
+
 /// Utility functions for permissions, formatting, and error handling.
 pub mod utils;
 
@@ -30,4 +36,6 @@ pub mod utils;
 pub use auth::authenticate_sudo;
 pub use cleaners::{system_cleaners, user_cleaners};
 pub use model::{load_categories, CleanerCategory, CleanerItem, Status};
+pub use settings::{load_settings, save_settings, Settings};
+pub use theme::{theme_by_index, theme_index_by_name, AppTheme, Rgb, THEME_COUNT, THEME_NAMES};
 pub use utils::{check_root, confirm, format_size, get_size, print_error, print_header};

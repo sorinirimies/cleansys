@@ -109,6 +109,8 @@ cleansys-gui
 
 It presents the exact same cleaners as the TUI (shared via `cleansys-core`) with checkboxes per category, a "Run selected" button, and a live activity log. System cleaners will prompt for your sudo password the first time they're needed.
 
+The top bar includes a **theme selector** with 43 built-in themes (Dracula, Nord, Solarized, Gruvbox, Catppuccin, Tokyo Night, Kanagawa, Rose Pine, and more) — pick one from the dropdown and it's applied instantly and remembered across restarts (saved to `~/.config/cleansys/settings.json`).
+
 ### Command-Line Interface
 
 ```bash
@@ -374,7 +376,7 @@ Things that would be natural next steps for the project (contributions welcome!)
 - **Pluggable/custom cleaners** — user-defined cleaner rules via a TOML config (glob patterns + safety checks), loaded by `cleansys-core` and shared by both front-ends.
 - **Notifications** — desktop notification (via `notify-rust` or similar) when a long-running clean finishes.
 - **GUI disk-usage chart** — port the TUI's pie/bar chart (`tui-piechart`) to an Iced `Canvas` widget in `cleansys-gui` for visual parity.
-- **Light theme / theme picker** for the GUI, and a `--theme` flag for the TUI.
+- **Light/dark auto-detection** for the GUI theme (follow OS preference by default, falling back to the manual picker).
 - **Localization (i18n)** for both UIs.
 - **JSON output** for `cleansys list` / `cleansys user --yes` etc., to make the CLI scriptable.
 - **AUR / winget / Homebrew formulae** for easier installation (AUR `PKGBUILD` scaffold already included under `packaging/aur/`).

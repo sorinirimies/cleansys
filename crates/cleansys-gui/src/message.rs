@@ -11,6 +11,8 @@ pub enum Message {
     DeselectAllCategory(usize),
     /// Switch the active category tab.
     SwitchCategoryTab(usize),
+    /// User picked a different theme from the theme selector.
+    ThemeChanged(usize),
     /// Kick off cleaning of all currently-selected items.
     RunSelected,
     /// The password field in the sudo authentication dialog changed.

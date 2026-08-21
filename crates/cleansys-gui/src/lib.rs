@@ -22,6 +22,12 @@ pub mod view;
 /// Bootstrap icon font glyph constants.
 pub mod icons;
 
+/// Theme colour derivation (`ThemeColors::from_core`, custom `iced::Theme`).
+pub mod theme;
+
+/// Theme picker widget (`pick_list` of all `cleansys-core` themes).
+pub mod theme_selector;
+
 pub use message::Message;
 pub use state::CleanSysGui;
 pub use update::update;

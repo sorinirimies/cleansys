@@ -9,25 +9,23 @@ use iced::{Alignment, Color, Element, Length};
 use crate::icons;
 use crate::message::Message;
 use crate::state::CleanSysGui;
-
-const MUTED: Color = Color::from_rgba(0.72, 0.74, 0.78, 1.0);
-const DIM: Color = Color::from_rgba(0.55, 0.57, 0.62, 1.0);
-const SUCCESS: Color = Color::from_rgb(0.36, 0.78, 0.45);
-const DANGER: Color = Color::from_rgb(0.92, 0.42, 0.42);
-const ACCENT: Color = Color::from_rgb(0.51, 0.53, 0.94);
+use crate::theme::ThemeColors;
+use crate::theme_selector::theme_selector;
 
 /// Render the full application view.
 pub fn view(state: &CleanSysGui) -> Element<'_, Message> {
+    let c = state.colors();
+
     if state.needs_password {
-        return password_dialog(state);
+        return password_dialog(state, &c);
     }
 
     let content = column![
-        top_bar(state),
-        controls_bar(state),
-        tab_bar(state),
-        active_category_panel(state),
-        log_panel(state),
+        top_bar(state, &c),
+        controls_bar(state, &c),
+        tab_bar(state, &c),
+        active_category_panel(state, &c),
+        log_panel(state, &c),
     ]
     .spacing(14)
     .padding(20)
@@ -36,51 +34,61 @@ pub fn view(state: &CleanSysGui) -> Element<'_, Message> {
     container(content)
         .width(Length::Fill)
         .height(Length::Fill)
+        .style(move |_theme: &iced::Theme| container::Style {
+            background: Some(c.bg.into()),
+            text_color: Some(c.text_primary),
+            ..Default::default()
+        })
         .into()
 }
 
 // ── Sections ────────────────────────────────────────────────────────────────
 
-fn top_bar(state: &CleanSysGui) -> Element<'_, Message> {
+fn top_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> {
+    let c = *c;
     let root_badge = if state.is_root {
-        badge("ROOT", SUCCESS)
+        badge("ROOT", c.green)
     } else {
-        badge("USER", ACCENT)
+        badge("USER", c.accent)
     };
+
+    let title_row = row![
+        text("🧹 CleanSys").size(26).color(c.text_primary),
+        root_badge,
+        Space::new().width(Length::Fill),
+        text("Theme").size(13).color(c.text_secondary),
+        theme_selector(state.theme_index),
+    ]
+    .spacing(12)
+    .align_y(Alignment::Center);
 
     container(
         column![
-            row![text("🧹 CleanSys").size(26), root_badge]
-                .spacing(12)
-                .align_y(Alignment::Center),
+            title_row,
             text(if state.is_root {
                 "Running with root privileges — all cleaners can run directly."
             } else {
                 "Running as a normal user — system cleaners will prompt for your sudo password."
             })
             .size(13)
-            .color(MUTED),
+            .color(c.text_secondary),
         ]
         .spacing(4),
     )
     .padding([16, 20])
     .width(Length::Fill)
-    .style(top_bar_style)
-    .into()
-}
-
-fn top_bar_style(_theme: &iced::Theme) -> container::Style {
-    container::Style {
-        background: Some(Color::from_rgb(0.145, 0.153, 0.19).into()),
+    .style(move |_theme: &iced::Theme| container::Style {
+        background: Some(c.header_bg.into()),
         border: iced::Border {
             radius: 10.0.into(),
             ..Default::default()
         },
         ..Default::default()
-    }
+    })
+    .into()
 }
 
-fn controls_bar(state: &CleanSysGui) -> Element<'_, Message> {
+fn controls_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> {
     let selected = state.selected_count();
     let run_label = if state.is_running {
         "⏳ Cleaning…".to_string()
@@ -104,13 +112,14 @@ fn controls_bar(state: &CleanSysGui) -> Element<'_, Message> {
             "Total freed this run: {}",
             format_size(state.total_bytes_cleaned)
         ))
-        .size(14),
+        .size(14)
+        .color(c.text_primary),
         text(format!(
             "{} item(s) selected across all categories",
             selected
         ))
         .size(12)
-        .color(DIM),
+        .color(c.muted),
     ]
     .spacing(2);
 
@@ -121,12 +130,12 @@ fn controls_bar(state: &CleanSysGui) -> Element<'_, Message> {
     )
     .padding(16)
     .width(Length::Fill)
-    .style(container::rounded_box)
+    .style(surface_style(*c))
     .into()
 }
 
-fn tab_bar(state: &CleanSysGui) -> Element<'_, Message> {
-    let tabs: Vec<Element<'_, Message>> = state
+fn tab_bar<'a>(state: &'a CleanSysGui, _c: &ThemeColors) -> Element<'a, Message> {
+    let tabs: Vec<Element<'a, Message>> = state
         .categories
         .iter()
         .enumerate()
@@ -160,14 +169,14 @@ fn tab_bar(state: &CleanSysGui) -> Element<'_, Message> {
     row(tabs).spacing(8).into()
 }
 
-fn active_category_panel(state: &CleanSysGui) -> Element<'_, Message> {
+fn active_category_panel<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> {
     let Some(category) = state.categories.get(state.active_tab) else {
         return Space::new().into();
     };
     let cat_idx = state.active_tab;
 
     let title_row = row![
-        text(category.description.clone()).size(13).color(MUTED),
+        text(category.description.clone()).size(13).color(c.muted),
         Space::new().width(Length::Fill),
         button(text("Select all").size(12))
             .padding([5, 12])
@@ -181,11 +190,11 @@ fn active_category_panel(state: &CleanSysGui) -> Element<'_, Message> {
     .spacing(8)
     .align_y(Alignment::Center);
 
-    let items: Vec<Element<'_, Message>> = category
+    let items: Vec<Element<'a, Message>> = category
         .items
         .iter()
         .enumerate()
-        .map(|(item_idx, item)| item_row(cat_idx, item_idx, item))
+        .map(|(item_idx, item)| item_row(cat_idx, item_idx, item, c))
         .collect();
 
     let list = scrollable(column(items).spacing(4)).height(Length::Fill);
@@ -198,7 +207,7 @@ fn active_category_panel(state: &CleanSysGui) -> Element<'_, Message> {
     .padding(18)
     .width(Length::Fill)
     .height(Length::Fill)
-    .style(container::rounded_box)
+    .style(surface_style(*c))
     .into()
 }
 
@@ -206,6 +215,7 @@ fn item_row<'a>(
     cat_idx: usize,
     item_idx: usize,
     item: &'a cleansys_core::CleanerItem,
+    c: &ThemeColors,
 ) -> Element<'a, Message> {
     let box_ = checkbox(item.selected)
         .label(item.name.clone())
@@ -213,39 +223,40 @@ fn item_row<'a>(
         .on_toggle(move |_| Message::ToggleItem(cat_idx, item_idx));
 
     let root_tag: Element<'_, Message> = if item.requires_root {
-        badge("ROOT", ACCENT)
+        badge("ROOT", c.accent)
     } else {
         Space::new().into()
     };
 
     let status_line: Element<'_, Message> = match &item.status {
         Some(Status::Success(msg)) => row![
-            icon(icons::CHECK_CIRCLE_FILL, SUCCESS),
-            text(msg.clone()).size(12).color(SUCCESS),
+            icon(icons::CHECK_CIRCLE_FILL, c.green),
+            text(msg.clone()).size(12).color(c.green),
         ]
         .spacing(6)
         .align_y(Alignment::Center)
         .into(),
         Some(Status::Error(msg)) => row![
-            icon(icons::X_CIRCLE, DANGER),
-            text(msg.clone()).size(12).color(DANGER),
+            icon(icons::X_CIRCLE, c.red),
+            text(msg.clone()).size(12).color(c.red),
         ]
         .spacing(6)
         .align_y(Alignment::Center)
         .into(),
         Some(Status::Running) => row![
-            icon(icons::ARROW_REPEAT, ACCENT),
-            text("running…").size(12).color(ACCENT),
+            icon(icons::ARROW_REPEAT, c.accent),
+            text("running…").size(12).color(c.accent),
         ]
         .spacing(6)
         .align_y(Alignment::Center)
         .into(),
-        Some(Status::Pending) => {
-            row![icon(icons::CLOCK, DIM), text("pending").size(12).color(DIM),]
-                .spacing(6)
-                .align_y(Alignment::Center)
-                .into()
-        }
+        Some(Status::Pending) => row![
+            icon(icons::CLOCK, c.muted),
+            text("pending").size(12).color(c.muted),
+        ]
+        .spacing(6)
+        .align_y(Alignment::Center)
+        .into(),
         None => Space::new().into(),
     };
 
@@ -261,44 +272,33 @@ fn item_row<'a>(
     container(
         column![
             header_row,
-            text(item.description.clone()).size(12).color(MUTED),
+            text(item.description.clone()).size(12).color(c.muted),
         ]
         .spacing(2),
     )
     .padding([8, 10])
     .width(Length::Fill)
-    .style(item_row_style)
+    .style(item_row_style(*c))
     .into()
 }
 
-fn item_row_style(_theme: &iced::Theme) -> container::Style {
-    container::Style {
-        background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.03).into()),
-        border: iced::Border {
-            radius: 6.0.into(),
-            ..Default::default()
-        },
-        ..Default::default()
-    }
-}
-
-fn log_panel(state: &CleanSysGui) -> Element<'_, Message> {
-    let log_lines: Vec<Element<'_, Message>> = if state.logs.is_empty() {
-        vec![text("No activity yet.").size(12).color(DIM).into()]
+fn log_panel<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> {
+    let log_lines: Vec<Element<'a, Message>> = if state.logs.is_empty() {
+        vec![text("No activity yet.").size(12).color(c.muted).into()]
     } else {
         state
             .logs
             .iter()
             .rev()
             .take(200)
-            .map(|l| text(l.clone()).size(12).into())
+            .map(|l| text(l.clone()).size(12).color(c.text_secondary).into())
             .collect()
     };
 
     container(
         column![
             row![
-                text("Activity log").size(14),
+                text("Activity log").size(14).color(c.text_primary),
                 Space::new().width(Length::Fill),
                 button(text("Clear").size(12))
                     .padding([4, 10])
@@ -314,11 +314,37 @@ fn log_panel(state: &CleanSysGui) -> Element<'_, Message> {
     )
     .padding(14)
     .width(Length::Fill)
-    .style(container::rounded_box)
+    .style(surface_style(*c))
     .into()
 }
 
 // ── Small shared widgets ─────────────────────────────────────────────────────
+
+/// A reusable "elevated surface" container style (cards, panels) tinted by
+/// the active theme.
+fn surface_style(c: ThemeColors) -> impl Fn(&iced::Theme) -> container::Style {
+    move |_theme: &iced::Theme| container::Style {
+        background: Some(c.surface.into()),
+        border: iced::Border {
+            color: c.border,
+            width: 1.0,
+            radius: 8.0.into(),
+        },
+        ..Default::default()
+    }
+}
+
+/// A slightly-highlighted row background, used for individual cleaner items.
+fn item_row_style(c: ThemeColors) -> impl Fn(&iced::Theme) -> container::Style {
+    move |_theme: &iced::Theme| container::Style {
+        background: Some(c.surface_highlight.into()),
+        border: iced::Border {
+            radius: 6.0.into(),
+            ..Default::default()
+        },
+        ..Default::default()
+    }
+}
 
 fn icon(glyph: char, color: Color) -> Element<'static, Message> {
     text(glyph.to_string())
@@ -343,17 +369,20 @@ fn badge(label: &'static str, color: Color) -> Element<'static, Message> {
         .into()
 }
 
-fn password_dialog(state: &CleanSysGui) -> Element<'_, Message> {
+fn password_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> {
+    let c = *c;
     let mut content = column![
         row![
-            icon(icons::EXCLAMATION_TRIANGLE, ACCENT),
-            text("Authentication required").size(22),
+            icon(icons::EXCLAMATION_TRIANGLE, c.accent),
+            text("Authentication required")
+                .size(22)
+                .color(c.text_primary),
         ]
         .spacing(10)
         .align_y(Alignment::Center),
         text("System cleaners require root privileges. Enter your password to continue:")
             .size(14)
-            .color(MUTED),
+            .color(c.text_secondary),
         text_input("Password", &state.password_input)
             .secure(true)
             .on_input(Message::PasswordChanged)
@@ -365,7 +394,7 @@ fn password_dialog(state: &CleanSysGui) -> Element<'_, Message> {
     .max_width(420);
 
     if let Some(err) = &state.password_error {
-        content = content.push(text(format!("❌ {}", err)).size(13).color(DANGER));
+        content = content.push(text(format!("❌ {}", err)).size(13).color(c.red));
     }
 
     content = content.push(
@@ -382,12 +411,17 @@ fn password_dialog(state: &CleanSysGui) -> Element<'_, Message> {
         .spacing(12),
     );
 
-    let card = container(content).padding(8).style(container::bordered_box);
+    let card = container(content).padding(8).style(surface_style(c));
 
     container(card)
         .width(Length::Fill)
         .height(Length::Fill)
         .center_x(Length::Fill)
         .center_y(Length::Fill)
+        .style(move |_theme: &iced::Theme| container::Style {
+            background: Some(c.bg.into()),
+            text_color: Some(c.text_primary),
+            ..Default::default()
+        })
         .into()
 }

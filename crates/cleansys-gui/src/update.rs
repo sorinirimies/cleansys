@@ -45,6 +45,14 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        Message::ThemeChanged(idx) => {
+            if idx < cleansys_core::THEME_COUNT {
+                state.theme_index = idx;
+                state.save_theme();
+            }
+            Task::none()
+        }
+
         Message::ClearLog => {
             state.logs.clear();
             Task::none()
@@ -249,6 +257,23 @@ mod tests {
         let mut state = CleanSysGui::new();
         let _ = update(&mut state, Message::SwitchCategoryTab(99));
         assert_eq!(state.active_tab, 0);
+    }
+
+    #[test]
+    fn theme_changed_updates_theme_index() {
+        let mut state = CleanSysGui::new();
+        let target = cleansys_core::theme_index_by_name("Nord");
+        let _ = update(&mut state, Message::ThemeChanged(target));
+        assert_eq!(state.theme_index, target);
+        assert_eq!(state.current_theme_name(), "Nord");
+    }
+
+    #[test]
+    fn theme_changed_ignores_out_of_range_index() {
+        let mut state = CleanSysGui::new();
+        let before = state.theme_index;
+        let _ = update(&mut state, Message::ThemeChanged(999_999));
+        assert_eq!(state.theme_index, before);
     }
 
     #[test]
