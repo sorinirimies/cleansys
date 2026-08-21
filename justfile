@@ -307,6 +307,24 @@ upgrade-deps: _check-nu
 upgrade-deps-check: _check-nu
     nu scripts/upgrade_deps.nu --check
 
+# Manually run the same "upgrade deps -> cut a patch release" flow the nightly
+# CI job runs automatically. Requires cargo-edit + git-cliff installed and a
+# clean working tree; pushes a commit + tag to origin on success.
+auto-patch-release: _check-nu _check-git-cliff
+    cargo install cargo-edit --locked
+    cargo update && cargo fetch
+    cargo upgrade --incompatible allow
+    cargo update
+    @if git diff --quiet Cargo.toml Cargo.lock; then \
+        echo "ℹ️  No dependency changes — nothing to release."; \
+    else \
+        just check-all && \
+        git add Cargo.toml Cargo.lock && \
+        git commit -m "chore(deps): dependency upgrade $(date -u '+%Y-%m-%d')" && \
+        git push origin main && \
+        nu scripts/ci/auto_patch_release.nu; \
+    fi
+
 outdated:
     cargo outdated
 

@@ -333,6 +333,19 @@ cargo test -- --nocapture
 cargo test --test integration_tests
 ```
 
+## 🤖 Automated Maintenance
+
+A nightly Gitea Actions job (`.gitea/workflows/deps-update.yml`) upgrades every
+workspace dependency pin, runs the full quality gate (fmt, clippy, test), and—
+if anything actually changed—**automatically cuts a new patch release**: it
+commits the dependency bump, then bumps the workspace version (`X.Y.Z` →
+`X.Y.Z+1`), regenerates `CHANGELOG.md`, and pushes the tag directly to `main`.
+No PR, no manual approval — pushing the tag triggers the normal Release
+workflow (build, package, crates.io publish, AUR update). If the quality gate
+fails at any point the job simply stops; nothing broken is ever released.
+
+Run the same flow locally with `just auto-patch-release`.
+
 ## 🤝 Contributing
 
 Contributions are welcome! Please feel free to submit a Pull Request.

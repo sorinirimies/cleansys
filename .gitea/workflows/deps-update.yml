@@ -1,5 +1,11 @@
 name: Nightly Dependency Upgrade
 
+# Upgrades workspace dependencies every night, and — if anything actually
+# changed — automatically cuts a new patch release (bump + changelog + tag +
+# push) with no human approval step. The quality gate (fmt, clippy, test)
+# must pass before either the dependency commit or the release tag are ever
+# pushed, so a bad upgrade simply fails the workflow instead of shipping.
+
 on:
   schedule:
     # Runs at 02:00 UTC every day (03:00 CET)
@@ -115,6 +121,24 @@ jobs:
           git push origin main
 
           echo "✅ Dependency updates pushed to main."
+
+      # ── Automatic patch release ─────────────────────────────────────────────
+      # Cuts a new patch version (X.Y.Z -> X.Y.Z+1) for the dependency bump
+      # above and pushes the tag, which triggers the full Release workflow
+      # (build, package, crates.io publish, AUR update) — no human approval
+      # in the loop, matching the "nightly libs auto update that merges
+      # automatically and creates a new patched version" requirement.
+      - name: Install git-cliff
+        if: steps.check.outputs.has_changes == 'true'
+        run: cargo install git-cliff --locked
+
+      - name: Install Nushell
+        if: steps.check.outputs.has_changes == 'true'
+        run: cargo install nu --locked
+
+      - name: Cut automatic patch release
+        if: steps.check.outputs.has_changes == 'true'
+        run: nu scripts/ci/auto_patch_release.nu
 
       - name: Nothing to update
         if: steps.check.outputs.has_changes == 'false'
