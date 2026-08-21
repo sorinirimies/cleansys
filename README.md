@@ -1,4 +1,4 @@
-# CleanSys - Modern Terminal-Based System Cleaner for Linux
+# CleanSys - Modern System Cleaner (Linux, macOS, Windows)
 
 [![Crates.io](https://img.shields.io/crates/v/cleansys)](https://crates.io/crates/cleansys)
 [![Documentation](https://docs.rs/cleansys/badge.svg)](https://docs.rs/cleansys)
@@ -34,21 +34,20 @@ CleanSys is a Cargo workspace with three crates:
 - **Responsive Design**: Automatically adapts to any terminal size
 - **Real-time Resize**: Handles terminal resizing without losing state
 
-### 🧹 User-Level Cleaning
-- Browser caches (Firefox, Chrome/Chromium)
+### 🧹 User-Level Cleaning (Linux, macOS, Windows)
+- Browser caches — Firefox, Chrome/Chromium, Edge, Safari (real per-platform paths, not guesses)
 - Application caches
-- Thumbnail caches
-- Temporary files
+- Thumbnail/preview caches
+- Temporary files owned by the current user
 - Package manager caches (pip, npm, cargo)
-- User trash
+- Trash / Recycle Bin (Linux XDG trash, macOS `~/.Trash`)
 
-### 🔧 System-Level Cleaning (requires root)
-- Package manager caches (apt, pacman, dnf, etc.)
-- System logs
-- System caches
-- Temporary files
-- Old kernels (on supported systems)
-- Crash reports and core dumps
+### 🔧 System-Level Cleaning (platform-appropriate, some require root/admin)
+- **Linux**: apt/pacman/dnf caches, rotated logs + journald vacuum, `/var/cache`, old kernels, crash reports
+- **macOS**: Homebrew cache (never run as root!), rotated system logs, diagnostic/crash reports
+- **Windows**: Windows Update download cache, `C:\Windows\Temp` (best-effort; needs Administrator)
+
+Every cleaner reports **real measured sizes** — no estimates or guesses — and the detailed view/GUI activity log lists exactly which files/directories were removed and how many bytes each one freed.
 
 ### 🛡️ Safe by Default
 - Never removes system-critical files
@@ -283,11 +282,16 @@ crates/
 
 ## 🖥️ Platform Support
 
-| Platform | `cleansys` (TUI/CLI) | `cleansys-gui` | Notes |
-|----------|:---:|:---:|-------|
-| Linux (x86_64, aarch64) | ✅ | ✅ | Primary target — full cleaner support (apt/pacman/dnf, journalctl, etc.) |
-| macOS (Intel + Apple Silicon) | ✅ builds & runs | ✅ builds & runs | Both binaries build and run natively; the *cleaner implementations* are Linux-specific by design (this is a Linux cache/cleanup tool), so `cleansys-gui` is handy for developing/previewing the UI on macOS |
-| Windows (x86_64) | ✅ builds & runs | ✅ builds & runs | Same as macOS — compiles and runs cleanly (verified via cross-compilation to `x86_64-pc-windows-gnu`/`-msvc`), cleaner backends are Linux-specific |
+Cleaners are **real and platform-native** on every OS — not just Linux paths
+that happen to compile elsewhere. Each cleaner resolves OS-appropriate
+locations (see [`cleansys-core::cleaners::platform`](crates/cleansys-core/src/cleaners/platform.rs))
+and measures real freed bytes (no estimates).
+
+| Platform | `cleansys` (TUI/CLI) | `cleansys-gui` | User cleaners | System cleaners |
+|----------|:---:|:---:|-------|-------|
+| Linux (x86_64, aarch64) | ✅ | ✅ | Firefox/Chrome/Chromium caches, `~/.cache`, thumbnails, `/tmp`, pip/npm/cargo caches, XDG Trash | apt/pacman/dnf caches, rotated logs + journald vacuum, `/var/cache`, old kernels, crash reports (root required) |
+| macOS (Intel + Apple Silicon) | ✅ | ✅ | Firefox/Chrome/Safari caches, `~/Library/Caches`, QuickLook thumbnails, `$TMPDIR`, pip/npm/cargo caches, `~/.Trash` | Homebrew cache (**not** root — brew refuses to run as root), rotated system logs, diagnostic/crash reports (root required) |
+| Windows (x86_64) | ✅ | ✅ | Chrome/Edge/Firefox caches, Windows INetCache/CrashDumps, thumbnail cache, `%TEMP%`, pip/npm/cargo caches | Windows Update download cache, `C:\Windows\Temp` (best-effort, no UAC prompt yet — see Roadmap); Recycle Bin not yet supported |
 
 Windowing / desktop-environment support for `cleansys-gui` (via [Iced](https://iced.rs)/winit):
 - **Linux**: X11 and Wayland (both enabled by default)
@@ -369,8 +373,9 @@ All generated GIF files are output to `demo/target/` and are git-ignored.
 
 Things that would be natural next steps for the project (contributions welcome!):
 
-- **Cross-platform cleaner backends** — today's cleaner implementations target Linux (apt/pacman/dnf, journalctl, XDG cache dirs). Adding macOS (`~/Library/Caches`, Homebrew cache, Xcode derived data) and Windows (`%TEMP%`, `%LOCALAPPDATA%`, WinSxS) cleaner sets would let the GUI/TUI shells (which already build and run everywhere) actually clean on those platforms too.
-- **Dry-run / preview mode** — estimate reclaimed space and list affected files before actually deleting anything, in both TUI and GUI.
+- **Windows Recycle Bin support** — currently skipped (it's not a plain, safely-walkable folder); would need the Windows Shell APIs to enumerate/empty it correctly.
+- **Windows elevation (UAC)** — Windows system cleaners currently attempt their operation directly and log a warning if not run as Administrator, rather than prompting for elevation like the Unix sudo-password flow does.
+- **Dry-run / preview mode** — list exactly which files would be removed and their real measured sizes before actually deleting anything, in both TUI and GUI.
 - **Scheduled/background cleaning** — a small daemon or OS-native scheduler (systemd timer / launchd / Task Scheduler) integration to auto-clean on a cadence.
 - **Settings persistence** — remember last selection, custom include/exclude paths, and preferred chart/view mode across runs (`cleansys-core::utils` already has a `directories`-based config dir helper to build on).
 - **Pluggable/custom cleaners** — user-defined cleaner rules via a TOML config (glob patterns + safety checks), loaded by `cleansys-core` and shared by both front-ends.

@@ -168,14 +168,28 @@ mod tests {
         assert_eq!(state.selected_count_in(99), 0);
     }
 
+    /// Find `(cat_idx, item_idx)` of a system item that actually requires
+    /// root on this platform (not every "System Cleaners" entry does —
+    /// e.g. Homebrew on macOS must not run as root).
+    fn first_root_required_item(state: &CleanSysGui) -> (usize, usize) {
+        for (ci, category) in state.categories.iter().enumerate() {
+            for (ii, item) in category.items.iter().enumerate() {
+                if item.requires_root {
+                    return (ci, ii);
+                }
+            }
+        }
+        panic!("expected at least one root-requiring cleaner on this platform");
+    }
+
     #[test]
     fn selection_needs_root_when_not_root_and_system_item_selected() {
         let mut state = CleanSysGui::new();
         state.is_root = false;
         assert!(!state.selection_needs_root());
 
-        // Category 1 is "System Cleaners" — all items require root.
-        state.categories[1].items[0].selected = true;
+        let (ci, ii) = first_root_required_item(&state);
+        state.categories[ci].items[ii].selected = true;
         assert!(state.selection_needs_root());
     }
 
@@ -183,7 +197,8 @@ mod tests {
     fn selection_needs_root_false_when_already_root() {
         let mut state = CleanSysGui::new();
         state.is_root = true;
-        state.categories[1].items[0].selected = true;
+        let (ci, ii) = first_root_required_item(&state);
+        state.categories[ci].items[ii].selected = true;
         assert!(!state.selection_needs_root());
     }
 

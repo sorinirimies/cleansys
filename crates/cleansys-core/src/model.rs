@@ -3,8 +3,7 @@
 //! Nothing in this module depends on `ratatui`, `crossterm`, or `iced` — it is
 //! pure application state that both front-ends render in their own way.
 
-use anyhow::Result;
-
+use crate::cleaners::cleaned_item::{CleanerFn, CleaningResult};
 use crate::cleaners::{system_cleaners, user_cleaners};
 
 /// The outcome of running (or attempting to run) a single cleaner.
@@ -47,11 +46,16 @@ pub struct CleanerItem {
     /// Whether the user has selected this cleaner to run.
     pub selected: bool,
     /// The function that performs the actual cleaning.
-    /// Takes `dry_run: bool` (when `false`, files are actually removed) and
-    /// returns the number of bytes freed.
-    pub function: fn(bool) -> Result<u64>,
+    /// Takes `skip_confirmation: bool` (when `true`, files are removed
+    /// without an interactive y/n prompt — always `true` from the TUI/GUI,
+    /// which have no stdin prompt loop) and returns the structured set of
+    /// items actually removed, with real per-item sizes.
+    pub function: CleanerFn,
     /// Bytes freed by the most recent run of this cleaner.
     pub bytes_cleaned: u64,
+    /// Structured detail (per-file/per-directory paths and sizes) from the
+    /// most recent run of this cleaner, if any.
+    pub last_result: Option<CleaningResult>,
     /// Current run status, if the cleaner has been queued/run at least once.
     pub status: Option<Status>,
 }
@@ -81,6 +85,7 @@ pub fn load_categories() -> Vec<CleanerCategory> {
             selected: false,
             function: cleaner.function,
             bytes_cleaned: 0,
+            last_result: None,
             status: None,
         });
     }
@@ -90,10 +95,11 @@ pub fn load_categories() -> Vec<CleanerCategory> {
         system_items.push(CleanerItem {
             name: cleaner.name.to_string(),
             description: cleaner.description.to_string(),
-            requires_root: true,
+            requires_root: cleaner.requires_root,
             selected: false,
             function: cleaner.function,
             bytes_cleaned: 0,
+            last_result: None,
             status: None,
         });
     }
@@ -124,7 +130,9 @@ mod tests {
         assert_eq!(categories[1].name, "System Cleaners");
         assert!(!categories[0].items.is_empty());
         assert!(!categories[1].items.is_empty());
-        assert!(categories[1].items.iter().all(|i| i.requires_root));
+        // System cleaners each declare their own root requirement (e.g.
+        // Homebrew on macOS must not run as root), so not every item in the
+        // System category necessarily requires root — but user cleaners never do.
         assert!(categories[0].items.iter().all(|i| !i.requires_root));
     }
 

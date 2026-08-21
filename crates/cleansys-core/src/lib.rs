@@ -34,6 +34,7 @@ pub mod utils;
 
 // Convenience re-exports
 pub use auth::authenticate_sudo;
+pub use cleaners::cleaned_item::{CleanedItem, CleanedItemType, CleanerFn, CleaningResult};
 pub use cleaners::{system_cleaners, user_cleaners};
 pub use model::{load_categories, CleanerCategory, CleanerItem, Status};
 pub use settings::{load_settings, save_settings, Settings};

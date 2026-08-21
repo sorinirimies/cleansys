@@ -96,27 +96,52 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
         }
 
         Message::OperationFinished(cat_idx, item_idx, result) => {
-            let mut log_line = None;
+            let mut log_lines: Vec<String> = Vec::new();
             if let Some(item) = state
                 .categories
                 .get_mut(cat_idx)
                 .and_then(|c| c.items.get_mut(item_idx))
             {
                 match result {
-                    Ok(bytes) => {
-                        item.status =
-                            Some(Status::Success(format!("Cleaned {}", format_size(bytes))));
+                    Ok(cleaning_result) => {
+                        let bytes = cleaning_result.total_bytes;
+                        item.status = Some(Status::Success(format!(
+                            "Cleaned {} across {} item(s)",
+                            format_size(bytes),
+                            cleaning_result.item_count()
+                        )));
                         item.bytes_cleaned = bytes;
                         state.total_bytes_cleaned += bytes;
-                        log_line = Some(format!("✅ {}: freed {}", item.name, format_size(bytes)));
+
+                        if bytes == 0 {
+                            log_lines.push(format!(
+                                "ℹ️  {}: nothing to clean (already empty on this platform)",
+                                item.name
+                            ));
+                        } else {
+                            log_lines.push(format!(
+                                "✅ {}: freed {} across {} item(s)",
+                                item.name,
+                                format_size(bytes),
+                                cleaning_result.item_count()
+                            ));
+                            for cleaned in &cleaning_result.items {
+                                log_lines.push(format!(
+                                    "   → {} ({})",
+                                    cleaned.path_str(),
+                                    format_size(cleaned.size)
+                                ));
+                            }
+                        }
+                        item.last_result = Some(cleaning_result);
                     }
                     Err(err) => {
                         item.status = Some(Status::Error(err.clone()));
-                        log_line = Some(format!("❌ {}: {}", item.name, err));
+                        log_lines.push(format!("❌ {}: {}", item.name, err));
                     }
                 }
             }
-            if let Some(line) = log_line {
+            for line in log_lines {
                 state.push_log(line);
             }
 
@@ -306,24 +331,37 @@ mod tests {
         ));
     }
 
+    fn first_root_required_item(state: &CleanSysGui) -> (usize, usize) {
+        for (ci, category) in state.categories.iter().enumerate() {
+            for (ii, item) in category.items.iter().enumerate() {
+                if item.requires_root {
+                    return (ci, ii);
+                }
+            }
+        }
+        panic!("expected at least one root-requiring cleaner on this platform");
+    }
+
     #[test]
     fn run_selected_with_root_item_shows_password_dialog_when_not_root() {
         let mut state = CleanSysGui::new();
         state.is_root = false;
-        state.categories[1].items[0].selected = true;
+        let (ci, ii) = first_root_required_item(&state);
+        state.categories[ci].items[ii].selected = true;
 
         let _ = update(&mut state, Message::RunSelected);
 
         assert!(state.needs_password);
         assert!(!state.is_running);
-        assert_eq!(state.pending_root_ops, vec![(1, 0)]);
+        assert_eq!(state.pending_root_ops, vec![(ci, ii)]);
     }
 
     #[test]
     fn run_selected_with_root_item_runs_immediately_when_already_root() {
         let mut state = CleanSysGui::new();
         state.is_root = true;
-        state.categories[1].items[0].selected = true;
+        let (ci, ii) = first_root_required_item(&state);
+        state.categories[ci].items[ii].selected = true;
 
         let _ = update(&mut state, Message::RunSelected);
 
@@ -371,8 +409,9 @@ mod tests {
         let mut state = CleanSysGui::new();
         state.needs_password = true;
         state.is_root = false;
-        state.pending_root_ops = vec![(1, 0)];
-        state.categories[1].items[0].selected = true;
+        let (ci, ii) = first_root_required_item(&state);
+        state.pending_root_ops = vec![(ci, ii)];
+        state.categories[ci].items[ii].selected = true;
 
         let _ = update(&mut state, Message::AuthenticationResult(true));
 
@@ -387,13 +426,20 @@ mod tests {
         state.categories[0].items[0].status = Some(Status::Running);
         state.is_running = true;
 
-        let _ = update(&mut state, Message::OperationFinished(0, 0, Ok(2048)));
+        let mut result = cleansys_core::CleaningResult::new();
+        result.add_item(cleansys_core::CleanedItem::file(
+            std::path::PathBuf::from("/tmp/foo"),
+            2048,
+            "test",
+        ));
+        let _ = update(&mut state, Message::OperationFinished(0, 0, Ok(result)));
 
         assert_eq!(state.total_bytes_cleaned, 2048);
         assert!(matches!(
             state.categories[0].items[0].status,
             Some(Status::Success(_))
         ));
+        assert!(state.categories[0].items[0].last_result.is_some());
         // No other items are pending/running, so the run should be marked done.
         assert!(!state.is_running);
     }
@@ -423,7 +469,13 @@ mod tests {
         state.categories[0].items[1].status = Some(Status::Pending);
         state.is_running = true;
 
-        let _ = update(&mut state, Message::OperationFinished(0, 0, Ok(10)));
+        let mut result = cleansys_core::CleaningResult::new();
+        result.add_item(cleansys_core::CleanedItem::file(
+            std::path::PathBuf::from("/tmp/foo"),
+            10,
+            "test",
+        ));
+        let _ = update(&mut state, Message::OperationFinished(0, 0, Ok(result)));
 
         // Another item is still pending, so the overall run isn't finished yet.
         assert!(state.is_running);

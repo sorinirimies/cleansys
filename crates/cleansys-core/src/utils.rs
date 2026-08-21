@@ -169,24 +169,41 @@ pub fn format_size(bytes: u64) -> String {
     }
 }
 
-/// Get the size of a directory or file in bytes
+/// Get the size of a directory or file in bytes.
+///
+/// Implemented as a pure-Rust recursive walk (no shell-out to `du`), so it
+/// works identically on Linux, macOS, and Windows — the previous `du -sb`
+/// implementation relied on a GNU-only flag and silently reported `0` on
+/// BSD/macOS `du`. Symlinks are not followed (their own size is counted,
+/// not the target's), matching `du`'s default behaviour and avoiding
+/// infinite loops on cyclic symlinks.
 pub fn get_size(path: &str) -> Result<u64> {
-    let output = std::process::Command::new("du")
-        .args(["-sb", path])
-        .output()?;
+    Ok(dir_size(std::path::Path::new(path)))
+}
 
-    if !output.status.success() {
-        return Ok(0);
+fn dir_size(path: &std::path::Path) -> u64 {
+    let metadata = match std::fs::symlink_metadata(path) {
+        Ok(m) => m,
+        Err(_) => return 0,
+    };
+
+    if metadata.file_type().is_symlink() {
+        return 0;
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    let parts: Vec<&str> = stdout.split_whitespace().collect();
-    if parts.is_empty() {
-        return Ok(0);
+    if metadata.is_file() {
+        return metadata.len();
     }
 
-    match parts[0].parse::<u64>() {
-        Ok(size) => Ok(size),
-        Err(_) => Ok(0),
+    if metadata.is_dir() {
+        let mut total = 0u64;
+        if let Ok(entries) = std::fs::read_dir(path) {
+            for entry in entries.flatten() {
+                total = total.saturating_add(dir_size(&entry.path()));
+            }
+        }
+        return total;
     }
+
+    0
 }

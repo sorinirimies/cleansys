@@ -5,7 +5,7 @@ edition.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
-description = "CleanSys — modern terminal user interface for Linux system cleanup (Ratatui TUI + CLI)"
+description = "CleanSys — modern terminal user interface for system cleanup on Linux, macOS, and Windows (Ratatui TUI + CLI)"
 readme = "README.md"
 categories = ["command-line-utilities", "filesystem", "os", "development-tools", "config"]
 keywords = ["clean", "system", "linux", "cleanup", "cache"]
@@ -34,12 +34,8 @@ unicode-width = { workspace = true }
 tui-textarea  = { workspace = true }
 tui-checkbox  = { workspace = true }
 tui-piechart  = { workspace = true }
-regex         = { workspace = true }
-libc          = { workspace = true }
-once_cell     = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }
 predicates = { workspace = true }
 tempfile   = { workspace = true }
-once_cell  = { workspace = true }

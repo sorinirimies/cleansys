@@ -2,99 +2,12 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crossterm::terminal;
 use ratatui::widgets::ListState;
-#[cfg(unix)]
-use std::io::Read;
-#[cfg(unix)]
-use std::os::unix::io::{AsRawFd, FromRawFd};
 use std::sync::mpsc;
 use std::time::Instant;
 
 use crate::components::password_prompt::PasswordPrompt;
-use cleansys_core::{check_root, format_size, CleanerCategory, Status};
-use once_cell::sync::Lazy;
-use regex::Regex;
+use cleansys_core::{check_root, format_size, CleanerCategory, CleanerFn, Status};
 use std::time::SystemTime;
-
-// Compile regex once at startup
-static SIZE_REGEX: Lazy<Regex> =
-    Lazy::new(|| Regex::new(r"(\d+\.?\d*)\s*(KB|MB|GB|bytes)").unwrap());
-
-/// Capture stdout/stderr during function execution.
-///
-/// Uses raw POSIX pipe redirection on Unix so cleaner functions that `println!`
-/// their progress can have that output parsed into [`DetailedCleanedItem`]s.
-/// On non-Unix targets (Windows) there is no cheap portable equivalent, so we
-/// just run the function directly without capturing output — the TUI still
-/// works, it just won't populate the detailed-items view from stdout text.
-#[cfg(unix)]
-fn capture_output<F, T>(f: F) -> Result<(T, String)>
-where
-    F: FnOnce() -> Result<T>,
-{
-    unsafe {
-        // Create pipes for stdout and stderr
-        let mut stdout_pipe: [i32; 2] = [0; 2];
-        let mut stderr_pipe: [i32; 2] = [0; 2];
-
-        if libc::pipe(stdout_pipe.as_mut_ptr()) != 0 {
-            return Err(anyhow::anyhow!("Failed to create stdout pipe"));
-        }
-        if libc::pipe(stderr_pipe.as_mut_ptr()) != 0 {
-            return Err(anyhow::anyhow!("Failed to create stderr pipe"));
-        }
-
-        // Save original stdout/stderr
-        let stdout_fd = std::io::stdout().as_raw_fd();
-        let stderr_fd = std::io::stderr().as_raw_fd();
-        let saved_stdout = libc::dup(stdout_fd);
-        let saved_stderr = libc::dup(stderr_fd);
-
-        // Redirect stdout/stderr to pipes
-        libc::dup2(stdout_pipe[1], stdout_fd);
-        libc::dup2(stderr_pipe[1], stderr_fd);
-        libc::close(stdout_pipe[1]);
-        libc::close(stderr_pipe[1]);
-
-        // Execute function
-        let result = f();
-
-        // Restore original stdout/stderr
-        libc::dup2(saved_stdout, stdout_fd);
-        libc::dup2(saved_stderr, stderr_fd);
-        libc::close(saved_stdout);
-        libc::close(saved_stderr);
-
-        // Read captured output
-        let mut stdout_output = Vec::new();
-        let mut stderr_output = Vec::new();
-
-        let mut stdout_file = std::fs::File::from_raw_fd(stdout_pipe[0]);
-        let mut stderr_file = std::fs::File::from_raw_fd(stderr_pipe[0]);
-
-        // Set non-blocking
-        let flags = libc::fcntl(stdout_pipe[0], libc::F_GETFL);
-        libc::fcntl(stdout_pipe[0], libc::F_SETFL, flags | libc::O_NONBLOCK);
-        let flags = libc::fcntl(stderr_pipe[0], libc::F_GETFL);
-        libc::fcntl(stderr_pipe[0], libc::F_SETFL, flags | libc::O_NONBLOCK);
-
-        let _ = stdout_file.read_to_end(&mut stdout_output);
-        let _ = stderr_file.read_to_end(&mut stderr_output);
-
-        let mut combined = String::from_utf8_lossy(&stdout_output).to_string();
-        combined.push_str(&String::from_utf8_lossy(&stderr_output));
-
-        result.map(|r| (r, combined))
-    }
-}
-
-/// Non-Unix fallback: just run `f` without capturing stdout/stderr.
-#[cfg(not(unix))]
-fn capture_output<F, T>(f: F) -> Result<(T, String)>
-where
-    F: FnOnce() -> Result<T>,
-{
-    f().map(|r| (r, String::new()))
-}
 
 #[derive(Debug, Clone)]
 pub struct DetailedCleanedItem {
@@ -113,8 +26,18 @@ pub enum CleanedItemType {
     Log,
 }
 
+impl From<cleansys_core::CleanedItemType> for CleanedItemType {
+    fn from(value: cleansys_core::CleanedItemType) -> Self {
+        match value {
+            cleansys_core::CleanedItemType::File => CleanedItemType::File,
+            cleansys_core::CleanedItemType::Directory => CleanedItemType::Directory,
+            cleansys_core::CleanedItemType::SymLink => CleanedItemType::File,
+        }
+    }
+}
+
 /// Type alias for pending operations: (category_index, item_index, name, function, requires_root)
-pub type PendingOperation = (usize, usize, String, fn(bool) -> Result<u64>, bool);
+pub type PendingOperation = (usize, usize, String, CleanerFn, bool);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum ViewMode {
@@ -251,9 +174,6 @@ impl App {
             pending_operations: Vec::new(),
         };
         app.item_list_state.select(Some(0));
-
-        // Add some sample cleaned items for demonstration
-        app.add_sample_cleaned_items();
 
         app
     }
@@ -507,7 +427,7 @@ impl App {
             let elapsed = start_time.elapsed().as_millis();
 
             // Find next pending operation to start
-            type Operation = (usize, usize, String, fn(bool) -> anyhow::Result<u64>, bool);
+            type Operation = (usize, usize, String, CleanerFn, bool);
             let mut pending_operations: Vec<Operation> = Vec::new();
             for (cat_idx, category) in self.categories.iter().enumerate() {
                 for (item_idx, item) in category.items.iter().enumerate() {
@@ -523,7 +443,9 @@ impl App {
                 }
             }
 
-            // Start next operation every 1.5 seconds
+            // Start next operation every 1.5 seconds (paced so the progress
+            // screen shows operations completing one at a time rather than
+            // all at once, even though each one runs synchronously).
             let operations_to_start = (elapsed / 1500) as usize;
             if operations_to_start > self.demo_operations_completed
                 && !pending_operations.is_empty()
@@ -558,139 +480,77 @@ impl App {
                 self.operation_logs.push(format!("Starting: {}", name));
 
                 // Check if operation requires root and we don't have it
-                let result: anyhow::Result<u64> = if requires_root
-                    && !self.is_root
-                    && !self.password_prompt.is_authenticated()
-                {
-                    // Show password prompt and pause operations
-                    self.needs_sudo = true;
-                    self.password_prompt.show();
-                    self.is_running = false;
-                    self.operation_logs
-                        .push(format!("🔒 {}: Waiting for sudo authentication...", name));
-                    // Return error to mark this operation as pending
-                    Err(anyhow::anyhow!("Waiting for sudo authentication"))
-                } else {
-                    self.operation_logs.push(format!("🔄 Executing: {}", name));
-
-                    // Capture output during execution
-                    let captured_result = capture_output(|| function(true));
-
-                    let result = match captured_result {
-                        Ok((bytes, output)) => {
-                            self.operation_logs
-                                .push(format!("✅ {}: Cleaned {} bytes", name, bytes));
-
-                            // Parse output for cleaned files and add to detailed items
-                            let category_name = self.categories[cat_idx].name.clone();
-                            let items_before = self.detailed_cleaned_items.len();
-
-                            for line in output.lines() {
-                                // Look for lines indicating files were removed
-                                if line.contains("Removed")
-                                    || line.contains("cleaned")
-                                    || line.contains("Cleaning")
-                                    || line.contains("freed")
-                                {
-                                    // Try to extract file path
-                                    if let Some(path_start) = line.find("/") {
-                                        let path_end = line[path_start..]
-                                            .find(|c: char| {
-                                                c == '"' || c == '\'' || c.is_whitespace()
-                                            })
-                                            .map(|i| path_start + i)
-                                            .unwrap_or(line.len());
-                                        let path = line[path_start..path_end].trim().to_string();
-
-                                        if !path.is_empty() && path.len() > 1 {
-                                            // Extract size if present using pre-compiled regex
-                                            let extracted_size = if let Some(cap) =
-                                                SIZE_REGEX.captures(line)
-                                            {
-                                                let num: f64 = cap
-                                                    .get(1)
-                                                    .and_then(|m| m.as_str().parse().ok())
-                                                    .unwrap_or(0.0);
-                                                let unit = cap
-                                                    .get(2)
-                                                    .map(|m| m.as_str())
-                                                    .unwrap_or("bytes");
-                                                match unit {
-                                                    "KB" => (num * 1024.0) as u64,
-                                                    "MB" => (num * 1024.0 * 1024.0) as u64,
-                                                    "GB" => (num * 1024.0 * 1024.0 * 1024.0) as u64,
-                                                    _ => num as u64,
-                                                }
-                                            } else {
-                                                bytes / 10 // Estimate
-                                            };
-
-                                            let item_type = if path.ends_with('/')
-                                                || line.contains("directory")
-                                            {
-                                                CleanedItemType::Directory
-                                            } else {
-                                                CleanedItemType::File
-                                            };
-
-                                            self.add_detailed_cleaned_item(
-                                                path,
-                                                extracted_size,
-                                                category_name.clone(),
-                                                name.clone(),
-                                                item_type,
-                                            );
-                                        }
-                                    }
-
-                                    // Also add to operation logs for visibility
-                                    if !line.trim().is_empty() {
-                                        self.operation_logs.push(format!("  → {}", line.trim()));
-                                    }
-                                }
-                            }
-
-                            // Fallback: If no detailed items were captured from this cleaner's output, create a summary item
-                            let items_after = self.detailed_cleaned_items.len();
-                            if items_after == items_before && bytes > 0 {
-                                // No items were parsed from output, create a summary item for this cleaner
-                                self.add_detailed_cleaned_item(
-                                    format!("{} (cleaned files)", name),
-                                    bytes,
-                                    category_name,
-                                    name.clone(),
-                                    CleanedItemType::Directory,
-                                );
-                            }
-
-                            Ok(bytes)
-                        }
-                        Err(e) => {
-                            self.operation_logs.push(format!("❌ {}: {}", name, e));
-                            Err(e)
-                        }
+                let result: anyhow::Result<cleansys_core::CleaningResult> =
+                    if requires_root && !self.is_root && !self.password_prompt.is_authenticated() {
+                        // Show password prompt and pause operations
+                        self.needs_sudo = true;
+                        self.password_prompt.show();
+                        self.is_running = false;
+                        self.operation_logs
+                            .push(format!("🔒 {}: Waiting for sudo authentication...", name));
+                        // Return error to mark this operation as pending
+                        Err(anyhow::anyhow!("Waiting for sudo authentication"))
+                    } else {
+                        self.operation_logs.push(format!("🔄 Executing: {}", name));
+                        function(true)
                     };
-
-                    result
-                };
 
                 // Process result
                 match result {
-                    Ok(bytes) => {
+                    Ok(cleaning_result) => {
+                        let bytes = cleaning_result.total_bytes;
                         let msg = if requires_root {
-                            format!("Cleaned {} (root) ({})", name, format_size(bytes))
+                            format!(
+                                "Cleaned {} (root) ({}, {} item(s))",
+                                name,
+                                format_size(bytes),
+                                cleaning_result.item_count()
+                            )
                         } else {
-                            format!("Cleaned {} ({})", name, format_size(bytes))
+                            format!(
+                                "Cleaned {} ({}, {} item(s))",
+                                name,
+                                format_size(bytes),
+                                cleaning_result.item_count()
+                            )
                         };
                         self.categories[cat_idx].items[item_idx].status =
                             Some(Status::Success(msg));
                         self.categories[cat_idx].items[item_idx].bytes_cleaned = bytes;
                         self.total_bytes_cleaned += bytes;
                         self.operation_logs.push(format!(
-                            "✅ Completed {}: {} freed",
+                            "✅ Completed {}: {} freed across {} item(s)",
                             name,
-                            format_size(bytes)
+                            format_size(bytes),
+                            cleaning_result.item_count()
                         ));
+
+                        // Record real per-item detail (path + size) for the detailed view.
+                        let category_name = self.categories[cat_idx].name.clone();
+                        for item in &cleaning_result.items {
+                            self.operation_logs.push(format!(
+                                "  → {} ({})",
+                                item.path_str(),
+                                format_size(item.size)
+                            ));
+                            self.add_detailed_cleaned_item(
+                                item.path_str(),
+                                item.size,
+                                category_name.clone(),
+                                name.clone(),
+                                item.item_type.clone().into(),
+                            );
+                        }
+                        self.categories[cat_idx].items[item_idx].last_result =
+                            Some(cleaning_result);
+
+                        if bytes == 0 {
+                            self.operation_logs.push(format!(
+                                "ℹ️  {}: nothing to clean (already empty on {})",
+                                name,
+                                cleansys_core::cleaners::platform::platform_name()
+                            ));
+                        }
                     }
                     Err(e) => {
                         let error_msg = if requires_root && !self.is_root {
@@ -1298,126 +1158,5 @@ impl App {
             ChartType::PieCount => ChartType::PieSize,
             ChartType::PieSize => ChartType::Bar,
         };
-    }
-
-    pub fn add_sample_cleaned_items(&mut self) {
-        // Add some sample cleaned items to demonstrate the detailed view
-        let sample_items = vec![
-            (
-                "/home/user/.cache/pip/wheels/abc123.whl",
-                15_728_640,
-                "Package Manager Caches",
-                "pip cache",
-                CleanedItemType::File,
-            ),
-            (
-                "/home/user/.cache/npm/_cacache/content-v2/sha512/",
-                8_388_608,
-                "Package Manager Caches",
-                "npm cache",
-                CleanedItemType::Directory,
-            ),
-            (
-                "/home/user/.local/share/Trash/files/old_document.pdf",
-                2_097_152,
-                "Trash",
-                "trash",
-                CleanedItemType::File,
-            ),
-            (
-                "/home/user/.cache/mozilla/firefox/profiles/",
-                104_857_600,
-                "Browser Caches",
-                "firefox cache",
-                CleanedItemType::Directory,
-            ),
-            (
-                "/home/user/.cargo/registry/cache/github.com-1ecc6299db9ec823/",
-                52_428_800,
-                "Package Manager Caches",
-                "cargo cache",
-                CleanedItemType::Directory,
-            ),
-            (
-                "/tmp/temp_file_12345.tmp",
-                1_048_576,
-                "Temporary Files",
-                "temp files",
-                CleanedItemType::File,
-            ),
-            (
-                "/home/user/.cache/thumbnails/large/abc123.png",
-                262_144,
-                "Thumbnail Caches",
-                "thumbnails",
-                CleanedItemType::File,
-            ),
-            (
-                "/var/log/old_system.log",
-                10_485_760,
-                "System Logs",
-                "system logs",
-                CleanedItemType::Log,
-            ),
-            (
-                "/home/user/.local/share/recently-used.xbel.bak",
-                32768,
-                "Application Caches",
-                "application cache",
-                CleanedItemType::File,
-            ),
-            (
-                "/home/user/.cache/google-chrome/Default/Cache/",
-                209_715_200,
-                "Browser Caches",
-                "chrome cache",
-                CleanedItemType::Directory,
-            ),
-            (
-                "/home/user/.npm/_cacache/tmp/",
-                4_194_304,
-                "Package Manager Caches",
-                "npm cache",
-                CleanedItemType::Directory,
-            ),
-            (
-                "/home/user/.cache/yarn/v6/npm-lodash-4.17.21/",
-                1_572_864,
-                "Package Manager Caches",
-                "yarn cache",
-                CleanedItemType::Directory,
-            ),
-            (
-                "/var/tmp/portage/",
-                83_886_080,
-                "Temporary Files",
-                "portage temp",
-                CleanedItemType::Directory,
-            ),
-            (
-                "/home/user/.local/share/Trash/files/screenshot.png",
-                3_145_728,
-                "Trash",
-                "trash",
-                CleanedItemType::File,
-            ),
-            (
-                "/home/user/.cache/fontconfig/",
-                524_288,
-                "Application Caches",
-                "font cache",
-                CleanedItemType::Directory,
-            ),
-        ];
-
-        for (path, size, category, cleaner, item_type) in sample_items {
-            self.add_detailed_cleaned_item(
-                path.to_string(),
-                size,
-                category.to_string(),
-                cleaner.to_string(),
-                item_type,
-            );
-        }
     }
 }

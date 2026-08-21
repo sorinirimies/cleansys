@@ -6,6 +6,7 @@ use std::io::{self, Write};
 use cleansys_core::utils::{print_success, print_warning};
 use cleansys_core::{
     check_root, confirm, format_size, print_error, print_header, system_cleaners, user_cleaners,
+    CleanerFn,
 };
 
 pub struct MenuItem {
@@ -13,7 +14,7 @@ pub struct MenuItem {
     name: String,
     description: String,
     requires_root: bool,
-    function: fn(bool) -> Result<u64>,
+    function: CleanerFn,
 }
 
 pub struct Menu {
@@ -160,12 +161,13 @@ impl Menu {
 
                 if confirm(&format!("Run '{}'?", item.name), true)? {
                     match (item.function)(false) {
-                        Ok(bytes) => {
-                            total_saved += bytes;
+                        Ok(result) => {
+                            total_saved += result.total_bytes;
                             print_success(&format!(
-                                "{} completed: freed {}",
+                                "{} completed: freed {} across {} item(s)",
                                 item.name,
-                                format_size(bytes)
+                                format_size(result.total_bytes),
+                                result.item_count()
                             ));
                         }
                         Err(err) => {

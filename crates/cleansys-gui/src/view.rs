@@ -269,17 +269,52 @@ fn item_row<'a>(
     .spacing(10)
     .align_y(Alignment::Center);
 
-    container(
-        column![
-            header_row,
-            text(item.description.clone()).size(12).color(c.muted),
-        ]
-        .spacing(2),
-    )
-    .padding([8, 10])
-    .width(Length::Fill)
-    .style(item_row_style(*c))
-    .into()
+    let mut body = column![
+        header_row,
+        text(item.description.clone()).size(12).color(c.muted),
+    ]
+    .spacing(2);
+
+    // Show a real per-file/per-directory breakdown of what was actually
+    // cleaned (path + size), not just the aggregate total.
+    if let Some(result) = &item.last_result {
+        if !result.items.is_empty() {
+            let mut items_sorted: Vec<_> = result.items.iter().collect();
+            items_sorted.sort_by_key(|i| std::cmp::Reverse(i.size));
+
+            let mut detail_lines: Vec<Element<'a, Message>> = items_sorted
+                .iter()
+                .take(5)
+                .map(|cleaned| {
+                    text(format!(
+                        "    • {} — {}",
+                        cleaned.path_str(),
+                        format_size(cleaned.size)
+                    ))
+                    .size(11)
+                    .color(c.text_secondary)
+                    .into()
+                })
+                .collect();
+
+            if items_sorted.len() > 5 {
+                detail_lines.push(
+                    text(format!("    … and {} more", items_sorted.len() - 5))
+                        .size(11)
+                        .color(c.muted)
+                        .into(),
+                );
+            }
+
+            body = body.push(column(detail_lines).spacing(1));
+        }
+    }
+
+    container(body)
+        .padding([8, 10])
+        .width(Length::Fill)
+        .style(item_row_style(*c))
+        .into()
 }
 
 fn log_panel<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> {

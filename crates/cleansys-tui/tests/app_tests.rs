@@ -2,11 +2,11 @@
 //! view-state cycling logic (pure state machine, no terminal I/O required).
 
 use anyhow::Result;
-use cleansys_core::{CleanerCategory, CleanerItem};
+use cleansys_core::{CleanedItemType, CleanerCategory, CleanerItem, CleaningResult};
 use cleansys_tui::app::{App, ChartType, FilterMode, SortMode, ViewMode};
 
-fn noop(_dry_run: bool) -> Result<u64> {
-    Ok(0)
+fn noop(_dry_run: bool) -> Result<CleaningResult> {
+    Ok(CleaningResult::new())
 }
 
 fn sample_item(name: &str, requires_root: bool) -> CleanerItem {
@@ -17,7 +17,53 @@ fn sample_item(name: &str, requires_root: bool) -> CleanerItem {
         selected: false,
         function: noop,
         bytes_cleaned: 0,
+        last_result: None,
         status: None,
+    }
+}
+
+/// Populate `app.detailed_cleaned_items` with a handful of real-shaped
+/// entries (standing in for a completed cleaning run), used by tests that
+/// exercise `get_category_distribution`/`get_filtered_detailed_items`.
+fn seed_detailed_items(app: &mut App) {
+    let entries = [
+        (
+            "/home/user/.cache/pip/wheels/abc123.whl",
+            15_728_640u64,
+            "User Land Cleaners",
+            "pip cache",
+            CleanedItemType::File,
+        ),
+        (
+            "/home/user/.mozilla/firefox/abc.default/cache2",
+            104_857_600,
+            "User Land Cleaners",
+            "firefox cache",
+            CleanedItemType::Directory,
+        ),
+        (
+            "/home/user/.npm/_cacache",
+            8_388_608,
+            "User Land Cleaners",
+            "npm cache",
+            CleanedItemType::Directory,
+        ),
+        (
+            "/var/cache/apt/archives",
+            52_428_800,
+            "System Cleaners",
+            "APT cache",
+            CleanedItemType::Directory,
+        ),
+    ];
+    for (path, size, category, cleaner_name, item_type) in entries {
+        app.add_detailed_cleaned_item(
+            path.to_string(),
+            size,
+            category.to_string(),
+            cleaner_name.to_string(),
+            item_type.into(),
+        );
     }
 }
 
@@ -213,8 +259,8 @@ fn search_toggle_and_input() {
 
 #[test]
 fn get_category_distribution_groups_by_cleaner_name() {
-    // App::new() seeds sample cleaned items via add_sample_cleaned_items().
-    let app = App::new();
+    let mut app = App::new();
+    seed_detailed_items(&mut app);
     let distribution = app.get_category_distribution();
     assert!(!distribution.is_empty());
     // Sorted by total size descending.
@@ -226,6 +272,7 @@ fn get_category_distribution_groups_by_cleaner_name() {
 #[test]
 fn get_filtered_detailed_items_respects_search_query() {
     let mut app = App::new();
+    seed_detailed_items(&mut app);
     app.search_query = "firefox".to_string();
     let filtered = app.get_filtered_detailed_items();
     assert!(!filtered.is_empty());
@@ -239,6 +286,7 @@ fn get_filtered_detailed_items_respects_search_query() {
 #[test]
 fn get_filtered_detailed_items_sort_by_size_is_descending() {
     let mut app = App::new();
+    seed_detailed_items(&mut app);
     app.sort_mode = SortMode::Size;
     let filtered = app.get_filtered_detailed_items();
     for pair in filtered.windows(2) {

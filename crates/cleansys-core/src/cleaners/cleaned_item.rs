@@ -9,6 +9,9 @@ pub struct CleanedItem {
     pub size: u64,
     /// Type of item (file, directory, etc.)
     pub item_type: CleanedItemType,
+    /// Short human-readable label (e.g. "Firefox cache", "npm cache") shown
+    /// alongside the path in the TUI/GUI detailed views.
+    pub label: String,
 }
 
 /// Type of cleaned item
@@ -21,22 +24,28 @@ pub enum CleanedItemType {
 
 impl CleanedItem {
     /// Create a new cleaned item
-    pub fn new(path: PathBuf, size: u64, item_type: CleanedItemType) -> Self {
+    pub fn new(
+        path: PathBuf,
+        size: u64,
+        item_type: CleanedItemType,
+        label: impl Into<String>,
+    ) -> Self {
         Self {
             path,
             size,
             item_type,
+            label: label.into(),
         }
     }
 
     /// Create a file item
-    pub fn file(path: PathBuf, size: u64) -> Self {
-        Self::new(path, size, CleanedItemType::File)
+    pub fn file(path: PathBuf, size: u64, label: impl Into<String>) -> Self {
+        Self::new(path, size, CleanedItemType::File, label)
     }
 
     /// Create a directory item
-    pub fn directory(path: PathBuf, size: u64) -> Self {
-        Self::new(path, size, CleanedItemType::Directory)
+    pub fn directory(path: PathBuf, size: u64, label: impl Into<String>) -> Self {
+        Self::new(path, size, CleanedItemType::Directory, label)
     }
 
     /// Get the path as a string
@@ -99,5 +108,65 @@ impl CleaningResult {
 impl Default for CleaningResult {
     fn default() -> Self {
         Self::new()
+    }
+}
+
+/// Signature shared by every cleaner function: takes `skip_confirmation`
+/// (when running non-interactively, e.g. from the TUI/GUI) and returns the
+/// structured set of items actually removed, with real per-item sizes.
+pub type CleanerFn = fn(bool) -> anyhow::Result<CleaningResult>;
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cleaned_item_file_has_label() {
+        let item = CleanedItem::file(PathBuf::from("/tmp/foo"), 42, "Temp file");
+        assert_eq!(item.label, "Temp file");
+        assert_eq!(item.item_type, CleanedItemType::File);
+        assert_eq!(item.size, 42);
+    }
+
+    #[test]
+    fn cleaned_item_directory_has_label() {
+        let item = CleanedItem::directory(PathBuf::from("/tmp/dir"), 100, "Cache dir");
+        assert_eq!(item.label, "Cache dir");
+        assert_eq!(item.item_type, CleanedItemType::Directory);
+    }
+
+    #[test]
+    fn cleaning_result_add_item_updates_total() {
+        let mut result = CleaningResult::new();
+        result.add_item(CleanedItem::file(PathBuf::from("/a"), 10, "a"));
+        result.add_item(CleanedItem::file(PathBuf::from("/b"), 20, "b"));
+        assert_eq!(result.total_bytes, 30);
+        assert_eq!(result.item_count(), 2);
+    }
+
+    #[test]
+    fn cleaning_result_merge_combines_totals_and_items() {
+        let mut a = CleaningResult::new();
+        a.add_item(CleanedItem::file(PathBuf::from("/a"), 10, "a"));
+        let mut b = CleaningResult::new();
+        b.add_item(CleanedItem::file(PathBuf::from("/b"), 5, "b"));
+
+        a.merge(b);
+        assert_eq!(a.total_bytes, 15);
+        assert_eq!(a.item_count(), 2);
+    }
+
+    #[test]
+    fn cleaning_result_default_is_empty() {
+        let result = CleaningResult::default();
+        assert_eq!(result.total_bytes, 0);
+        assert_eq!(result.item_count(), 0);
+    }
+
+    #[test]
+    fn filename_falls_back_to_path_str_without_file_name() {
+        let item = CleanedItem::file(PathBuf::from("/"), 0, "root");
+        // "/" has no file_name(), so filename() falls back to path_str().
+        assert_eq!(item.filename(), item.path_str());
     }
 }

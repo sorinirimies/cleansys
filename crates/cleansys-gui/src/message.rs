@@ -24,8 +24,8 @@ pub enum Message {
     /// A background sudo authentication attempt finished.
     AuthenticationResult(bool),
     /// A single cleaner (category_index, item_index) finished running.
-    /// `Ok(bytes)` on success, `Err(message)` on failure.
-    OperationFinished(usize, usize, Result<u64, String>),
+    /// `Ok(result)` with structured per-item detail on success, `Err(message)` on failure.
+    OperationFinished(usize, usize, Result<cleansys_core::CleaningResult, String>),
     /// Clear the operation log and reset counters for a fresh run.
     ClearLog,
 }
