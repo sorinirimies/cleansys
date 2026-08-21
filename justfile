@@ -336,15 +336,20 @@ push:
 push-gitea:
     git push gitea main
 
+# Push the current branch to Gitea (nexus-lab instance)
+push-gitea-nexus-lab:
+    git push gitea-nexus-lab main
+
 push-all:
     #!/usr/bin/env sh
     failed=""
-    git push origin main || failed="$failed origin"
-    git push gitea main  || failed="$failed gitea"
+    git push origin main             || failed="$failed origin"
+    git push gitea main              || failed="$failed gitea"
+    git push gitea-nexus-lab main     || failed="$failed gitea-nexus-lab"
     if [ -n "$failed" ]; then
         echo "⚠️  Failed to push to:$failed"
     else
-        echo "✅ Pushed to GitHub and Gitea!"
+        echo "✅ Pushed to GitHub, Gitea, and Gitea (nexus-lab)!"
     fi
 
 push-tags:
@@ -353,7 +358,8 @@ push-tags:
 push-tags-all:
     git push origin --tags
     git push gitea --tags
-    @echo "✅ Tags pushed to both GitHub and Gitea!"
+    git push gitea-nexus-lab --tags
+    @echo "✅ Tags pushed to GitHub, Gitea, and Gitea (nexus-lab)!"
 
 pull:
     git pull origin main
@@ -361,12 +367,17 @@ pull:
 pull-gitea:
     git pull gitea main
 
+# Pull the current branch from Gitea (nexus-lab instance)
+pull-gitea-nexus-lab:
+    git pull gitea-nexus-lab main
+
 # Push the latest commit and all tags to every remote (no bump).
 push-release-all: check-all
     #!/usr/bin/env sh
     failed=""
-    git push --follow-tags origin main || failed="$failed origin"
-    git push --follow-tags gitea main  || failed="$failed gitea"
+    git push --follow-tags origin main             || failed="$failed origin"
+    git push --follow-tags gitea main              || failed="$failed gitea"
+    git push --follow-tags gitea-nexus-lab main     || failed="$failed gitea-nexus-lab"
     if [ -n "$failed" ]; then
         echo "⚠️  Failed to push to:$failed"
     else
@@ -378,6 +389,26 @@ sync-gitea:
     git push gitea main --force
     git push gitea --tags --force
     @echo "✅ Gitea synced with GitHub."
+
+# Force-sync Gitea (nexus-lab instance) with GitHub
+sync-gitea-nexus-lab:
+    git push gitea-nexus-lab main --force
+    git push gitea-nexus-lab --tags --force
+    @echo "✅ Gitea (nexus-lab) force-synced with GitHub."
+
+# Force-sync all Gitea instances with GitHub (continues on failure)
+sync-all-gitea:
+    #!/usr/bin/env sh
+    failed=""
+    git push gitea main --force                  || failed="$failed gitea"
+    git push gitea --tags --force                || failed="$failed gitea-tags"
+    git push gitea-nexus-lab main --force        || failed="$failed gitea-nexus-lab"
+    git push gitea-nexus-lab --tags --force      || failed="$failed gitea-nexus-lab-tags"
+    if [ -n "$failed" ]; then
+        echo "⚠️  Failed to sync:$failed"
+    else
+        echo "✅ All Gitea instances force-synced with GitHub."
+    fi
 
 # Add a Gitea remote and optionally push — interactive (nu script)
 setup-gitea url: _check-nu
@@ -401,17 +432,24 @@ release-gitea version: (bump version)
     git push --follow-tags gitea main
     @echo "✅ Release v{{version}} live on Gitea."
 
+# Bump, commit, tag, then push to Gitea (nexus-lab instance) only.
+release-gitea-nexus-lab version: (bump version)
+    @echo "Pushing release v{{version}} to Gitea (nexus-lab)…"
+    git push --follow-tags gitea-nexus-lab main
+    @echo "✅ Release v{{version}} live on Gitea (nexus-lab)."
+
 # Bump, commit, tag, then push to all remotes.
 release-all version: (bump version)
     #!/usr/bin/env sh
     echo "Pushing release v{{version}} to all remotes…"
     failed=""
-    git push --follow-tags origin main || failed="$failed origin"
-    git push --follow-tags gitea main  || failed="$failed gitea"
+    git push --follow-tags origin main             || failed="$failed origin"
+    git push --follow-tags gitea main              || failed="$failed gitea"
+    git push --follow-tags gitea-nexus-lab main     || failed="$failed gitea-nexus-lab"
     if [ -n "$failed" ]; then
         echo "⚠️  Release v{{version}} failed to push to:$failed"
     else
-        echo "✅ Release v{{version}} pushed to GitHub and Gitea!"
+        echo "✅ Release v{{version}} pushed to GitHub, Gitea, and Gitea (nexus-lab)!"
     fi
 
 # Manually re-trigger the Release workflow for an existing tag via the gh CLI.
