@@ -26,6 +26,9 @@ pub mod pie_chart;
 /// Rendering logic for the terminal UI.
 pub mod render;
 
+/// Desktop notification helper (best-effort; failures never surface to the UI).
+pub mod notifications;
+
 /// Re-export commonly used types for convenience.
 pub use app::App;
 pub use components::password_prompt::PasswordPrompt;

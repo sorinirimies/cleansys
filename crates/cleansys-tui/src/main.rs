@@ -174,7 +174,7 @@ fn main() -> Result<()> {
                 println!("  • {}", cleaner);
             }
 
-            println!("\nSystem cleaners (root required):");
+            println!("\nSystem cleaners (some require root/admin):");
             for cleaner in system_cleaners::list_cleaners() {
                 println!("  • {}", cleaner);
             }

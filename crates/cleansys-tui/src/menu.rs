@@ -160,7 +160,7 @@ impl Menu {
                 print_header(&format!("RUNNING: {}", item.name.to_uppercase()));
 
                 if confirm(&format!("Run '{}'?", item.name), true)? {
-                    match (item.function)(false) {
+                    match (item.function)(cleansys_core::RunOptions::execute_with_confirmation()) {
                         Ok(result) => {
                             total_saved += result.total_bytes;
                             print_success(&format!(

@@ -5,15 +5,30 @@ use std::process::Command;
 #[cfg(unix)]
 use users::get_effective_uid;
 
-/// Check if the program is running with root privileges
+/// Check if the program is running with root privileges (Unix) or an
+/// elevated/Administrator token (Windows).
 #[cfg(unix)]
 pub fn check_root() -> bool {
     get_effective_uid() == 0
 }
 
-#[cfg(not(unix))]
+/// Check if the current process token is elevated (running "as Administrator").
+#[cfg(windows)]
+pub fn check_root() -> bool {
+    is_elevated::is_elevated()
+}
+
+#[cfg(not(any(unix, windows)))]
 pub fn check_root() -> bool {
     false
+}
+
+/// Whether this platform's elevation model matches the interactive
+/// sudo-password-prompt flow (Unix: `sudo -S`). Windows uses UAC/Administrator
+/// tokens instead, which front-ends should present very differently (there is
+/// no password to type — the user must relaunch the process elevated).
+pub const fn supports_sudo_prompt() -> bool {
+    cfg!(unix)
 }
 
 /// Prompt for sudo elevation if not already root
@@ -60,9 +75,20 @@ pub fn elevate_if_needed() -> Result<bool> {
     }
 }
 
-#[cfg(not(unix))]
+#[cfg(windows)]
 pub fn elevate_if_needed() -> Result<bool> {
-    print_warning("System cleaners are only available on Unix-like systems.");
+    if check_root() {
+        return Ok(true);
+    }
+    print_warning(
+        "Some system cleaners require Administrator privileges. Restart CleanSys as Administrator (right-click → 'Run as administrator') to use them.",
+    );
+    Ok(false)
+}
+
+#[cfg(not(any(unix, windows)))]
+pub fn elevate_if_needed() -> Result<bool> {
+    print_warning("System cleaners are only available on Unix-like systems and Windows.");
     Ok(false)
 }
 
@@ -178,10 +204,11 @@ pub fn format_size(bytes: u64) -> String {
 /// not the target's), matching `du`'s default behaviour and avoiding
 /// infinite loops on cyclic symlinks.
 pub fn get_size(path: &str) -> Result<u64> {
-    Ok(dir_size(std::path::Path::new(path)))
+    const MAX_DEPTH: u32 = 512;
+    Ok(dir_size(std::path::Path::new(path), 0, MAX_DEPTH))
 }
 
-fn dir_size(path: &std::path::Path) -> u64 {
+fn dir_size(path: &std::path::Path, depth: u32, max_depth: u32) -> u64 {
     let metadata = match std::fs::symlink_metadata(path) {
         Ok(m) => m,
         Err(_) => return 0,
@@ -196,10 +223,22 @@ fn dir_size(path: &std::path::Path) -> u64 {
     }
 
     if metadata.is_dir() {
+        // Guard against pathological/cyclic directory structures: give up on
+        // descending further rather than risk a stack overflow. In practice
+        // no real cache/temp/trash directory this tool targets comes close
+        // to this depth.
+        if depth >= max_depth {
+            log::warn!(
+                "get_size: max recursion depth ({max_depth}) reached at {:?}; size may be underestimated",
+                path
+            );
+            return 0;
+        }
+
         let mut total = 0u64;
         if let Ok(entries) = std::fs::read_dir(path) {
             for entry in entries.flatten() {
-                total = total.saturating_add(dir_size(&entry.path()));
+                total = total.saturating_add(dir_size(&entry.path(), depth + 1, max_depth));
             }
         }
         return total;

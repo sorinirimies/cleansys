@@ -1,0 +1,31 @@
+cleansys.icns — placeholder note
+====================================
+
+The DMG builder script references this path for the disk-image volume icon:
+
+    packaging/macos/cleansys.icns
+
+This file is NOT committed to the repository because `.icns` binaries are
+large and change infrequently. Provide it at build time via one of these
+approaches:
+
+1. **Export from the app icon (recommended)**
+   If the project already has a PNG application icon (e.g. in
+   `assets/icons/`), convert it with `iconutil` (macOS only):
+
+       mkdir cleansys.iconset
+       # populate cleansys.iconset/icon_16x16.png, icon_32x32.png, ... icon_512x512@2x.png
+       iconutil -c icns cleansys.iconset -o packaging/macos/cleansys.icns
+
+   Or with ImageMagick + `png2icns` (cross-platform):
+
+       png2icns packaging/macos/cleansys.icns assets/icons/cleansys.png
+
+2. **Download from the release artifacts**
+   The CI pipeline uploads `cleansys.icns` as a release asset. Download it
+   and place it at `packaging/macos/cleansys.icns` before running
+   `create_dmg.sh`.
+
+If no icon is provided, `create_dmg.sh` simply builds the DMG without a
+custom volume icon (macOS shows a generic disk icon) — the build never
+hard-fails on a missing icon file.

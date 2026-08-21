@@ -3,7 +3,7 @@ use ratatui::{
     style::{Color, Modifier, Style},
     symbols,
     text::{Line, Span},
-    widgets::{Axis, Block, Borders, Chart, Dataset, List, ListItem, Paragraph, Wrap},
+    widgets::{Axis, Block, Borders, Chart, Clear, Dataset, List, ListItem, Paragraph, Wrap},
     Frame,
 };
 // Using tui-checkbox library for consistent checkbox symbols across the application
@@ -56,6 +56,14 @@ pub fn ui(f: &mut Frame, app: &mut App) {
     // Render password prompt as overlay if visible
     if app.password_prompt.is_visible() {
         app.password_prompt.render(f, f.area());
+    }
+
+    if app.needs_admin_notice {
+        render_admin_notice(f, f.area());
+    } else if app.awaiting_run_confirmation {
+        render_confirm_run(f, app, f.area());
+    } else if app.preview_open {
+        render_preview(f, app, f.area());
     }
 }
 
@@ -1276,9 +1284,16 @@ fn render_help(f: &mut Frame, area: Rect) {
             Style::default().add_modifier(Modifier::BOLD),
         )]),
         Line::from(vec![Span::raw("  Space: Toggle selection")]),
-        Line::from(vec![Span::raw("  Enter: Run selected cleaners")]),
+        Line::from(vec![Span::raw(
+            "  Enter: Run selected cleaners (asks for confirmation)",
+        )]),
+        Line::from(vec![Span::raw(
+            "  d: Preview selected cleaners (dry-run, deletes nothing)",
+        )]),
         Line::from(vec![Span::raw("  a: Select all in current category")]),
         Line::from(vec![Span::raw("  n: Deselect all in current category")]),
+        Line::from(vec![Span::raw("  A: Select all across every category")]),
+        Line::from(vec![Span::raw("  N: Deselect all across every category")]),
         Line::from(vec![Span::raw(
             "  c: Cycle chart type (Bar → Count Pie → Size Pie → Bar)",
         )]),
@@ -1365,4 +1380,192 @@ fn render_help(f: &mut Frame, area: Rect) {
         .wrap(Wrap { trim: true });
 
     f.render_widget(help, area);
+}
+
+/// Compute a centered popup `Rect` covering roughly `width_pct`/`height_pct`
+/// of `area`, clamped to a sensible minimum/maximum size.
+fn centered_popup(area: Rect, width_pct: u16, height_pct: u16) -> Rect {
+    let width = (area.width * width_pct / 100).clamp(30, area.width.saturating_sub(2).max(30));
+    let height = (area.height * height_pct / 100).clamp(10, area.height.saturating_sub(2).max(10));
+    let x = area.x + (area.width.saturating_sub(width)) / 2;
+    let y = area.y + (area.height.saturating_sub(height)) / 2;
+    Rect {
+        x,
+        y,
+        width,
+        height,
+    }
+}
+
+/// Overlay shown before actually cleaning: lists exactly what's selected and
+/// requires an explicit Enter/y (confirm) or Esc/n (cancel).
+fn render_confirm_run(f: &mut Frame, app: &App, area: Rect) {
+    let popup = centered_popup(area, 70, 60);
+
+    let selected_count = app.pending_run_selection.len();
+    let mut lines = vec![
+        Line::from(vec![Span::styled(
+            "⚠️  Confirm Cleaning",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from(vec![Span::raw("")]),
+        Line::from(vec![Span::raw(format!(
+            "This will permanently delete files for {selected_count} selected cleaner(s):"
+        ))]),
+        Line::from(vec![Span::raw("")]),
+    ];
+
+    for (_, _, name, _, requires_root) in app.pending_run_selection.iter().take(15) {
+        let suffix = if *requires_root { " (root)" } else { "" };
+        lines.push(Line::from(vec![Span::raw(format!("  • {name}{suffix}"))]));
+    }
+    if app.pending_run_selection.len() > 15 {
+        lines.push(Line::from(vec![Span::styled(
+            format!("  … and {} more", app.pending_run_selection.len() - 15),
+            Style::default().fg(Color::DarkGray),
+        )]));
+    }
+
+    lines.push(Line::from(vec![Span::raw("")]));
+    lines.push(Line::from(vec![Span::styled(
+        "Enter/y: Run now    Esc/n: Cancel",
+        Style::default()
+            .fg(Color::Green)
+            .add_modifier(Modifier::BOLD),
+    )]));
+
+    let popup_widget = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .title("Confirm")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Yellow)),
+        )
+        .wrap(Wrap { trim: true });
+
+    f.render_widget(Clear, popup);
+    f.render_widget(popup_widget, popup);
+}
+
+/// Overlay shown for a preview (dry-run): lists what *would* be cleaned and
+/// its real measured size, without anything having been deleted.
+fn render_preview(f: &mut Frame, app: &App, area: Rect) {
+    let popup = centered_popup(area, 80, 75);
+
+    let total_bytes: u64 = app.preview_results.iter().map(|(_, r)| r.total_bytes).sum();
+    let total_items: usize = app
+        .preview_results
+        .iter()
+        .map(|(_, r)| r.item_count())
+        .sum();
+
+    let mut lines = vec![
+        Line::from(vec![Span::styled(
+            "🔍 Preview (dry-run)",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from(vec![Span::raw("")]),
+        Line::from(vec![Span::raw(format!(
+            "Would free {} across {total_items} item(s). Nothing has been deleted.",
+            format_size(total_bytes)
+        ))]),
+        Line::from(vec![Span::raw("")]),
+    ];
+
+    if app.preview_results.is_empty() {
+        lines.push(Line::from(vec![Span::styled(
+            "Nothing to clean — all selected cleaners are already empty.",
+            Style::default().fg(Color::DarkGray),
+        )]));
+    }
+
+    for (name, result) in &app.preview_results {
+        lines.push(Line::from(vec![Span::styled(
+            format!(
+                "{name} — {} across {} item(s)",
+                format_size(result.total_bytes),
+                result.item_count()
+            ),
+            Style::default().add_modifier(Modifier::BOLD),
+        )]));
+        for item in result.items.iter().take(3) {
+            lines.push(Line::from(vec![Span::raw(format!(
+                "    • {} ({})",
+                item.path_str(),
+                format_size(item.size)
+            ))]));
+        }
+        if result.items.len() > 3 {
+            lines.push(Line::from(vec![Span::styled(
+                format!("    … and {} more", result.items.len() - 3),
+                Style::default().fg(Color::DarkGray),
+            )]));
+        }
+        lines.push(Line::from(vec![Span::raw("")]));
+    }
+
+    lines.push(Line::from(vec![Span::styled(
+        "Enter/Esc/q: Close",
+        Style::default()
+            .fg(Color::Green)
+            .add_modifier(Modifier::BOLD),
+    )]));
+
+    let popup_widget = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .title("Preview")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan)),
+        )
+        .wrap(Wrap { trim: true });
+
+    f.render_widget(Clear, popup);
+    f.render_widget(popup_widget, popup);
+}
+
+/// Overlay shown when a selected cleaner needs Administrator privileges on
+/// Windows, where there is no interactive sudo-password prompt to fall back
+/// to — the user must restart the process elevated themselves.
+fn render_admin_notice(f: &mut Frame, area: Rect) {
+    let popup = centered_popup(area, 60, 30);
+
+    let lines = vec![
+        Line::from(vec![Span::styled(
+            "⚠️  Administrator privileges required",
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from(vec![Span::raw("")]),
+        Line::from(vec![Span::raw(
+            "One or more selected cleaners need Administrator privileges.",
+        )]),
+        Line::from(vec![Span::raw(
+            "Restart CleanSys as Administrator to use them.",
+        )]),
+        Line::from(vec![Span::raw("")]),
+        Line::from(vec![Span::styled(
+            "Enter/Esc/q: Close",
+            Style::default()
+                .fg(Color::Green)
+                .add_modifier(Modifier::BOLD),
+        )]),
+    ];
+
+    let popup_widget = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .title("Administrator required")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Yellow)),
+        )
+        .wrap(Wrap { trim: true });
+
+    f.render_widget(Clear, popup);
+    f.render_widget(popup_widget, popup);
 }

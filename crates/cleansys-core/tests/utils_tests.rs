@@ -91,6 +91,42 @@ fn test_get_size_with_temp_file() {
     assert!(size_value > 0, "Directory size should be greater than 0");
 }
 
+#[test]
+fn test_get_size_deeply_nested_directories() {
+    // A moderately deep (well within the recursion guard) nested directory
+    // tree should still be measured correctly and not panic/overflow.
+    let temp_dir = TempDir::new().unwrap();
+    let mut current = temp_dir.path().to_path_buf();
+    for i in 0..50 {
+        current = current.join(format!("level{i}"));
+        std::fs::create_dir(&current).unwrap();
+    }
+    std::fs::write(current.join("leaf.txt"), "deep file contents").unwrap();
+
+    let size = get_size(temp_dir.path().to_str().unwrap()).unwrap();
+    assert!(size > 0);
+}
+
+#[test]
+fn test_get_size_does_not_follow_symlinks() {
+    #[cfg(unix)]
+    {
+        use std::os::unix::fs::symlink;
+
+        let temp_dir = TempDir::new().unwrap();
+        let real_file = temp_dir.path().join("real.txt");
+        std::fs::write(&real_file, "some real content here").unwrap();
+
+        let link_dir = TempDir::new().unwrap();
+        let link_path = link_dir.path().join("link.txt");
+        symlink(&real_file, &link_path).unwrap();
+
+        // The symlink itself should be counted as 0 bytes (not the target's size).
+        let size = get_size(link_dir.path().to_str().unwrap()).unwrap();
+        assert_eq!(size, 0);
+    }
+}
+
 #[cfg(unix)]
 #[test]
 fn test_execute_with_sudo_direct_command() {

@@ -2,10 +2,10 @@
 //! view-state cycling logic (pure state machine, no terminal I/O required).
 
 use anyhow::Result;
-use cleansys_core::{CleanedItemType, CleanerCategory, CleanerItem, CleaningResult};
+use cleansys_core::{CleanedItemType, CleanerCategory, CleanerItem, CleaningResult, RunOptions};
 use cleansys_tui::app::{App, ChartType, FilterMode, SortMode, ViewMode};
 
-fn noop(_dry_run: bool) -> Result<CleaningResult> {
+fn noop(_opts: RunOptions) -> Result<CleaningResult> {
     Ok(CleaningResult::new())
 }
 
@@ -318,4 +318,146 @@ fn update_counters_counts_selected_errors_and_operations() {
     assert_eq!(app.selected_cleaners_count, 1);
     assert_eq!(app.errors_count, 1);
     assert_eq!(app.operation_count, 2);
+}
+
+#[test]
+fn request_run_with_nothing_selected_logs_message() {
+    let mut app = app_with_categories();
+    app.request_run().unwrap();
+    assert!(!app.awaiting_run_confirmation);
+    assert!(app
+        .result_messages
+        .iter()
+        .any(|m| m.contains("No items selected")));
+}
+
+#[test]
+fn request_run_with_confirmation_mode_shows_confirmation_overlay() {
+    let mut app = app_with_categories();
+    app.confirmation_mode = true;
+    app.categories[0].items[0].selected = true;
+
+    app.request_run().unwrap();
+
+    assert!(app.awaiting_run_confirmation);
+    assert!(!app.is_running);
+    assert_eq!(app.pending_run_selection.len(), 1);
+}
+
+#[test]
+fn cancel_run_confirmation_clears_pending_selection() {
+    let mut app = app_with_categories();
+    app.confirmation_mode = true;
+    app.categories[0].items[0].selected = true;
+    app.request_run().unwrap();
+
+    app.cancel_run_confirmation();
+
+    assert!(!app.awaiting_run_confirmation);
+    assert!(app.pending_run_selection.is_empty());
+    assert!(!app.is_running);
+}
+
+#[test]
+fn confirm_pending_run_starts_execution_for_user_cleaners() {
+    let mut app = app_with_categories();
+    app.confirmation_mode = true;
+    app.categories[0].items[0].selected = true;
+    app.request_run().unwrap();
+
+    app.confirm_pending_run().unwrap();
+
+    assert!(!app.awaiting_run_confirmation);
+    assert!(app.is_running);
+    assert!(matches!(
+        app.categories[0].items[0].status,
+        Some(cleansys_core::Status::Pending)
+    ));
+}
+
+#[test]
+fn request_run_without_confirmation_mode_starts_immediately() {
+    let mut app = app_with_categories();
+    app.confirmation_mode = false;
+    app.categories[0].items[0].selected = true;
+
+    app.request_run().unwrap();
+
+    assert!(!app.awaiting_run_confirmation);
+    assert!(app.is_running);
+}
+
+#[test]
+fn request_run_with_root_item_and_no_root_needs_elevation() {
+    let mut app = app_with_categories();
+    app.confirmation_mode = false;
+    app.is_root = false;
+    app.categories[1].items[0].selected = true; // requires_root cleaner
+
+    app.request_run().unwrap();
+
+    assert!(!app.is_running);
+    if cleansys_core::utils::supports_sudo_prompt() {
+        assert!(app.needs_sudo);
+    } else {
+        assert!(app.needs_admin_notice);
+    }
+}
+
+#[test]
+fn run_preview_with_nothing_selected_logs_message() {
+    let mut app = app_with_categories();
+    app.run_preview();
+    assert!(!app.preview_open);
+    assert!(app
+        .result_messages
+        .iter()
+        .any(|m| m.contains("No items selected")));
+}
+
+#[test]
+fn run_preview_with_selection_populates_results_and_opens_overlay() {
+    let mut app = app_with_categories();
+    app.categories[0].items[0].selected = true;
+
+    app.run_preview();
+
+    assert!(app.preview_open);
+    assert_eq!(app.preview_results.len(), 1);
+    // Preview must never mark items as running/pending or start a real run.
+    assert!(!app.is_running);
+    assert!(app.categories[0].items[0].status.is_none());
+}
+
+#[test]
+fn close_preview_clears_state() {
+    let mut app = app_with_categories();
+    app.categories[0].items[0].selected = true;
+    app.run_preview();
+
+    app.close_preview();
+
+    assert!(!app.preview_open);
+    assert!(app.preview_results.is_empty());
+}
+
+#[test]
+fn select_all_everywhere_selects_every_category() {
+    let mut app = app_with_categories();
+    app.select_all_everywhere();
+    assert!(app
+        .categories
+        .iter()
+        .all(|c| c.items.iter().all(|i| i.selected)));
+}
+
+#[test]
+fn deselect_all_everywhere_deselects_every_category() {
+    let mut app = app_with_categories();
+    app.select_all_everywhere();
+    app.deselect_all_everywhere();
+    assert!(app
+        .categories
+        .iter()
+        .all(|c| c.items.iter().all(|i| !i.selected)));
 }

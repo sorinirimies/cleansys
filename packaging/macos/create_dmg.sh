@@ -71,10 +71,22 @@ echo "✅ Created ${APP_NAME}.app bundle"
 # ── Create DMG ────────────────────────────────────────────────────────────────
 OUTPUT="${DIST}/cleansys-${VERSION}-macos.dmg"
 
+# The DMG volume icon is optional artwork (see cleansys.icns.txt) that is
+# NOT committed to the repo. Only pass --volicon when it actually exists so
+# create-dmg never hard-fails on a missing icon file -- same fallback pattern
+# as the Windows installer's bundled fallback .ico.
+ICNS="packaging/macos/cleansys.icns"
+VOLICON_ARGS=()
+if [ -f "$ICNS" ]; then
+    VOLICON_ARGS=(--volicon "$ICNS")
+else
+    echo "info: $ICNS not found - building DMG without a custom volume icon."
+fi
+
 if command -v create-dmg &>/dev/null; then
     create-dmg \
         --volname "CleanSys ${VERSION}" \
-        --volicon "packaging/macos/cleansys.icns" \
+        "${VOLICON_ARGS[@]}" \
         --window-pos 200 120 \
         --window-size 660 400 \
         --icon-size 128 \

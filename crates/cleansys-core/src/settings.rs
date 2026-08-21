@@ -19,6 +19,12 @@ pub struct Settings {
     /// doesn't silently change a user's saved theme.
     #[serde(default)]
     pub theme_name: Option<String>,
+    /// Names of cleaners that were selected (checked) the last time the
+    /// app was closed, restored on next launch. Stored as `"Category: Item"`
+    /// pairs so identically-named cleaners in different categories don't
+    /// collide.
+    #[serde(default)]
+    pub selected_cleaners: Vec<String>,
 }
 
 impl Settings {
@@ -29,6 +35,18 @@ impl Settings {
             .as_deref()
             .map(crate::theme::theme_index_by_name)
             .unwrap_or(0)
+    }
+
+    /// Build the `"Category: Item"` key used to identify a selected cleaner.
+    pub fn selection_key(category_name: &str, item_name: &str) -> String {
+        format!("{category_name}: {item_name}")
+    }
+
+    /// Whether the given category/item pair was selected last time.
+    pub fn is_selected(&self, category_name: &str, item_name: &str) -> bool {
+        self.selected_cleaners
+            .iter()
+            .any(|k| k == &Self::selection_key(category_name, item_name))
     }
 }
 
@@ -115,12 +133,14 @@ mod tests {
         let s = Settings::default();
         assert!(s.theme_name.is_none());
         assert_eq!(s.theme_index(), 0);
+        assert!(s.selected_cleaners.is_empty());
     }
 
     #[test]
     fn theme_index_resolves_known_name() {
         let s = Settings {
             theme_name: Some("Dracula".to_string()),
+            ..Default::default()
         };
         assert_eq!(
             s.theme_index(),
@@ -132,8 +152,27 @@ mod tests {
     fn theme_index_falls_back_for_unknown_name() {
         let s = Settings {
             theme_name: Some("Not A Real Theme".to_string()),
+            ..Default::default()
         };
         assert_eq!(s.theme_index(), 0);
+    }
+
+    #[test]
+    fn selection_key_combines_category_and_item() {
+        assert_eq!(
+            Settings::selection_key("User Land Cleaners", "Browser Caches"),
+            "User Land Cleaners: Browser Caches"
+        );
+    }
+
+    #[test]
+    fn is_selected_checks_selected_cleaners() {
+        let s = Settings {
+            selected_cleaners: vec!["User Land Cleaners: Browser Caches".to_string()],
+            ..Default::default()
+        };
+        assert!(s.is_selected("User Land Cleaners", "Browser Caches"));
+        assert!(!s.is_selected("User Land Cleaners", "Trash"));
     }
 
     #[test]
@@ -143,11 +182,16 @@ mod tests {
 
         let settings = Settings {
             theme_name: Some("Nord".to_string()),
+            selected_cleaners: vec!["User Land Cleaners: Trash".to_string()],
         };
         save_to(&path, &settings).unwrap();
 
         let loaded = load_from(&path).unwrap();
         assert_eq!(loaded.theme_name.as_deref(), Some("Nord"));
+        assert_eq!(
+            loaded.selected_cleaners,
+            vec!["User Land Cleaners: Trash".to_string()]
+        );
     }
 
     #[test]

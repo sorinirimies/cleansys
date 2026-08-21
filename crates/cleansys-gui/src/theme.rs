@@ -11,7 +11,7 @@ use iced::{Color, Theme};
 /// number of custom-styled elements in the GUI (badges, cards, status text).
 ///
 /// Everything else (buttons, checkboxes, text inputs, pick-lists, scrollbars)
-/// is themed automatically via [`iced_theme`], which builds a custom
+/// is themed automatically via [`iced_theme_for`], which builds a custom
 /// `iced::Theme::Palette` from the same core theme.
 #[derive(Debug, Clone, Copy)]
 pub struct ThemeColors {

@@ -28,6 +28,9 @@ pub mod theme;
 /// Theme picker widget (`pick_list` of all `cleansys-core` themes).
 pub mod theme_selector;
 
+/// Desktop notifications and (Windows-only) elevated relaunch helper.
+pub mod platform;
+
 pub use message::Message;
 pub use state::CleanSysGui;
 pub use update::update;

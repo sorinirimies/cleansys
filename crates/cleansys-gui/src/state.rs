@@ -28,6 +28,22 @@ pub struct CleanSysGui {
     pub active_tab: usize,
     /// Index of the currently selected UI theme (see `cleansys_core::THEME_NAMES`).
     pub theme_index: usize,
+    /// Whether the "confirm this run" dialog is visible.
+    pub confirm_run_pending: bool,
+    /// Whether a preview (dry-run) is currently being computed.
+    pub previewing: bool,
+    /// Whether the preview results dialog is visible.
+    pub preview_open: bool,
+    /// Results of the most recent preview run: `(cleaner_name, result)`.
+    pub preview_results: Vec<(String, cleansys_core::CleaningResult)>,
+    /// Total number of operations in the current run (for the progress bar).
+    pub operations_total: usize,
+    /// Number of operations completed so far in the current run.
+    pub operations_completed: usize,
+    /// Whether the "needs Administrator" notice is visible (Windows only;
+    /// Windows has no interactive sudo-password flow, so this replaces the
+    /// password dialog when elevation is required there).
+    pub needs_admin_notice: bool,
 }
 
 impl Default for CleanSysGui {
@@ -40,8 +56,14 @@ impl CleanSysGui {
     /// Construct a fresh application state with all known cleaners loaded.
     pub fn new() -> Self {
         let settings = cleansys_core::load_settings().unwrap_or_default();
+        let mut categories = cleansys_core::load_categories();
+        for category in &mut categories {
+            for item in &mut category.items {
+                item.selected = settings.is_selected(&category.name, &item.name);
+            }
+        }
         Self {
-            categories: cleansys_core::load_categories(),
+            categories,
             logs: Vec::new(),
             total_bytes_cleaned: 0,
             is_running: false,
@@ -52,6 +74,13 @@ impl CleanSysGui {
             pending_root_ops: Vec::new(),
             active_tab: 0,
             theme_index: settings.theme_index(),
+            confirm_run_pending: false,
+            previewing: false,
+            preview_open: false,
+            preview_results: Vec::new(),
+            operations_total: 0,
+            operations_completed: 0,
+            needs_admin_notice: false,
         }
     }
 
@@ -80,6 +109,37 @@ impl CleanSysGui {
                 .iter()
                 .flat_map(|c| &c.items)
                 .any(|i| i.selected && i.requires_root)
+    }
+
+    /// `(category_index, item_index)` pairs of every currently-selected item.
+    pub fn selected_indices(&self) -> Vec<(usize, usize)> {
+        self.categories
+            .iter()
+            .enumerate()
+            .flat_map(|(ci, c)| {
+                c.items
+                    .iter()
+                    .enumerate()
+                    .filter(|(_, i)| i.selected)
+                    .map(move |(ii, _)| (ci, ii))
+            })
+            .collect()
+    }
+
+    /// Fraction of the current run's operations completed so far, in
+    /// `0.0..=1.0`. `0.0` when no run is in progress.
+    pub fn progress_fraction(&self) -> f32 {
+        if self.operations_total == 0 {
+            0.0
+        } else {
+            (self.operations_completed as f32 / self.operations_total as f32).clamp(0.0, 1.0)
+        }
+    }
+
+    /// Whether this platform supports the interactive sudo-password
+    /// elevation flow (Unix). Windows uses UAC/Administrator tokens instead.
+    pub fn supports_sudo_prompt(&self) -> bool {
+        cleansys_core::utils::supports_sudo_prompt()
     }
 
     /// Push a line to the activity log, keeping only the most recent entries.
@@ -122,14 +182,39 @@ impl CleanSysGui {
             .unwrap_or("Default")
     }
 
-    /// Persist the currently selected theme to `settings.json` (best-effort;
-    /// failures are logged but never surfaced to the UI).
-    pub fn save_theme(&self) {
-        let settings = cleansys_core::Settings {
+    /// Build the full [`cleansys_core::Settings`] snapshot for the current
+    /// state (theme + selected cleaners), for persistence.
+    pub fn current_settings(&self) -> cleansys_core::Settings {
+        let selected_cleaners = self
+            .categories
+            .iter()
+            .flat_map(|c| {
+                let cat_name = c.name.clone();
+                c.items
+                    .iter()
+                    .filter(|i| i.selected)
+                    .map(move |i| cleansys_core::Settings::selection_key(&cat_name, &i.name))
+            })
+            .collect();
+
+        cleansys_core::Settings {
             theme_name: Some(self.current_theme_name().to_string()),
-        };
-        if let Err(e) = cleansys_core::save_settings(&settings) {
+            selected_cleaners,
+        }
+    }
+
+    /// Persist the current theme and cleaner selections to `settings.json`
+    /// (best-effort; failures are logged but never surfaced to the UI).
+    pub fn save_theme(&self) {
+        if let Err(e) = cleansys_core::save_settings(&self.current_settings()) {
             log::warn!("failed to save theme preference: {e}");
+        }
+    }
+
+    /// Persist the current cleaner selections (and theme) to `settings.json`.
+    pub fn save_selections(&self) {
+        if let Err(e) = cleansys_core::save_settings(&self.current_settings()) {
+            log::warn!("failed to save cleaner selections: {e}");
         }
     }
 }
@@ -263,5 +348,54 @@ mod tests {
             let _ = state.colors();
             let _ = state.iced_theme();
         }
+    }
+
+    #[test]
+    fn selected_indices_returns_selected_pairs() {
+        let mut state = CleanSysGui::new();
+        state.categories[0].items[0].selected = true;
+        state.categories[0].items[2].selected = true;
+        let indices = state.selected_indices();
+        assert_eq!(indices, vec![(0, 0), (0, 2)]);
+    }
+
+    #[test]
+    fn progress_fraction_is_zero_with_no_operations() {
+        let state = CleanSysGui::new();
+        assert_eq!(state.progress_fraction(), 0.0);
+    }
+
+    #[test]
+    fn progress_fraction_computes_ratio() {
+        let mut state = CleanSysGui::new();
+        state.operations_total = 4;
+        state.operations_completed = 1;
+        assert_eq!(state.progress_fraction(), 0.25);
+        state.operations_completed = 4;
+        assert_eq!(state.progress_fraction(), 1.0);
+    }
+
+    #[test]
+    fn current_settings_includes_selected_cleaners() {
+        let mut state = CleanSysGui::new();
+        state.categories[0].items[0].selected = true;
+        let name = state.categories[0].items[0].name.clone();
+        let cat_name = state.categories[0].name.clone();
+        let settings = state.current_settings();
+        assert!(settings.is_selected(&cat_name, &name));
+    }
+
+    #[test]
+    fn new_restores_selection_from_settings() {
+        // Can't easily isolate the real config dir in a unit test, but we can
+        // at least confirm current_settings() round-trips through is_selected
+        // the same way new() consults it.
+        let mut state = CleanSysGui::new();
+        state.categories[0].items[1].selected = true;
+        let settings = state.current_settings();
+        let cat_name = state.categories[0].name.clone();
+        let item_name = state.categories[0].items[1].name.clone();
+        assert!(settings.is_selected(&cat_name, &item_name));
+        assert!(!settings.is_selected(&cat_name, "Definitely Not A Real Cleaner"));
     }
 }

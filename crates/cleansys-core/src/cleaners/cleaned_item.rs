@@ -111,10 +111,54 @@ impl Default for CleaningResult {
     }
 }
 
-/// Signature shared by every cleaner function: takes `skip_confirmation`
-/// (when running non-interactively, e.g. from the TUI/GUI) and returns the
-/// structured set of items actually removed, with real per-item sizes.
-pub type CleanerFn = fn(bool) -> anyhow::Result<CleaningResult>;
+/// Options controlling how a cleaner function runs.
+///
+/// Replaces the old bare `skip_confirmation: bool` parameter so cleaners can
+/// also support a real dry-run/preview mode: [`RunOptions::preview`] measures
+/// exactly what *would* be removed (real sizes, real paths) without deleting
+/// anything or invoking any external command that has side effects.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct RunOptions {
+    /// When `true`, skip interactive y/n prompts (always `true` from the
+    /// TUI/GUI, which have no stdin prompt loop; only meaningful for the
+    /// CLI `menu`/`user`/`system` subcommands).
+    pub skip_confirmation: bool,
+    /// When `true`, measure and report what would be cleaned without
+    /// actually deleting anything or running any mutating external command.
+    pub dry_run: bool,
+}
+
+impl RunOptions {
+    /// Actually perform the cleaning (skips interactive prompts).
+    pub const fn execute() -> Self {
+        Self {
+            skip_confirmation: true,
+            dry_run: false,
+        }
+    }
+
+    /// Actually perform the cleaning, honouring interactive confirmation
+    /// prompts (used by the CLI `menu`/`user`/`system` subcommands).
+    pub const fn execute_with_confirmation() -> Self {
+        Self {
+            skip_confirmation: false,
+            dry_run: false,
+        }
+    }
+
+    /// Preview mode: measure real sizes/paths, delete nothing.
+    pub const fn preview() -> Self {
+        Self {
+            skip_confirmation: true,
+            dry_run: true,
+        }
+    }
+}
+
+/// Signature shared by every cleaner function: takes [`RunOptions`] and
+/// returns the structured set of items actually removed (or, in preview
+/// mode, that *would be* removed), with real per-item sizes.
+pub type CleanerFn = fn(RunOptions) -> anyhow::Result<CleaningResult>;
 
 #[cfg(test)]
 mod tests {
@@ -168,5 +212,31 @@ mod tests {
         let item = CleanedItem::file(PathBuf::from("/"), 0, "root");
         // "/" has no file_name(), so filename() falls back to path_str().
         assert_eq!(item.filename(), item.path_str());
+    }
+}
+
+#[cfg(test)]
+mod run_options_tests {
+    use super::RunOptions;
+
+    #[test]
+    fn execute_skips_confirmation_and_is_not_dry_run() {
+        let opts = RunOptions::execute();
+        assert!(opts.skip_confirmation);
+        assert!(!opts.dry_run);
+    }
+
+    #[test]
+    fn execute_with_confirmation_prompts_and_is_not_dry_run() {
+        let opts = RunOptions::execute_with_confirmation();
+        assert!(!opts.skip_confirmation);
+        assert!(!opts.dry_run);
+    }
+
+    #[test]
+    fn preview_skips_confirmation_and_is_dry_run() {
+        let opts = RunOptions::preview();
+        assert!(opts.skip_confirmation);
+        assert!(opts.dry_run);
     }
 }

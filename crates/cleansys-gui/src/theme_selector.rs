@@ -1,6 +1,6 @@
 //! Theme selector widget for the CleanSys GUI.
 //!
-//! Provides a [`pick_list()`] drop-down that lets the user switch between
+//! Provides a `pick_list()` drop-down that lets the user switch between
 //! all themes defined in `cleansys_core` at runtime.
 
 use iced::widget::pick_list;
@@ -31,7 +31,7 @@ pub fn all_themes() -> Vec<ThemeChoice> {
         .collect()
 }
 
-/// Create a theme selector [`pick_list()`] widget.
+/// Create a theme selector `pick_list()` widget.
 ///
 /// The widget displays the name of the current theme and, when opened, lists
 /// every theme returned by [`all_themes`]. Selecting a new entry emits

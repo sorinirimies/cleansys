@@ -2,7 +2,6 @@ use anyhow::Result;
 use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crossterm::terminal;
 use ratatui::widgets::ListState;
-use std::sync::mpsc;
 use std::time::Instant;
 
 use crate::components::password_prompt::PasswordPrompt;
@@ -115,6 +114,18 @@ pub struct App {
     pub password_prompt: PasswordPrompt,
     pub needs_sudo: bool,
     pub pending_operations: Vec<PendingOperation>,
+    /// Whether the "confirm this run" overlay is currently shown, awaiting
+    /// a yes/no answer before `pending_operations` actually executes.
+    pub awaiting_run_confirmation: bool,
+    /// Whether the preview (dry-run) results overlay is currently shown.
+    pub preview_open: bool,
+    /// Results of the most recent preview run: `(cleaner_name, result)`.
+    pub preview_results: Vec<(String, cleansys_core::CleaningResult)>,
+    /// Whether the "needs Administrator" notice is shown (Windows only;
+    /// there is no interactive sudo-password flow there).
+    pub needs_admin_notice: bool,
+    /// Selected cleaners staged while `awaiting_run_confirmation` is true.
+    pub pending_run_selection: Vec<PendingOperation>,
 }
 
 impl Default for App {
@@ -172,6 +183,11 @@ impl App {
             password_prompt: PasswordPrompt::new(),
             needs_sudo: false,
             pending_operations: Vec::new(),
+            awaiting_run_confirmation: false,
+            preview_open: false,
+            preview_results: Vec::new(),
+            needs_admin_notice: false,
+            pending_run_selection: Vec::new(),
         };
         app.item_list_state.select(Some(0));
 
@@ -305,25 +321,35 @@ impl App {
         }
     }
 
-    pub fn run_selected(&mut self) -> Result<()> {
+    /// Select every item across every category (not just the active tab).
+    pub fn select_all_everywhere(&mut self) {
+        for category in &mut self.categories {
+            for item in &mut category.items {
+                item.selected = true;
+            }
+        }
+    }
+
+    /// Deselect every item across every category (not just the active tab).
+    pub fn deselect_all_everywhere(&mut self) {
+        for category in &mut self.categories {
+            for item in &mut category.items {
+                item.selected = false;
+            }
+        }
+    }
+
+    /// Gather selected cleaners and either show the confirmation overlay
+    /// (when `confirmation_mode` is on) or start execution immediately.
+    pub fn request_run(&mut self) -> Result<()> {
         if self.is_running {
             return Ok(());
         }
 
-        // Count selected items
-        let mut has_selected = false;
-
-        for category in &self.categories {
-            for item in &category.items {
-                if item.selected {
-                    has_selected = true;
-                    break;
-                }
-            }
-            if has_selected {
-                break;
-            }
-        }
+        let has_selected = self
+            .categories
+            .iter()
+            .any(|c| c.items.iter().any(|i| i.selected));
 
         if !has_selected {
             self.result_messages
@@ -331,20 +357,13 @@ impl App {
             return Ok(());
         }
 
-        // Prepare the selected cleaners
         let mut selected_cleaners = Vec::new();
-        let mut has_root_operations = false;
-
         for (cat_idx, category) in self.categories.iter().enumerate() {
             for (item_idx, item) in category.items.iter().enumerate() {
                 if item.selected {
-                    // Include all selected cleaners - sudo will be prompted when needed
                     let name = item.name.clone();
                     let function = item.function;
                     selected_cleaners.push((cat_idx, item_idx, name, function, item.requires_root));
-                    if item.requires_root {
-                        has_root_operations = true;
-                    }
                 }
             }
         }
@@ -355,12 +374,83 @@ impl App {
             return Ok(());
         }
 
-        // Check if we need sudo and prompt for password
+        if self.confirmation_mode {
+            self.pending_run_selection = selected_cleaners;
+            self.awaiting_run_confirmation = true;
+            Ok(())
+        } else {
+            self.begin_execution(selected_cleaners)
+        }
+    }
+
+    /// User confirmed the run in the confirmation overlay.
+    pub fn confirm_pending_run(&mut self) -> Result<()> {
+        self.awaiting_run_confirmation = false;
+        let selected_cleaners = std::mem::take(&mut self.pending_run_selection);
+        self.begin_execution(selected_cleaners)
+    }
+
+    /// User cancelled the confirmation overlay.
+    pub fn cancel_run_confirmation(&mut self) {
+        self.awaiting_run_confirmation = false;
+        self.pending_run_selection.clear();
+    }
+
+    /// Preview (dry-run) every selected cleaner synchronously: measures real
+    /// sizes/paths without deleting anything or invoking any mutating
+    /// external command, and shows the results in an overlay.
+    pub fn run_preview(&mut self) {
+        if self.is_running {
+            return;
+        }
+
+        let selected: Vec<(String, cleansys_core::CleanerFn)> = self
+            .categories
+            .iter()
+            .flat_map(|c| c.items.iter())
+            .filter(|i| i.selected)
+            .map(|i| (i.name.clone(), i.function))
+            .collect();
+
+        if selected.is_empty() {
+            self.result_messages
+                .push("No items selected. Please select items to preview.".to_string());
+            return;
+        }
+
+        self.preview_results.clear();
+        for (name, function) in selected {
+            match function(cleansys_core::RunOptions::preview()) {
+                Ok(result) => self.preview_results.push((name, result)),
+                Err(e) => self
+                    .operation_logs
+                    .push(format!("⚠️  Preview failed for {name}: {e}")),
+            }
+        }
+        self.preview_open = true;
+    }
+
+    /// Close the preview results overlay.
+    pub fn close_preview(&mut self) {
+        self.preview_open = false;
+        self.preview_results.clear();
+    }
+
+    /// Actually start execution of the given selected cleaners: prompts for
+    /// elevation if needed (sudo password on Unix, an "Administrator
+    /// required" notice on Windows), or starts the run directly.
+    fn begin_execution(&mut self, selected_cleaners: Vec<PendingOperation>) -> Result<()> {
+        let has_root_operations = selected_cleaners.iter().any(|(_, _, _, _, root)| *root);
+
+        // Check if we need elevation
         if has_root_operations && !self.is_root {
-            self.needs_sudo = true;
-            self.password_prompt.show();
-            // Store the selected cleaners for later execution after authentication
             self.pending_operations.clone_from(&selected_cleaners);
+            if cleansys_core::utils::supports_sudo_prompt() {
+                self.needs_sudo = true;
+                self.password_prompt.show();
+            } else {
+                self.needs_admin_notice = true;
+            }
             return Ok(());
         }
 
@@ -390,21 +480,9 @@ impl App {
             self.categories[*cat_idx].items[*item_idx].status = Some(Status::Pending);
         }
 
-        // Clone necessary data for the thread
-        let (_tx, _rx) = mpsc::channel::<(usize, usize, Status)>();
-
-        // Actual thread processing will be implemented in a future version
-        // For demo purposes, we'll simulate async operations
-        // Set all selected operations to pending first, then they'll progress over time
-        if !selected_cleaners.is_empty() {
-            // Set operations to pending initially - they'll be processed by update_demo_operations
-            for (cat_idx, item_idx, _, _, _) in &selected_cleaners {
-                self.categories[*cat_idx].items[*item_idx].status = Some(Status::Pending);
-            }
-        }
-
-        // Operations will be processed by update_demo_operations over time
-        // The is_running flag will be automatically turned off when all operations complete
+        // Operations will be processed by update_demo_operations over time.
+        // The is_running flag will be automatically turned off when all
+        // operations complete.
 
         Ok(())
     }
@@ -492,7 +570,7 @@ impl App {
                         Err(anyhow::anyhow!("Waiting for sudo authentication"))
                     } else {
                         self.operation_logs.push(format!("🔄 Executing: {}", name));
-                        function(true)
+                        function(cleansys_core::RunOptions::execute())
                     };
 
                 // Process result
@@ -678,6 +756,43 @@ impl App {
             return Ok(false);
         }
 
+        // "Needs Administrator" notice (Windows only — no interactive sudo flow there)
+        if self.needs_admin_notice {
+            match key.code {
+                KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => {
+                    self.needs_admin_notice = false;
+                    self.pending_operations.clear();
+                }
+                _ => {}
+            }
+            return Ok(false);
+        }
+
+        // Run confirmation overlay
+        if self.awaiting_run_confirmation {
+            match key.code {
+                KeyCode::Enter | KeyCode::Char('y') => {
+                    self.confirm_pending_run()?;
+                }
+                KeyCode::Esc | KeyCode::Char('n') => {
+                    self.cancel_run_confirmation();
+                }
+                _ => {}
+            }
+            return Ok(false);
+        }
+
+        // Preview results overlay
+        if self.preview_open {
+            match key.code {
+                KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q') => {
+                    self.close_preview();
+                }
+                _ => {}
+            }
+            return Ok(false);
+        }
+
         match (key.code, key.modifiers) {
             // Quit
             (KeyCode::Char('q'), _) => {
@@ -727,10 +842,18 @@ impl App {
                     self.toggle_selected();
                 }
             }
-            // Run cleaners
+            // Run cleaners (shows a confirmation overlay first, unless
+            // confirmation prompts are disabled via 'y').
             (KeyCode::Enter, _) => {
                 if !self.show_help {
-                    self.run_selected()?;
+                    self.request_run()?;
+                }
+            }
+            // Preview (dry-run) selected cleaners — measures real sizes/paths
+            // without deleting anything.
+            (KeyCode::Char('d'), _) => {
+                if !self.show_help && !self.is_running {
+                    self.run_preview();
                 }
             }
             // Help dialog
@@ -777,6 +900,18 @@ impl App {
             (KeyCode::Char('n'), _) => {
                 if !self.show_help {
                     self.deselect_all();
+                }
+            }
+            // Select all across every category
+            (KeyCode::Char('A'), _) => {
+                if !self.show_help {
+                    self.select_all_everywhere();
+                }
+            }
+            // Deselect all across every category
+            (KeyCode::Char('N'), _) => {
+                if !self.show_help {
+                    self.deselect_all_everywhere();
                 }
             }
 
@@ -1016,10 +1151,13 @@ impl App {
                     .iter()
                     .any(|msg| msg.contains("Completed"))
                 {
-                    self.result_messages.push(format!(
-                        "✅ Cleaning completed! Total space freed: {} (Press ESC to return to main menu)",
+                    let summary = format!(
+                        "Cleaning completed! Total space freed: {}",
                         format_size(self.total_bytes_cleaned)
-                    ));
+                    );
+                    self.result_messages
+                        .push(format!("✅ {summary} (Press ESC to return to main menu)"));
+                    crate::notifications::notify_completion(&summary);
                 }
                 // Keep show_progress_screen true so user stays on details screen
             }

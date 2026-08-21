@@ -34,6 +34,7 @@ unicode-width = { workspace = true }
 tui-textarea  = { workspace = true }
 tui-checkbox  = { workspace = true }
 tui-piechart  = { workspace = true }
+notify-rust   = { workspace = true }
 
 [dev-dependencies]
 assert_cmd = { workspace = true }

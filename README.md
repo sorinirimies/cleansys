@@ -25,6 +25,12 @@ CleanSys is a Cargo workspace with three crates:
 
 ## ✨ Features
 
+### 🛡️ Safety
+- **Confirmation dialog** before any destructive run (TUI and GUI) — lists exactly what's selected, with an option to disable prompts (`y` in the TUI)
+- **Preview / dry-run mode** — measure real sizes and paths that *would* be cleaned without deleting anything (`d` in the TUI, "Preview" button in the GUI)
+- **Progress tracking** — live per-item status plus an overall progress bar/percentage while a run is in flight
+- **Desktop notifications** on completion (Linux/macOS/Windows)
+
 ### 🎨 Modern Terminal UI
 - **Beautiful Interface**: Built with [Ratatui](https://github.com/ratatui-org/ratatui) for a smooth, modern experience
 - **Interactive Checkboxes**: Easy selection using [tui-checkbox](https://crates.io/crates/tui-checkbox) library
@@ -40,12 +46,12 @@ CleanSys is a Cargo workspace with three crates:
 - Thumbnail/preview caches
 - Temporary files owned by the current user
 - Package manager caches (pip, npm, cargo)
-- Trash / Recycle Bin (Linux XDG trash, macOS `~/.Trash`)
+- Trash / Recycle Bin (Linux XDG trash, macOS `~/.Trash`, Windows Recycle Bin via Shell32)
 
 ### 🔧 System-Level Cleaning (platform-appropriate, some require root/admin)
 - **Linux**: apt/pacman/dnf caches, rotated logs + journald vacuum, `/var/cache`, old kernels, crash reports
-- **macOS**: Homebrew cache (never run as root!), rotated system logs, diagnostic/crash reports
-- **Windows**: Windows Update download cache, `C:\Windows\Temp` (best-effort; needs Administrator)
+- **macOS**: Homebrew cache (never run as root!), Xcode DerivedData, unavailable iOS/watchOS/tvOS Simulator caches, rotated system logs, diagnostic/crash reports
+- **Windows**: Windows Update download cache, `C:\Windows\Temp`, Recycle Bin (via the same Shell32 API Explorer's "Empty Recycle Bin" uses — no Administrator required for the current user's own bin)
 
 Every cleaner reports **real measured sizes** — no estimates or guesses — and the detailed view/GUI activity log lists exactly which files/directories were removed and how many bytes each one freed.
 
@@ -106,7 +112,13 @@ Prefer a graphical interface? Launch the Iced-based desktop app instead:
 cleansys-gui
 ```
 
-It presents the exact same cleaners as the TUI (shared via `cleansys-core`) with checkboxes per category, a "Run selected" button, and a live activity log. System cleaners will prompt for your sudo password the first time they're needed.
+It presents the exact same cleaners as the TUI (shared via `cleansys-core`) with checkboxes per category, a "Run selected" button, and a live activity log. Selections are remembered across restarts. System cleaners will prompt for your sudo password (Unix) or an "Administrator required" notice with a one-click relaunch (Windows) the first time they're needed.
+
+- **Confirm before cleaning**: clicking "Run selected" shows exactly what's about to be deleted before anything happens.
+- **Preview**: click "Preview" to see real sizes/paths that would be cleaned without deleting anything.
+- **Progress bar**: a live progress bar and "N/M" counter while a run (or preview) is in flight.
+- **Global selection**: "Select all" / "Select none" buttons work across every category, not just the active tab.
+- **Desktop notification** when a run finishes.
 
 The top bar includes a **theme selector** with 43 built-in themes (Dracula, Nord, Solarized, Gruvbox, Catppuccin, Tokyo Night, Kanagawa, Rose Pine, and more) — pick one from the dropdown and it's applied instantly and remembered across restarts (saved to `~/.config/cleansys/settings.json`).
 
@@ -149,10 +161,14 @@ cleansys --verbose
 
 ### Actions
 - `Space`: Toggle selection
-- `Enter`: Run selected cleaners
+- `Enter`: Run selected cleaners (shows a confirmation overlay first, unless disabled)
+- `d`: Preview selected cleaners (dry-run — measures real sizes/paths, deletes nothing)
 - `a`: Select all in current category
 - `n`: Deselect all in current category
-- `ESC`: Cancel operation or return to menu
+- `A`: Select all across every category
+- `N`: Deselect all across every category
+- `y`: Toggle confirmation prompts on/off
+- `ESC`: Cancel operation, close overlay, or return to menu
 - `q`: Exit application
 
 ### View Controls
@@ -290,8 +306,8 @@ and measures real freed bytes (no estimates).
 | Platform | `cleansys` (TUI/CLI) | `cleansys-gui` | User cleaners | System cleaners |
 |----------|:---:|:---:|-------|-------|
 | Linux (x86_64, aarch64) | ✅ | ✅ | Firefox/Chrome/Chromium caches, `~/.cache`, thumbnails, `/tmp`, pip/npm/cargo caches, XDG Trash | apt/pacman/dnf caches, rotated logs + journald vacuum, `/var/cache`, old kernels, crash reports (root required) |
-| macOS (Intel + Apple Silicon) | ✅ | ✅ | Firefox/Chrome/Safari caches, `~/Library/Caches`, QuickLook thumbnails, `$TMPDIR`, pip/npm/cargo caches, `~/.Trash` | Homebrew cache (**not** root — brew refuses to run as root), rotated system logs, diagnostic/crash reports (root required) |
-| Windows (x86_64) | ✅ | ✅ | Chrome/Edge/Firefox caches, Windows INetCache/CrashDumps, thumbnail cache, `%TEMP%`, pip/npm/cargo caches | Windows Update download cache, `C:\Windows\Temp` (best-effort, no UAC prompt yet — see Roadmap); Recycle Bin not yet supported |
+| macOS (Intel + Apple Silicon) | ✅ | ✅ | Firefox/Chrome/Safari caches, `~/Library/Caches`, QuickLook thumbnails, `$TMPDIR`, pip/npm/cargo caches, `~/.Trash` | Homebrew cache (**not** root — brew refuses to run as root), Xcode DerivedData, unavailable Simulator caches, rotated system logs, diagnostic/crash reports (root required) |
+| Windows (x86_64) | ✅ | ✅ | Chrome/Edge/Firefox caches, Windows INetCache/CrashDumps, thumbnail cache, `%TEMP%`, pip/npm/cargo caches | Windows Update download cache, `C:\Windows\Temp` (Administrator), Recycle Bin (via Shell32, no Administrator needed for your own bin) |
 
 Windowing / desktop-environment support for `cleansys-gui` (via [Iced](https://iced.rs)/winit):
 - **Linux**: X11 and Wayland (both enabled by default)
@@ -373,18 +389,15 @@ All generated GIF files are output to `demo/target/` and are git-ignored.
 
 Things that would be natural next steps for the project (contributions welcome!):
 
-- **Windows Recycle Bin support** — currently skipped (it's not a plain, safely-walkable folder); would need the Windows Shell APIs to enumerate/empty it correctly.
-- **Windows elevation (UAC)** — Windows system cleaners currently attempt their operation directly and log a warning if not run as Administrator, rather than prompting for elevation like the Unix sudo-password flow does.
-- **Dry-run / preview mode** — list exactly which files would be removed and their real measured sizes before actually deleting anything, in both TUI and GUI.
 - **Scheduled/background cleaning** — a small daemon or OS-native scheduler (systemd timer / launchd / Task Scheduler) integration to auto-clean on a cadence.
-- **Settings persistence** — remember last selection, custom include/exclude paths, and preferred chart/view mode across runs (`cleansys-core::utils` already has a `directories`-based config dir helper to build on).
 - **Pluggable/custom cleaners** — user-defined cleaner rules via a TOML config (glob patterns + safety checks), loaded by `cleansys-core` and shared by both front-ends.
-- **Notifications** — desktop notification (via `notify-rust` or similar) when a long-running clean finishes.
 - **GUI disk-usage chart** — port the TUI's pie/bar chart (`tui-piechart`) to an Iced `Canvas` widget in `cleansys-gui` for visual parity.
 - **Light/dark auto-detection** for the GUI theme (follow OS preference by default, falling back to the manual picker).
 - **Localization (i18n)** for both UIs.
 - **JSON output** for `cleansys list` / `cleansys user --yes` etc., to make the CLI scriptable.
 - **AUR / winget / Homebrew formulae** for easier installation (AUR `PKGBUILD` scaffold already included under `packaging/aur/`).
+- **TUI selection persistence** — the GUI already remembers checked cleaners across restarts (`~/.config/cleansys/settings.json`); the TUI could opt into the same `tui-settings.json` file.
+- **Branded icon/artwork** — `packaging/windows/cleansys.ico` and `packaging/macos/cleansys.icns` currently fall back to a placeholder/no icon; real artwork would polish the installers/DMG.
 
 ## 🙏 Acknowledgments
 
