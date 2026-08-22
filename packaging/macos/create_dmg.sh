@@ -86,7 +86,7 @@ fi
 if command -v create-dmg &>/dev/null; then
     create-dmg \
         --volname "CleanSys ${VERSION}" \
-        "${VOLICON_ARGS[@]}" \
+        "${VOLICON_ARGS[@]+"${VOLICON_ARGS[@]}"}" \
         --window-pos 200 120 \
         --window-size 660 400 \
         --icon-size 128 \
