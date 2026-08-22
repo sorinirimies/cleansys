@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 
 ## 0.5.0 - 2026-08-22
+### ♻️ Refactor
+- refactor(tui): use tui-piechart directly, drop the redundant local wrapper
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.5.0...v0.5.0
+## 0.5.0 - 2026-08-22
 ### ✨ Features
 - feat: restructure into Cargo workspace, add Iced GUI, migrate scripts to Nushell
 - feat(gui): redesign layout with tabs/icons, cross-platform support, packaging, tests
