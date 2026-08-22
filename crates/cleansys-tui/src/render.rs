@@ -702,39 +702,36 @@ fn render_operations_summary(f: &mut Frame, app: &App, area: Rect) {
 fn render_pie_chart_distribution(f: &mut Frame, app: &App, area: Rect) {
     let category_distribution = app.get_category_distribution();
 
-    // Only show real data from actual cleaning operations
-    if !category_distribution.is_empty() {
-        // Create pie chart from distribution data
-        let pie_chart = create_pie_chart_from_distribution(
+    // Only show real data from actual cleaning operations, and only when
+    // there's enough room for tui-piechart to draw something meaningful.
+    if !category_distribution.is_empty() && area.width >= 20 && area.height >= 8 {
+        let chart = create_pie_chart_from_distribution(
             &category_distribution,
             "Items Distribution (Count)",
             false, // Use count-based distribution
-        );
+        )
+        .show_percentages(area.width >= 40)
+        .show_legend(area.width >= 50 || area.height >= 16);
 
-        let responsive_chart = pie_chart
-            .show_percentages(area.width >= 40)
-            .show_legend(area.width >= 50 || area.height >= 16);
-
-        responsive_chart.render(f, area);
+        f.render_widget(chart, area);
     }
 }
 
 fn render_pie_chart_size_distribution(f: &mut Frame, app: &App, area: Rect) {
     let category_distribution = app.get_category_distribution();
 
-    // Only show real data from actual cleaning operations
-    if !category_distribution.is_empty() {
-        let pie_chart = create_pie_chart_from_distribution(
+    // Only show real data from actual cleaning operations, and only when
+    // there's enough room for tui-piechart to draw something meaningful.
+    if !category_distribution.is_empty() && area.width >= 20 && area.height >= 8 {
+        let chart = create_pie_chart_from_distribution(
             &category_distribution,
             "Items Distribution (Size)",
             true, // Use size-based distribution
-        );
+        )
+        .show_percentages(area.width >= 40)
+        .show_legend(area.width >= 50 || area.height >= 16);
 
-        let responsive_chart = pie_chart
-            .show_percentages(area.width >= 40)
-            .show_legend(area.width >= 50 || area.height >= 16);
-
-        responsive_chart.render(f, area);
+        f.render_widget(chart, area);
     }
 }
 

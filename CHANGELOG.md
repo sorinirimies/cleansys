@@ -36,6 +36,7 @@ All notable changes to this project will be documented in this file.
 - chore: bump version to 0.3.2
 - chore: add gitea-nexus-lab remote + matching justfile recipes
 - chore(deps): update to latest crate versions, drop dead dependencies
+- chore: bump version to 0.5.0
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.6...v0.5.0
 ## 0.2.6 - 2025-11-02
 ### ✨ Features

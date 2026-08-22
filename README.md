@@ -35,7 +35,7 @@ CleanSys is a Cargo workspace with three crates:
 - **Beautiful Interface**: Built with [Ratatui](https://github.com/ratatui-org/ratatui) for a smooth, modern experience
 - **Interactive Checkboxes**: Easy selection using [tui-checkbox](https://crates.io/crates/tui-checkbox) library
 - **Animated loading spinner**: [tui-spinner](https://crates.io/crates/tui-spinner) renders a live braille spinner in the title bar while a cleaning run is in progress
-- **Multiple Chart Types**: Toggle between Bar Chart, Pie Chart (by count), and Pie Chart (by size)
+- **Multiple Chart Types**: Toggle between Bar Chart, Pie Chart (by count), and Pie Chart (by size) — rendered directly by [tui-piechart](https://crates.io/crates/tui-piechart), with no local pie-drawing code of our own
 - **Split-View Progress**: Detailed status information with real-time updates
 - **Animated Indicators**: Loading spinners, progress bars, and status icons
 - **Responsive Design**: Automatically adapts to any terminal size
@@ -286,7 +286,7 @@ crates/
 │       ├── app.rs           # Application state and key-handling logic
 │       ├── events.rs        # Terminal input/resize event handling
 │       ├── render.rs        # UI rendering logic
-│       ├── pie_chart.rs     # Chart visualization component
+│       ├── pie_chart.rs     # Thin adapter: our data -> tui-piechart::PieChart (no local drawing logic)
 │       ├── menu.rs          # Text-based interactive menu
 │       └── components/      # Reusable widgets (password prompt)
 └── cleansys-gui/            # Iced desktop GUI (binary: cleansys-gui)

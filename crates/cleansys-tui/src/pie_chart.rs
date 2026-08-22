@@ -1,134 +1,109 @@
+//! Thin adapter from CleanSys's `(name, count, size)` category-distribution
+//! tuples to the [`tui_piechart`] crate's own `PieChart`/`PieSlice` widgets.
+//!
+//! There is no local pie-chart drawing logic here — rendering is handled
+//! entirely by `tui_piechart::PieChart`, which already supports everything
+//! this crate needs (block/title, legend, percentages, colours) via its own
+//! builder API. This module only maps our domain data into `PieSlice`s and
+//! applies CleanSys's default styling.
+
 use ratatui::{
-    layout::{Alignment, Rect},
+    layout::Alignment,
     style::{Color, Modifier, Style},
     widgets::{Block, Borders, Padding},
-    Frame,
 };
-use tui_piechart::{PieChart as TuiPieChart, PieSlice};
+use tui_piechart::{PieChart, PieSlice};
 
-pub struct PieChartData {
-    pub name: String,
-    pub value: f64,
-    pub color: Color,
-}
+/// Colour palette cycled across pie slices (by index).
+const SLICE_COLORS: [Color; 10] = [
+    Color::Red,
+    Color::Green,
+    Color::Blue,
+    Color::Yellow,
+    Color::Magenta,
+    Color::Cyan,
+    Color::White,
+    Color::LightRed,
+    Color::LightGreen,
+    Color::LightBlue,
+];
 
-pub struct PieChart {
-    pub title: String,
-    pub data: Vec<PieChartData>,
-    pub show_percentages: bool,
-    pub show_legend: bool,
-}
-
-impl Default for PieChart {
-    fn default() -> Self {
-        Self {
-            title: "Distribution".to_string(),
-            data: Vec::new(),
-            show_percentages: true,
-            show_legend: true,
-        }
-    }
-}
-
-impl PieChart {
-    pub fn new(title: &str) -> Self {
-        Self {
-            title: title.to_string(),
-            ..Default::default()
-        }
-    }
-
-    pub fn data(mut self, data: Vec<PieChartData>) -> Self {
-        self.data = data;
-        self
-    }
-
-    pub fn show_percentages(mut self, show: bool) -> Self {
-        self.show_percentages = show;
-        self
-    }
-
-    pub fn show_legend(mut self, show: bool) -> Self {
-        self.show_legend = show;
-        self
-    }
-
-    pub fn render(&self, frame: &mut Frame, area: Rect) {
-        if area.width < 20 || area.height < 8 {
-            // Too small to render anything meaningful
-            return;
-        }
-
-        let total: f64 = self.data.iter().map(|d| d.value).sum();
-        if total <= 0.0 {
-            return;
-        }
-
-        // Convert our data format to tui-piechart PieSlice format
-        let slices: Vec<PieSlice> = self
-            .data
-            .iter()
-            .map(|d| PieSlice::new(&d.name, d.value, d.color))
-            .collect();
-
-        // Create block with title, borders, and padding
-        let block = Block::default()
-            .title(self.title.clone())
-            .title_alignment(Alignment::Center)
-            .title_style(
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            )
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(Color::Cyan))
-            .padding(Padding::new(1, 1, 0, 0));
-
-        // Create the tui-piechart widget with legend and percentages always enabled
-        let mut piechart = TuiPieChart::new(slices).block(block).show_percentages(true); // Always show percentages
-
-        // Configure legend based on settings
-        if self.show_legend {
-            piechart = piechart.show_legend(true);
-        }
-
-        // Render the pie chart
-        frame.render_widget(piechart, area);
-    }
-}
-
-// Helper function to create pie chart data from category distribution
-pub fn create_pie_chart_from_distribution(
-    distribution: &[(String, usize, u64)], // (name, count, size)
-    title: &str,
+/// Build a ready-to-render [`tui_piechart::PieChart`] from a category
+/// distribution, with CleanSys's default title/border styling, percentages,
+/// and legend enabled.
+///
+/// The returned widget borrows `distribution`'s and `title`'s string data, so
+/// both must outlive the `frame.render_widget(..., area)` call.
+pub fn create_pie_chart_from_distribution<'a>(
+    distribution: &'a [(String, usize, u64)], // (name, count, size)
+    title: &'a str,
     use_size: bool, // true for size-based, false for count-based
-) -> PieChart {
-    let colors = [
-        Color::Red,
-        Color::Green,
-        Color::Blue,
-        Color::Yellow,
-        Color::Magenta,
-        Color::Cyan,
-        Color::White,
-        Color::LightRed,
-        Color::LightGreen,
-        Color::LightBlue,
-    ];
-
-    let data: Vec<PieChartData> = distribution
+) -> PieChart<'a> {
+    let slices: Vec<PieSlice<'a>> = distribution
         .iter()
         .enumerate()
-        .map(|(i, (name, count, size))| PieChartData {
-            name: name.clone(),
-            value: if use_size {
+        .map(|(i, (name, count, size))| {
+            let value = if use_size {
                 *size as f64
             } else {
                 *count as f64
-            },
-            color: colors[i % colors.len()],
+            };
+            PieSlice::new(name.as_str(), value, SLICE_COLORS[i % SLICE_COLORS.len()])
         })
         .collect();
 
-    PieChart::new(title).data(data)
+    let block = Block::default()
+        .title(title)
+        .title_alignment(Alignment::Center)
+        .title_style(
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan))
+        .padding(Padding::new(1, 1, 0, 0));
+
+    PieChart::new(slices)
+        .block(block)
+        .show_percentages(true)
+        .show_legend(true)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn sample_distribution() -> Vec<(String, usize, u64)> {
+        vec![
+            ("Browser Caches".to_string(), 3, 1_048_576),
+            ("Trash".to_string(), 1, 2_097_152),
+        ]
+    }
+
+    #[test]
+    fn create_pie_chart_from_distribution_does_not_panic_count_based() {
+        let dist = sample_distribution();
+        let _chart = create_pie_chart_from_distribution(&dist, "Count", false);
+    }
+
+    #[test]
+    fn create_pie_chart_from_distribution_does_not_panic_size_based() {
+        let dist = sample_distribution();
+        let _chart = create_pie_chart_from_distribution(&dist, "Size", true);
+    }
+
+    #[test]
+    fn create_pie_chart_from_distribution_handles_empty_distribution() {
+        let dist: Vec<(String, usize, u64)> = Vec::new();
+        let _chart = create_pie_chart_from_distribution(&dist, "Empty", false);
+    }
+
+    #[test]
+    fn create_pie_chart_from_distribution_cycles_colors_beyond_palette_size() {
+        // 12 entries > SLICE_COLORS.len() (10) exercises the modulo wraparound.
+        let dist: Vec<(String, usize, u64)> =
+            (0..12).map(|i| (format!("Item {i}"), 1, 1024)).collect();
+        let _chart = create_pie_chart_from_distribution(&dist, "Wraparound", false);
+    }
 }
