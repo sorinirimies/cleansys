@@ -1,7 +1,7 @@
 use ratatui::{
     layout::{Alignment, Rect},
     style::{Color, Modifier, Style},
-    widgets::{block::Padding, Block, Borders},
+    widgets::{Block, Borders, Padding},
     Frame,
 };
 use tui_piechart::{PieChart as TuiPieChart, PieSlice};

@@ -20,26 +20,21 @@ repository = "https://github.com/sorinirimies/cleansys"
 [workspace.dependencies]
 # Core / shared
 anyhow      = "1.0"
-colored     = "2.0"
+colored     = "3.1"
 log         = "0.4"
-env_logger  = "0.10"
-directories = "5.0"
+env_logger  = "0.11"
+directories = "6.0"
 serde       = { version = "1.0", features = ["derive"] }
-toml        = "0.8"
 regex       = "1.10"
 once_cell   = "1.19"
 users       = "0.11"
 serde_json  = "1.0"
 
 # TUI (Ratatui)
-ratatui       = "0.29.0"
-crossterm     = "0.28.0"
-unicode-width = "0.1.10"
-tui-textarea  = "0.2.0"
-tui-checkbox  = "0.3.3"
-tui-piechart  = "0.1.8"
-libc          = "0.2"
-indicatif     = "0.17"
+ratatui       = "0.30"
+crossterm     = "0.29"
+tui-checkbox  = "0.4"
+tui-piechart  = "1.0"
 clap          = { version = "4.4", features = ["derive"] }
 
 # GUI (Iced)
