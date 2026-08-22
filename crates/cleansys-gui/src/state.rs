@@ -55,7 +55,16 @@ impl Default for CleanSysGui {
 impl CleanSysGui {
     /// Construct a fresh application state with all known cleaners loaded.
     pub fn new() -> Self {
-        let settings = cleansys_core::load_settings().unwrap_or_default();
+        // Unit tests must never read the real ~/.config/cleansys/settings.json
+        // — doing so made tests flaky/order-dependent, since every test in
+        // this crate's test binary shares the same real file on disk (writes
+        // from one test's `save_selections()`/`save_theme()` would leak into
+        // whichever test happened to construct `CleanSysGui::new()` next).
+        let settings = if cfg!(test) {
+            cleansys_core::Settings::default()
+        } else {
+            cleansys_core::load_settings().unwrap_or_default()
+        };
         let mut categories = cleansys_core::load_categories();
         for category in &mut categories {
             for item in &mut category.items {
@@ -205,14 +214,24 @@ impl CleanSysGui {
 
     /// Persist the current theme and cleaner selections to `settings.json`
     /// (best-effort; failures are logged but never surfaced to the UI).
+    ///
+    /// A no-op under `cfg(test)` so unit tests never touch the real
+    /// `~/.config/cleansys/settings.json` (see the comment in [`Self::new`]).
     pub fn save_theme(&self) {
+        if cfg!(test) {
+            return;
+        }
         if let Err(e) = cleansys_core::save_settings(&self.current_settings()) {
             log::warn!("failed to save theme preference: {e}");
         }
     }
 
     /// Persist the current cleaner selections (and theme) to `settings.json`.
+    /// A no-op under `cfg(test)` — see [`Self::save_theme`].
     pub fn save_selections(&self) {
+        if cfg!(test) {
+            return;
+        }
         if let Err(e) = cleansys_core::save_settings(&self.current_settings()) {
             log::warn!("failed to save cleaner selections: {e}");
         }

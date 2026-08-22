@@ -34,6 +34,7 @@ CleanSys is a Cargo workspace with three crates:
 ### 🎨 Modern Terminal UI
 - **Beautiful Interface**: Built with [Ratatui](https://github.com/ratatui-org/ratatui) for a smooth, modern experience
 - **Interactive Checkboxes**: Easy selection using [tui-checkbox](https://crates.io/crates/tui-checkbox) library
+- **Animated loading spinner**: [tui-spinner](https://crates.io/crates/tui-spinner) renders a live braille spinner in the title bar while a cleaning run is in progress
 - **Multiple Chart Types**: Toggle between Bar Chart, Pie Chart (by count), and Pie Chart (by size)
 - **Split-View Progress**: Detailed status information with real-time updates
 - **Animated Indicators**: Loading spinners, progress bars, and status icons
@@ -416,6 +417,8 @@ Things that would be natural next steps for the project (contributions welcome!)
 
 - [Ratatui](https://github.com/ratatui-org/ratatui) - Terminal UI framework
 - [tui-checkbox](https://crates.io/crates/tui-checkbox) - Checkbox widget library
+- [tui-spinner](https://crates.io/crates/tui-spinner) - Animated loading spinner widget
+- [tui-piechart](https://crates.io/crates/tui-piechart) - Pie chart visualization widget
 - [Crossterm](https://github.com/crossterm-rs/crossterm) - Cross-platform terminal manipulation
 - [Iced](https://iced.rs) - Cross-platform Rust GUI framework powering `cleansys-gui`
 - [iced_fonts](https://crates.io/crates/iced_fonts) - Bootstrap icon font for the GUI

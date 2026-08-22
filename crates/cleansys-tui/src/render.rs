@@ -8,6 +8,7 @@ use ratatui::{
 };
 // Using tui-checkbox library for consistent checkbox symbols across the application
 use tui_checkbox::{symbols as checkbox_symbols, Checkbox};
+use tui_spinner::{FluxFrames, FluxSpinner};
 
 use crate::app::{App, ChartType, CleanedItemType};
 use crate::pie_chart::create_pie_chart_from_distribution;
@@ -123,6 +124,50 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
     let title = Paragraph::new(title_lines).block(Block::default().borders(Borders::BOTTOM));
 
     f.render_widget(title, area);
+
+    // Animated "loading" spinner (via the tui-spinner crate) in the
+    // top-right corner of the title bar while a cleaning run is active.
+    if app.is_running && area.width > 14 {
+        let spinner_width = 12u16;
+        let spinner_area = Rect {
+            x: area.x + area.width.saturating_sub(spinner_width + 1),
+            y: area.y,
+            width: spinner_width,
+            height: 1,
+        };
+
+        let label = Line::from(vec![
+            Span::raw(" "),
+            Span::styled(
+                "RUNNING",
+                Style::default()
+                    .fg(Color::Yellow)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(" "),
+        ]);
+        let label_width = label.width() as u16;
+
+        let (label_area, glyph_area) = (
+            Rect {
+                width: label_width.min(spinner_width),
+                ..spinner_area
+            },
+            Rect {
+                x: spinner_area.x + label_width.min(spinner_width),
+                width: spinner_area.width.saturating_sub(label_width),
+                ..spinner_area
+            },
+        );
+
+        f.render_widget(Paragraph::new(label), label_area);
+        f.render_widget(
+            FluxSpinner::new(app.animation_frame as u64)
+                .frames(FluxFrames::CLASSIC)
+                .color(Color::Cyan),
+            glyph_area,
+        );
+    }
 }
 
 fn render_main_content(f: &mut Frame, app: &mut App, area: Rect) {

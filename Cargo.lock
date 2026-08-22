@@ -664,6 +664,7 @@ dependencies = [
  "tempfile",
  "tui-checkbox",
  "tui-piechart",
+ "tui-spinner",
 ]
 
 [[package]]
@@ -4373,6 +4374,15 @@ name = "tui-piechart"
 version = "1.0.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "80333ebf441bf1bf04055494abdd345ef90c6e74b3ada1349c6239cd5525bf9a"
+dependencies = [
+ "ratatui",
+]
+
+[[package]]
+name = "tui-spinner"
+version = "0.4.9"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c44283f579cde5b095fada29be22488d2aa222d8f98ec79d57c30a2b00992e23"
 dependencies = [
  "ratatui",
 ]
