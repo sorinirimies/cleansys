@@ -9,6 +9,8 @@ All notable changes to this project will be documented in this file.
 - fix(ci): fix macOS DMG build failure blocking the v0.5.0 release
 ### 📚 Documentation
 - docs: update README and CHANGELOG for v0.5.0
+### 🔧 Chores
+- chore: bump version to 0.5.1
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.5.0...v0.5.1
 ## 0.5.0 - 2026-08-22
 ### ✨ Features
