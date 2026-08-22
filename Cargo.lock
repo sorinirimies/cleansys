@@ -617,7 +617,7 @@ checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
 name = "cleansys-core"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "colored",
@@ -633,7 +633,7 @@ dependencies = [
 
 [[package]]
 name = "cleansys-gui"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "cleansys-core",
@@ -648,7 +648,7 @@ dependencies = [
 
 [[package]]
 name = "cleansys-tui"
-version = "0.4.0"
+version = "0.5.0"
 dependencies = [
  "anyhow",
  "assert_cmd",

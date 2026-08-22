@@ -2,43 +2,41 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.3.2 - 2025-11-13
-### 🔄 CI
-- ci: fix git-cliff installation by adding Rust toolchain setup
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.3.1...v0.3.2
-## 0.3.1 - 2025-11-13
-### 🔧 Chores
-- chore: bump version to 0.3.1
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.3.0...v0.3.1
-## 0.3.0 - 2025-11-13
-### 🔧 Chores
-- chore: bump version to 0.3.0
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.9...v0.3.0
-## 0.2.9 - 2025-11-13
-### ➕ Added
-- Add Gitea CI, release, and README update workflows
-### 🔧 Chores
-- chore: bump version to 0.2.9
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.8...v0.2.9
-## 0.2.8 - 2025-11-13
-### 🔧 Chores
-- chore: bump version to 0.2.7
-- chore: bump version to 0.2.8
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.7...v0.2.8
-## 0.2.7 - 2025-11-13
+## 0.5.0 - 2026-08-22
+### ✨ Features
+- feat: restructure into Cargo workspace, add Iced GUI, migrate scripts to Nushell
+- feat(gui): redesign layout with tabs/icons, cross-platform support, packaging, tests
+- feat(gui): add complete 43-theme selector, matching GitKraft's theme system
+- feat: safety, dry-run preview, Windows elevation, macOS dev cleaners, and more
+- feat(ci): nightly dependency upgrade now auto-cuts a patch release
+- feat(tui): add tui-spinner animated loading indicator; fix flaky GUI tests
 ### ➕ Added
 - Add Gitea dual-hosting scripts and justfile commands
+- Add Gitea CI, release, and README update workflows
+- Add comprehensive justfile and setup-just.sh for automation
+### 🐛 Bug Fixes
+- fix(cleaners): real cross-platform cleaning with structured, measured results
 ### 📚 Documentation
 - docs: update README and CHANGELOG for v0.2.6
 ### 📦 Other Changes
 - Revamp demo system: add user/system tapes, update VHS tasks
+### 🔄 CI
+- ci: fix git-cliff installation by adding Rust toolchain setup
 ### 🔄 Updated
 - update gitea migration files
 - Update to ratatui 0.29 and crossterm 0.28, switch pie chart to
 ### 🔧 Chores
 - chore: bump version to 0.2.6
 - chore: bump version to 0.2.7
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.6...v0.2.7
+- chore: bump version to 0.2.7
+- chore: bump version to 0.2.8
+- chore: bump version to 0.2.9
+- chore: bump version to 0.3.0
+- chore: bump version to 0.3.1
+- chore: bump version to 0.3.2
+- chore: add gitea-nexus-lab remote + matching justfile recipes
+- chore(deps): update to latest crate versions, drop dead dependencies
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.2.6...v0.5.0
 ## 0.2.6 - 2025-11-02
 ### ✨ Features
 - feat: add password prompt, fix legend distribution, update categories
@@ -136,16 +134,13 @@ All notable changes to this project will be documented in this file.
 ## 0.0.6 - 2025-10-02
 ### 📦 Other Changes
 - keep cargolock
-### 🔧 Chores
-- chore: bump version to 0.0.5
-- chore: bump version to 0.0.6
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.5...v0.0.6
-## 0.0.5 - 2025-10-02
 ### 🔄 Updated
 - update readme
 ### 🔧 Chores
 - chore: bump version to 0.0.5
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.4...v0.0.5
+- chore: bump version to 0.0.5
+- chore: bump version to 0.0.6
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.4...v0.0.6
 ## 0.0.4 - 2025-06-05
 ### 📦 Other Changes
 - Improves progress screen behavior and controls

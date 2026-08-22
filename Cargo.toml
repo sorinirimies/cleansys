@@ -7,7 +7,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version    = "0.4.0"
+version    = "0.5.0"
 edition    = "2021"
 authors    = ["Sorin Albu-Irimies <sorinirimies@gmail.com>"]
 license    = "MIT"
@@ -49,7 +49,7 @@ predicates = "3.0"
 tempfile   = "3.8"
 
 # Internal crates
-cleansys-core = { path = "crates/cleansys-core", version = "0.4.0" }
+cleansys-core = { path = "crates/cleansys-core", version = "0.5.0" }
 
 [profile.dev]
 opt-level = 0
