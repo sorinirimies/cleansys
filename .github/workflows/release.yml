@@ -210,13 +210,13 @@ jobs:
           ref: ${{ needs.validate.outputs.tag }}
 
       - name: Download arm64 artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: artifacts-aarch64-apple-darwin
           path: artifacts/arm64/
 
       - name: Download x86_64 artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: artifacts-x86_64-apple-darwin
           path: artifacts/x86_64/
@@ -267,7 +267,7 @@ jobs:
         run: nu scripts/ci/release_notes.nu ${{ needs.validate.outputs.tag }}
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: artifacts/
           merge-multiple: true
