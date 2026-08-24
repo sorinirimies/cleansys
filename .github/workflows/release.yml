@@ -192,7 +192,7 @@ jobs:
              dist/cleansys-tui-${{ matrix.target }}${{ matrix.suffix }} || true
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: artifacts-${{ matrix.target }}
           path: dist/
@@ -241,7 +241,7 @@ jobs:
         run: bash packaging/macos/create_dmg.sh ${{ needs.validate.outputs.version }}
 
       - name: Upload DMG
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: artifacts-macos-universal
           path: dist/*.dmg
