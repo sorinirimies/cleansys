@@ -91,6 +91,9 @@ def list_outdated [] {
 def do_upgrade [] {
     header "CleanSys · Upgrading Dependencies"
 
+    step "Snapshotting current Cargo.lock for downgrade check …"
+    cp Cargo.lock Cargo.lock.before
+
     step "Running `cargo upgrade --workspace` …"
     let result = (do { cargo upgrade --workspace } | complete)
     print $result.stdout
@@ -98,6 +101,7 @@ def do_upgrade [] {
     if $result.exit_code != 0 {
         err "cargo upgrade failed"
         print $result.stderr
+        rm -f Cargo.lock.before
         exit 1
     }
     ok "Dependencies upgraded in Cargo.toml(s)"
@@ -107,9 +111,22 @@ def do_upgrade [] {
     if $lock_result.exit_code != 0 {
         err "cargo update failed"
         print $lock_result.stderr
+        rm -f Cargo.lock.before
         exit 1
     }
     ok "Cargo.lock updated"
+
+    step "Checking for dependency downgrades …"
+    let guard = (do { nu scripts/ci/check_no_downgrade.nu --before Cargo.lock.before --after Cargo.lock } | complete)
+    print $guard.stdout
+    if $guard.exit_code != 0 {
+        err "Downgrade(s) detected — refusing to proceed."
+        print $guard.stderr
+        rm -f Cargo.lock.before
+        exit 1
+    }
+    ok "No downgrades detected"
+    rm -f Cargo.lock.before
 }
 
 # ─── Cross-checks ─────────────────────────────────────────────────────────────

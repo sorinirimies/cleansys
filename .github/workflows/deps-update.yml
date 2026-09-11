@@ -5,11 +5,14 @@ name: Nightly Dependency Upgrade
 # push) with no human approval step. The quality gate (fmt, clippy, test)
 # must pass before either the dependency commit or the release tag are ever
 # pushed, so a bad upgrade simply fails the workflow instead of shipping.
+# A downgrade guard also runs before anything is committed, so a resolver
+# fluke can never silently ship an older crate version.
 
 on:
   schedule:
-    # Runs at 02:00 UTC every day (03:00 CET)
-    - cron: "0 2 * * *"
+    # Runs at 03:00 UTC every day — offset from the Gitea run (02:00 UTC) so
+    # the two mirrors don't race each other for the same tag.
+    - cron: "0 3 * * *"
   workflow_dispatch:
 
 env:
@@ -64,7 +67,13 @@ jobs:
       - name: Install cargo-edit
         run: cargo install cargo-edit --locked
 
-      # ── Pre-warm cargo registry (refresh index + fetch sources) ───────────
+      # ── Pre-warm cargo registry (refresh index + fetch sources) ────────────
+      # `cargo upgrade`'s recursive-dep resolver runs in offline mode and only
+      # considers package sources that are physically present in the local
+      # cache. Running `cargo update` first refreshes the registry index and
+      # rewrites Cargo.lock to non-yanked versions; `cargo fetch` then
+      # downloads those sources so the offline phase has at least one valid
+      # candidate for every transitive dependency.
       - name: Pre-warm cargo registry (refresh index + fetch sources)
         run: cargo update && cargo fetch
 
@@ -97,7 +106,7 @@ jobs:
         run: rm -f Cargo.lock.before
 
       # ── Check for changes ────────────────────────────────────────────────────
-      # `cargo upgrade` (cargo-edit) reserializes the whole Cargo.toml via
+      # ── `cargo upgrade` (cargo-edit) reserializes the whole Cargo.toml via
       # toml_edit — it can reorder/reformat keys and whitespace even when no
       # dependency version actually changed. That alone must NOT count as a
       # real update (it previously caused empty releases to be tagged in a
@@ -126,15 +135,15 @@ jobs:
         if: steps.check.outputs.has_changes == 'true'
         run: cargo test --workspace --all-features --all-targets
 
-      # ── Commit and push directly to main ───────────────────────────────────────
+      # ── Commit and push directly to main ────────────────────────────────────
       # The quality gate already passed — safe to push directly.
       - name: Commit and push dependency updates
         if: steps.check.outputs.has_changes == 'true'
         run: |
           DATE=$(date -u '+%Y-%m-%d')
 
-          git config user.name  "gitea-actions[bot]"
-          git config user.email "gitea-actions[bot]@noreply.gitea"
+          git config user.name  "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git add Cargo.toml Cargo.lock
           git commit -m "chore(deps): nightly dependency upgrade $DATE"
@@ -146,8 +155,7 @@ jobs:
       # Cuts a new patch version (X.Y.Z -> X.Y.Z+1) for the dependency bump
       # above and pushes the tag, which triggers the full Release workflow
       # (build, package, crates.io publish, AUR update) — no human approval
-      # in the loop, matching the "nightly libs auto update that merges
-      # automatically and creates a new patched version" requirement.
+      # in the loop.
       - name: Install git-cliff
         if: steps.check.outputs.has_changes == 'true'
         run: cargo install git-cliff --locked
@@ -157,31 +165,20 @@ jobs:
         run: nu scripts/ci/auto_patch_release.nu
 
       # ── Explicitly dispatch the Release workflow ────────────────────────────
-      # A tag pushed with the default bot token does NOT auto-trigger other
-      # tag-push-triggered workflows (anti-recursion safeguard, both GitHub
-      # and Gitea) — so we dispatch release.yml directly via the Actions API,
-      # which the same default token IS allowed to do.
+      # A tag pushed with the default GITHUB_TOKEN does NOT auto-trigger other
+      # tag-push-triggered workflows (anti-recursion safeguard) — so dispatch
+      # release.yml directly via the Actions API instead, which the same
+      # default token IS allowed to do.
       - name: Get newly-released version
         if: steps.check.outputs.has_changes == 'true'
         id: new_version
         run: echo "tag=v$(grep -m1 '^version' Cargo.toml | sed -E 's/version[[:space:]]*=[[:space:]]*"(.*)"/\1/')" >> "$GITHUB_OUTPUT"
 
-      - name: Dispatch Release workflow on Gitea
+      - name: Dispatch Release workflow
         if: steps.check.outputs.has_changes == 'true'
-        run: |
-          TAG="${{ steps.new_version.outputs.tag }}"
-          WORKFLOW_ID="release.yml"
-          API="${{ github.server_url }}/api/v1"
-          REPO="${{ github.repository }}"
-          TOKEN="${{ secrets.GITHUB_TOKEN }}"
-
-          curl -sf -X POST \
-            "${API}/repos/${REPO}/actions/workflows/${WORKFLOW_ID}/dispatches" \
-            -H "Authorization: token ${TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "{\"ref\":\"main\",\"inputs\":{\"tag\":\"${TAG}\"}}"
-
-          echo "✅ Dispatched release.yml for ${TAG}"
+        run: gh workflow run release.yml --field tag="${{ steps.new_version.outputs.tag }}"
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Nothing to update
         if: steps.check.outputs.has_changes == 'false'

@@ -311,14 +311,18 @@ upgrade-deps-check: _check-nu
 # CI job runs automatically. Requires cargo-edit + git-cliff installed and a
 # clean working tree; pushes a commit + tag to origin on success.
 auto-patch-release: _check-nu _check-git-cliff
+    cp Cargo.lock Cargo.lock.before
     cargo install cargo-edit --locked
     cargo update && cargo fetch
     cargo upgrade --incompatible allow
     cargo update
+    just check-no-downgrade
     @if git diff --quiet Cargo.toml Cargo.lock; then \
         echo "ℹ️  No dependency changes — nothing to release."; \
+        rm -f Cargo.lock.before; \
     else \
         just check-all && \
+        rm -f Cargo.lock.before && \
         git add Cargo.toml Cargo.lock && \
         git commit -m "chore(deps): dependency upgrade $(date -u '+%Y-%m-%d')" && \
         git push origin main && \
@@ -327,6 +331,10 @@ auto-patch-release: _check-nu _check-git-cliff
 
 outdated:
     cargo outdated
+
+# Guard: fail if any dependency version decreased vs a saved Cargo.lock.before snapshot
+check-no-downgrade before="Cargo.lock.before" after="Cargo.lock": _check-nu
+    nu scripts/ci/check_no_downgrade.nu --before {{ before }} --after {{ after }}
 
 # Show the current workspace version
 version: _check-nu
