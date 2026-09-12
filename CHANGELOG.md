@@ -5,15 +5,14 @@ All notable changes to this project will be documented in this file.
 ## 0.6.2 - 2026-09-12
 ### 🐛 Bug Fixes
 - fix(ci): install aarch64 cross-libc + alien/fakeroot for Gitea Linux release job
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.1...v0.6.2
-## 0.6.1 - 2026-09-12
 ### 📦 Other Changes
 - Rename TUI crate package to cleansys across tooling
 ### 🔄 Updated
 - Update lockfile dependency patch versions
 ### 🔧 Chores
 - chore: bump version to 0.6.1
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.0...v0.6.1
+- chore: bump version to 0.6.2
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.0...v0.6.2
 ## 0.6.0 - 2026-09-11
 ### ➕ Added
 - Add Starscream remote tasks and bulk pull/force push
@@ -168,6 +167,11 @@ All notable changes to this project will be documented in this file.
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.6...v0.0.7
 ## 0.0.6 - 2025-10-02
 ### 📦 Other Changes
+- Initial commit
+- Implements release workflow with git-cliff
+- Allows publishing crates with uncommitted changes
+- Updates crate category to comply with crates.io
+- Improves progress screen behavior and controls
 - keep cargolock
 ### 🔄 Updated
 - update readme
@@ -175,20 +179,3 @@ All notable changes to this project will be documented in this file.
 - chore: bump version to 0.0.5
 - chore: bump version to 0.0.5
 - chore: bump version to 0.0.6
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.4...v0.0.6
-## 0.0.4 - 2025-06-05
-### 📦 Other Changes
-- Improves progress screen behavior and controls
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.3...v0.0.4
-## 0.0.3 - 2025-06-05
-### 📦 Other Changes
-- Updates crate category to comply with crates.io
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.2...v0.0.3
-## 0.0.2 - 2025-06-05
-### 📦 Other Changes
-- Allows publishing crates with uncommitted changes
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.1...v0.0.2
-## 0.0.1 - 2025-06-05
-### 📦 Other Changes
-- Initial commit
-- Implements release workflow with git-cliff
