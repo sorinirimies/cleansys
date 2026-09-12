@@ -99,7 +99,7 @@ jobs:
             pkg-config libxkbcommon-dev libx11-dev libxrandr-dev \
             libxinerama-dev libxcursor-dev libxi-dev libwayland-dev \
             libgl1-mesa-dev libfontconfig1-dev libssl-dev \
-            gcc-aarch64-linux-gnu dpkg-dev rpm
+            gcc-aarch64-linux-gnu libc6-dev-arm64-cross dpkg-dev rpm alien fakeroot
 
       - name: Install Rust stable + target
         run: |
