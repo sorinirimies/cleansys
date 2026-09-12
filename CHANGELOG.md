@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.6.1 - 2026-09-12
+### 📦 Other Changes
+- Rename TUI crate package to cleansys across tooling
+### 🔄 Updated
+- Update lockfile dependency patch versions
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.0...v0.6.1
 ## 0.6.0 - 2026-09-11
 ### ➕ Added
 - Add Starscream remote tasks and bulk pull/force push
@@ -11,6 +17,8 @@ All notable changes to this project will be documented in this file.
 ### 📦 Other Changes
 - Bump Rust dependencies and refresh lockfile
 - Remove CodeGraph gitignore placeholder file
+### 🔧 Chores
+- chore: bump version to 0.6.0
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.5.1...v0.6.0
 ## 0.5.1 - 2026-08-22
 ### ♻️ Refactor
