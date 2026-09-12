@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.5.2 - 2026-09-12
+### ➕ Added
+- Add Starscream remote tasks and bulk pull/force push
+- Add downgrade guard to dependency upgrade workflows
+### 📚 Documentation
+- docs: update README and CHANGELOG for v0.5.1
+### 📦 Other Changes
+- Bump Rust dependencies and refresh lockfile
+- Remove CodeGraph gitignore placeholder file
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-12
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.5.1...v0.5.2
 ## 0.5.1 - 2026-08-22
 ### ♻️ Refactor
 - refactor(tui): use tui-piechart directly, drop the redundant local wrapper
