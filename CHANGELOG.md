@@ -2,11 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.6.2 - 2026-09-12
+### 🐛 Bug Fixes
+- fix(ci): install aarch64 cross-libc + alien/fakeroot for Gitea Linux release job
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.1...v0.6.2
 ## 0.6.1 - 2026-09-12
 ### 📦 Other Changes
 - Rename TUI crate package to cleansys across tooling
 ### 🔄 Updated
 - Update lockfile dependency patch versions
+### 🔧 Chores
+- chore: bump version to 0.6.1
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.0...v0.6.1
 ## 0.6.0 - 2026-09-11
 ### ➕ Added
