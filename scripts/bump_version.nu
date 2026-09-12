@@ -128,7 +128,7 @@ def main [
     # 8. Update Cargo.lock to reflect new workspace version
     print ""
     print $"(ansi cyan)── cargo update ────────────────────────────────────────────(ansi reset)"
-    run-external "cargo" "update" "-p" "cleansys-core" "-p" "cleansys-tui" "-p" "cleansys-gui"
+    run-external "cargo" "update" "-p" "cleansys-core" "-p" "cleansys" "-p" "cleansys-gui"
     print $"(ansi green)✓(ansi reset) Cargo.lock updated."
 
     # 9. Changelog (git-cliff)

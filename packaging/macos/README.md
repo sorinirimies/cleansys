@@ -11,8 +11,8 @@ The `create_dmg.sh` script creates a macOS disk image (`.dmg`) containing:
 1. Install create-dmg: `brew install create-dmg`
 2. Build for both architectures:
    ```bash
-   cargo build --release -p cleansys-gui -p cleansys-tui --target aarch64-apple-darwin
-   cargo build --release -p cleansys-gui -p cleansys-tui --target x86_64-apple-darwin
+   cargo build --release -p cleansys-gui -p cleansys --target aarch64-apple-darwin
+   cargo build --release -p cleansys-gui -p cleansys --target x86_64-apple-darwin
    ```
 3. Create universal binaries:
    ```bash

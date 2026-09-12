@@ -121,7 +121,7 @@ jobs:
           key: ${{ matrix.target }}
 
       - name: Build TUI
-        run: cargo build --release -p cleansys-tui --target ${{ matrix.target }}
+        run: cargo build --release -p cleansys --target ${{ matrix.target }}
 
       - name: Build GUI
         run: cargo build --release -p cleansys-gui --target ${{ matrix.target }}
@@ -194,7 +194,7 @@ jobs:
           key: x86_64-pc-windows-gnu
 
       - name: Build TUI for Windows
-        run: cargo build --release -p cleansys-tui --target x86_64-pc-windows-gnu
+        run: cargo build --release -p cleansys --target x86_64-pc-windows-gnu
 
       - name: Build GUI for Windows
         run: cargo build --release -p cleansys-gui --target x86_64-pc-windows-gnu
@@ -342,14 +342,14 @@ jobs:
               cargo publish -p cleansys-gui --allow-dirty && sleep 20
             }
 
-      - name: Publish cleansys-tui
+      - name: Publish cleansys
         if: env.HAS_TOKEN == 'true'
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
           V="${{ needs.validate.outputs.version }}"
-          cargo info cleansys-tui@$V 2>/dev/null | grep -q "^cleansys-tui" \
+          cargo info cleansys@$V 2>/dev/null | grep -q "^cleansys" \
             && echo "⏭️  Already published." || {
               cp README.md crates/cleansys-tui/README.md
-              cargo publish -p cleansys-tui --allow-dirty
+              cargo publish -p cleansys --allow-dirty
             }

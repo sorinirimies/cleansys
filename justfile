@@ -51,7 +51,7 @@ build-core:
 
 # Build only the TUI/CLI crate (dev)
 build-tui:
-    cargo build -p cleansys-tui
+    cargo build -p cleansys
 
 # Build only the GUI crate (dev)
 build-gui:
@@ -59,14 +59,14 @@ build-gui:
 
 # Build release binaries for TUI and GUI
 build-release:
-    cargo build --release -p cleansys-tui
+    cargo build --release -p cleansys
     cargo build --release -p cleansys-gui
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 
 # Launch the Ratatui terminal UI (default `cleansys` binary)
 run-tui:
-    cargo run -p cleansys-tui
+    cargo run -p cleansys
 
 # Launch the Iced desktop GUI
 run-gui:
@@ -87,7 +87,7 @@ test-core:
 
 # Test only the TUI crate
 test-tui:
-    cargo test -p cleansys-tui --all-features
+    cargo test -p cleansys --all-features
 
 # Test only the GUI crate
 test-gui:
@@ -169,7 +169,7 @@ package-appimage version:
 # Install: sudo pacman -S mingw-w64-gcc   OR   sudo apt install gcc-mingw-w64-x86-64
 package-windows version:
     rustup target add x86_64-pc-windows-gnu
-    cargo build --release -p cleansys-tui -p cleansys-gui --target x86_64-pc-windows-gnu
+    cargo build --release -p cleansys -p cleansys-gui --target x86_64-pc-windows-gnu
     mkdir -p dist
     cp target/x86_64-pc-windows-gnu/release/cleansys.exe     dist/cleansys-tui-x86_64-windows.exe
     cp target/x86_64-pc-windows-gnu/release/cleansys-gui.exe dist/cleansys-gui-x86_64-windows.exe
@@ -187,7 +187,7 @@ update-aur version:
 
 # Generate and open docs for the TUI crate
 doc-tui:
-    cargo doc --no-deps -p cleansys-tui --open
+    cargo doc --no-deps -p cleansys --open
 
 # Generate and open docs for the GUI crate
 doc-gui:
@@ -244,14 +244,14 @@ check-publish: _check-nu
 publish-dry: check-all
     @echo "Dry-run: cleansys-core"
     cargo publish --dry-run -p cleansys-core
-    @echo "Dry-run: cleansys-tui"
-    cargo publish --dry-run -p cleansys-tui
+    @echo "Dry-run: cleansys (TUI)"
+    cargo publish --dry-run -p cleansys
     @echo "Dry-run: cleansys-gui"
     cargo publish --dry-run -p cleansys-gui
 
 # Publish all three in dependency order: core → tui → gui.
 publish: check-all publish-core publish-tui publish-gui
-    @echo "✅ cleansys-core, cleansys-tui, and cleansys-gui published to crates.io!"
+    @echo "✅ cleansys-core, cleansys, and cleansys-gui published to crates.io!"
 
 publish-core:
     @echo "📦 Publishing cleansys-core…"
@@ -260,8 +260,8 @@ publish-core:
     sleep 30
 
 publish-tui:
-    @echo "📦 Publishing cleansys-tui…"
-    cargo publish -p cleansys-tui
+    @echo "📦 Publishing cleansys (TUI)…"
+    cargo publish -p cleansys
 
 publish-gui:
     @echo "📦 Publishing cleansys-gui…"
@@ -274,7 +274,7 @@ release-preview: _check-git-cliff
     @echo "Unreleased commits:"
     @git-cliff --unreleased
     @echo ""
-    @echo "Published crates:  cleansys-tui  •  cleansys-gui"
+    @echo "Published crates:  cleansys (TUI)  •  cleansys-gui"
     @echo "Internal crate:    cleansys-core (publish = false-able)"
 
 # ── Housekeeping ──────────────────────────────────────────────────────────────

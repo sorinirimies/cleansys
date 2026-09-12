@@ -1,5 +1,5 @@
 [package]
-name = "cleansys-tui"
+name = "cleansys"
 version.workspace = true
 edition.workspace = true
 authors.workspace = true

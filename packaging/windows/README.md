@@ -10,7 +10,7 @@ The `installer.nsi` script builds a standard Windows installer (`.exe`) using
 1. Install NSIS: https://nsis.sourceforge.io/Download
 2. Build the binaries:
    ```
-   cargo build --release -p cleansys-gui -p cleansys-tui --target x86_64-pc-windows-msvc
+   cargo build --release -p cleansys-gui -p cleansys --target x86_64-pc-windows-msvc
    ```
 3. Replace `@VERSION@` and `@REPO_ROOT_ABS@` in the `.nsi` file (see
    `scripts/ci/package_windows.sh` for how CI does this)

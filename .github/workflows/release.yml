@@ -147,7 +147,7 @@ jobs:
           echo 'linker = "aarch64-linux-gnu-gcc"'   >> ~/.cargo/config.toml
 
       - name: Build TUI/CLI
-        run: cargo build --release -p cleansys-tui --target ${{ matrix.target }}
+        run: cargo build --release -p cleansys --target ${{ matrix.target }}
 
       - name: Build GUI
         run: cargo build --release -p cleansys-gui --target ${{ matrix.target }}
@@ -328,16 +328,16 @@ jobs:
               cargo publish -p cleansys-core --allow-dirty && sleep 30
             }
 
-      - name: Publish cleansys-tui
+      - name: Publish cleansys
         if: env.HAS_TOKEN == 'true'
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: |
           V="${{ needs.validate.outputs.version }}"
-          cargo info cleansys-tui@$V 2>/dev/null | grep -q "^cleansys-tui" \
+          cargo info cleansys@$V 2>/dev/null | grep -q "^cleansys" \
             && echo "⏭️  Already published." || {
               cp README.md crates/cleansys-tui/README.md
-              cargo publish -p cleansys-tui --allow-dirty && sleep 20
+              cargo publish -p cleansys --allow-dirty && sleep 20
             }
 
       - name: Publish cleansys-gui

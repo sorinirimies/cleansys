@@ -1,4 +1,7 @@
-//! # cleansys-tui
+//! # cleansys
+//!
+//! Ratatui-based terminal user interface and CLI for CleanSys. Published to
+//! crates.io as `cleansys` (crate directory: `cleansys-tui`).
 //!
 //! Ratatui-based terminal user interface and CLI for CleanSys.
 //!

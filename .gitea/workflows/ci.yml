@@ -161,7 +161,7 @@ jobs:
         run: cargo build -p cleansys-gui
 
       - name: Build TUI (dev)
-        run: cargo build -p cleansys-tui
+        run: cargo build -p cleansys
 
   # ── 5. Docs ──────────────────────────────────────────────────────────────────
   doc:
@@ -200,8 +200,8 @@ jobs:
         env:
           RUSTDOCFLAGS: --cfg docsrs -D warnings
 
-      - name: cargo doc (cleansys-tui)
-        run: cargo doc --no-deps -p cleansys-tui --all-features
+      - name: cargo doc (cleansys)
+        run: cargo doc --no-deps -p cleansys --all-features
         env:
           RUSTDOCFLAGS: --cfg docsrs -D warnings
 

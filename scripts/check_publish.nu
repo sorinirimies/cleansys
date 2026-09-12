@@ -17,7 +17,7 @@ def main [] {
 
     # ── 1. Documentation checks ───────────────────────────────────────────────
     print "── Step 1: Documentation checks ──"
-    let doc_crates = ["cleansys-tui" "cleansys-gui"]
+    let doc_crates = ["cleansys" "cleansys-gui"]
 
     for crate in $doc_crates {
         print $"  📖 Checking docs for ($crate)..."
@@ -45,7 +45,7 @@ def main [] {
 
     # ── 3. Cargo check for TUI and GUI crates ────────────────────────────────
     print "── Step 3: Cargo check (TUI & GUI) ──"
-    let check_crates = ["cleansys-tui" "cleansys-gui"]
+    let check_crates = ["cleansys" "cleansys-gui"]
 
     for crate in $check_crates {
         print $"  🔍 Running cargo check for ($crate)..."
@@ -89,7 +89,7 @@ def main [] {
     print ""
     print "  Publish order:"
     print "    1. cargo publish -p cleansys-core"
-    print "    2. cargo publish -p cleansys-tui"
+    print "    2. cargo publish -p cleansys"
     print "    3. cargo publish -p cleansys-gui"
     print ""
     print "  Wait ~30-60 seconds between publishes for crates.io"

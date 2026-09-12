@@ -15,7 +15,7 @@ CleanSys is a Cargo workspace with three crates:
 | Crate | Binary | Description |
 |-------|--------|-------------|
 | [`cleansys-core`](crates/cleansys-core) | *(library)* | Framework-free domain logic: cleaners, permission checks, formatting, sudo auth — shared by both front-ends |
-| [`cleansys-tui`](crates/cleansys-tui) | `cleansys` | Ratatui terminal UI + CLI (the original CleanSys experience) |
+| [`cleansys-tui`](crates/cleansys-tui) | `cleansys` | Ratatui terminal UI + CLI (the original CleanSys experience) — published to crates.io as `cleansys` |
 | [`cleansys-gui`](crates/cleansys-gui) | `cleansys-gui` | Iced desktop GUI |
 
 ## 🎬 Demo
@@ -69,7 +69,7 @@ Every cleaner reports **real measured sizes** — no estimates or guesses — an
 
 ```bash
 # Terminal UI + CLI
-cargo install cleansys-tui
+cargo install cleansys
 
 # Desktop GUI
 cargo install cleansys-gui

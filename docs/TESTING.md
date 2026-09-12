@@ -53,7 +53,7 @@ just test-all-nu
 ### Single Crate
 ```bash
 cargo test -p cleansys-core
-cargo test -p cleansys-tui
+cargo test -p cleansys
 cargo test -p cleansys-gui
 ```
 

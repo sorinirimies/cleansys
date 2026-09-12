@@ -24,7 +24,7 @@ build() {
     cd "$pkgbase-$pkgver"
     export RUSTUP_TOOLCHAIN=stable
     export CARGO_TARGET_DIR=target
-    cargo build --frozen --release --package cleansys-tui
+    cargo build --frozen --release --package cleansys
     cargo build --frozen --release --package cleansys-gui
 }
 

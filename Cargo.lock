@@ -616,6 +616,27 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c8d4a3bb8b1e0c1050499d1815f5ab16d04f0959b233085fb31653fbfc9d98f9"
 
 [[package]]
+name = "cleansys"
+version = "0.6.0"
+dependencies = [
+ "anyhow",
+ "assert_cmd",
+ "clap",
+ "cleansys-core",
+ "colored",
+ "crossterm",
+ "env_logger",
+ "log",
+ "notify-rust",
+ "predicates",
+ "ratatui",
+ "tempfile",
+ "tui-checkbox",
+ "tui-piechart",
+ "tui-spinner",
+]
+
+[[package]]
 name = "cleansys-core"
 version = "0.6.0"
 dependencies = [
@@ -644,27 +665,6 @@ dependencies = [
  "notify-rust",
  "tempfile",
  "windows 0.62.2",
-]
-
-[[package]]
-name = "cleansys-tui"
-version = "0.6.0"
-dependencies = [
- "anyhow",
- "assert_cmd",
- "clap",
- "cleansys-core",
- "colored",
- "crossterm",
- "env_logger",
- "log",
- "notify-rust",
- "predicates",
- "ratatui",
- "tempfile",
- "tui-checkbox",
- "tui-piechart",
- "tui-spinner",
 ]
 
 [[package]]

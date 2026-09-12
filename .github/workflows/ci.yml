@@ -129,7 +129,7 @@ jobs:
       - name: Build core (dev)
         run: cargo build -p cleansys-core
       - name: Build TUI (dev)
-        run: cargo build -p cleansys-tui
+        run: cargo build -p cleansys
       - name: Build GUI (dev)
         run: cargo build -p cleansys-gui
 
