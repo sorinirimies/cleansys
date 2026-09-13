@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.6.3 - 2026-09-13
+### 📚 Documentation
+- docs: update README and CHANGELOG for v0.6.2
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-13
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.2...v0.6.3
 ## 0.6.2 - 2026-09-12
 ### 🐛 Bug Fixes
 - fix(ci): install aarch64 cross-libc + alien/fakeroot for Gitea Linux release job
