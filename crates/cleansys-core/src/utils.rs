@@ -92,31 +92,63 @@ pub fn elevate_if_needed() -> Result<bool> {
     Ok(false)
 }
 
-/// Execute a command with sudo if not already root
-/// This function handles terminal raw mode properly for TUI applications
-/// It assumes sudo credentials are already cached (via password dialog or sudo -v)
+/// Execute a command with sudo if not already root.
+///
+/// If a password was previously cached via [`crate::auth::cache_sudo_password`]
+/// (set by [`crate::auth::authenticate_sudo`] on success), it is piped
+/// directly to `sudo -S` for this specific command — the same reliable
+/// mechanism used to validate it in the first place. This avoids depending on
+/// `sudo`'s own credential cache, which is normally keyed per-TTY/session and
+/// is not guaranteed to be reusable across separate child processes spawned
+/// by a GUI front-end that has no controlling TTY at all.
+///
+/// Falls back to non-interactive `sudo -n` (relying on `sudo`'s own ticket
+/// cache) when no password has been cached — e.g. the TUI/CLI, which
+/// pre-authenticates via a real interactive `sudo -v` prompt on an actual
+/// terminal and never captures the raw password.
 #[cfg(unix)]
 pub fn execute_with_sudo(command: &str, args: &[&str]) -> Result<std::process::Output> {
+    use std::io::Write;
     use std::process::Stdio;
 
     if check_root() {
         // Already root, execute directly
-        Command::new(command)
+        return Command::new(command)
             .args(args)
             .output()
-            .context(format!("Failed to execute command: {}", command))
-    } else {
-        // Use sudo with non-interactive mode and cached credentials
-        // The -n flag prevents sudo from prompting for a password
-        let mut sudo_args = vec!["-n", command];
-        sudo_args.extend_from_slice(args);
-
-        Command::new("sudo")
-            .args(sudo_args)
-            .stdin(Stdio::null())
-            .output()
-            .context(format!("Failed to execute command with sudo: {}", command))
+            .context(format!("Failed to execute command: {}", command));
     }
+
+    if let Some(password) = crate::auth::cached_sudo_password() {
+        let mut child = Command::new("sudo")
+            .arg("-S")
+            .arg(command)
+            .args(args)
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .context(format!("Failed to execute command with sudo: {}", command))?;
+
+        if let Some(mut stdin) = child.stdin.take() {
+            let _ = writeln!(stdin, "{}", password);
+        }
+
+        return child
+            .wait_with_output()
+            .context(format!("Failed to execute command with sudo: {}", command));
+    }
+
+    // No cached password (TUI/CLI path) — rely on sudo's own ticket cache.
+    // The -n flag prevents sudo from prompting for a password.
+    let mut sudo_args = vec!["-n", command];
+    sudo_args.extend_from_slice(args);
+
+    Command::new("sudo")
+        .args(sudo_args)
+        .stdin(Stdio::null())
+        .output()
+        .context(format!("Failed to execute command with sudo: {}", command))
 }
 
 #[cfg(not(unix))]

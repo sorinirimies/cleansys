@@ -9,8 +9,6 @@ use crate::cleaners::cleaned_item::{CleanedItem, CleanerFn, CleaningResult, RunO
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use crate::cleaners::platform;
 #[cfg(target_os = "linux")]
-use crate::utils::check_root;
-#[cfg(target_os = "linux")]
 use crate::utils::print_warning;
 use crate::utils::{confirm, execute_with_sudo, format_size, get_size, print_error, print_success};
 
@@ -232,11 +230,13 @@ fn clean_package_caches(opts: RunOptions) -> Result<CleaningResult> {
     let mut result = CleaningResult::new();
     info!("Starting package cache cleaning...");
 
-    if !opts.dry_run && !check_root() {
-        return Err(anyhow::anyhow!(
-            "Root privileges required for package cache cleaning"
-        ));
-    }
+    // NOTE: this used to hard-require the whole process to already be
+    // running as root (`check_root()`) before attempting anything, which
+    // defeated the sudo-password-elevation flow entirely (GUI/TUI never run
+    // the process itself as root — they elevate individual commands via
+    // `execute_with_sudo`, which already handles both the "already root" and
+    // "not root, use sudo" cases below). Removed; each package manager
+    // invocation is elevated on its own via `execute_with_sudo`.
 
     if Path::new("/usr/bin/apt-get").exists() || Path::new("/usr/bin/apt").exists() {
         info!("Found APT package manager, cleaning cache...");

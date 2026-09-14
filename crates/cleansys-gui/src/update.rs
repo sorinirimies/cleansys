@@ -147,6 +147,7 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             state.password_input.clear();
             state.password_error = None;
             state.pending_root_ops.clear();
+            cleansys_core::clear_cached_sudo_password();
             Task::none()
         }
 
@@ -243,6 +244,7 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
 
             if !still_running {
                 state.is_running = false;
+                cleansys_core::clear_cached_sudo_password();
                 let summary = format!(
                     "Cleaning complete \u{2014} total freed: {}",
                     format_size(state.total_bytes_cleaned)
