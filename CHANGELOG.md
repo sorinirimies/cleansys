@@ -2,30 +2,27 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.6.2 - 2026-09-12
-### 🐛 Bug Fixes
-- fix(ci): install aarch64 cross-libc + alien/fakeroot for Gitea Linux release job
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.1...v0.6.2
-## 0.6.1 - 2026-09-12
-### 📦 Other Changes
-- Rename TUI crate package to cleansys across tooling
-### 🔄 Updated
-- Update lockfile dependency patch versions
-### 🔧 Chores
-- chore: bump version to 0.6.1
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.0...v0.6.1
-## 0.6.0 - 2026-09-11
+## 0.6.3 - 2026-09-14
 ### ➕ Added
 - Add Starscream remote tasks and bulk pull/force push
 - Add downgrade guard to dependency upgrade workflows
+### 🐛 Bug Fixes
+- fix(ci): install aarch64 cross-libc + alien/fakeroot for Gitea Linux release job
 ### 📚 Documentation
 - docs: update README and CHANGELOG for v0.5.1
 ### 📦 Other Changes
 - Bump Rust dependencies and refresh lockfile
 - Remove CodeGraph gitignore placeholder file
+- Rename TUI crate package to cleansys across tooling
+### 🔄 Updated
+- Update lockfile dependency patch versions
+- Update jiff crates to latest patch versions
 ### 🔧 Chores
 - chore: bump version to 0.6.0
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.5.1...v0.6.0
+- chore: bump version to 0.6.1
+- chore: bump version to 0.6.2
+- chore(deps): nightly dependency upgrade 2026-09-14
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.5.1...v0.6.3
 ## 0.5.1 - 2026-08-22
 ### ♻️ Refactor
 - refactor(tui): use tui-piechart directly, drop the redundant local wrapper
