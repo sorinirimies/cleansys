@@ -29,6 +29,22 @@ pub struct CleanerInfo {
     pub requires_root: bool,
 }
 
+/// Shorthand for a [`CleanerInfo`] entry. Collapses the repeated
+/// `CleanerInfo { name, description, function, requires_root }` struct
+/// literal (identical shape across all ~14 entries spread over the
+/// Linux/macOS/Windows cleaner lists below) down to a single line per
+/// cleaner.
+macro_rules! cleaner {
+    ($name:literal, $description:literal, $function:expr, requires_root: $root:literal) => {
+        CleanerInfo {
+            name: $name,
+            description: $description,
+            function: $function,
+            requires_root: $root,
+        }
+    };
+}
+
 /// Lists all available system cleaners with their descriptions.
 pub fn list_cleaners() -> Vec<String> {
     get_cleaners()
@@ -93,6 +109,31 @@ pub fn run_all(skip_confirmation: bool) -> Result<()> {
 
     print_success(&format!("Total space freed: {}", format_size(total_saved)));
     Ok(())
+}
+
+/// Run a privileged command via [`execute_with_sudo`] and treat a non-zero
+/// exit as a genuine failure (propagated as an `Err`) rather than silently
+/// logging a `warn!()` and reporting success anyway.
+///
+/// This is the shared implementation behind every `measure_around`/
+/// `measure_and_remove` closure below that shells out to a package manager
+/// or system utility (`apt-get clean`, `pacman -Sc`, `dnf clean all`,
+/// `journalctl --vacuum-time`, `updatedb`, ...). Before this helper existed,
+/// each call site duplicated the same "warn on failure, then report success
+/// anyway" boilerplate, which meant a *real* failure (permission denied,
+/// binary missing a required flag, disk full, ...) was indistinguishable
+/// from "nothing needed cleaning" — both silently produced a 0-byte,
+/// no-error result. Bailing here makes real failures visible as an actual
+/// ❌ error in the TUI/GUI instead.
+fn run_sudo_step(label: &str, command: &str, args: &[&str]) -> Result<bool> {
+    let output = execute_with_sudo(command, args)?;
+    if !output.status.success() {
+        anyhow::bail!(
+            "failed to clean {label}: {}",
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+    Ok(true)
 }
 
 /// Measure the real size of `path` before and after calling `action`, and
@@ -186,42 +227,42 @@ fn measure_and_remove(
 #[cfg(target_os = "linux")]
 fn linux_cleaners() -> Vec<CleanerInfo> {
     vec![
-        CleanerInfo {
-            name: "Package Manager Caches",
-            description: "Clean package manager caches (apt, pacman, dnf)",
-            function: clean_package_caches,
-            requires_root: true,
-        },
-        CleanerInfo {
-            name: "System Logs",
-            description: "Clean rotated system logs and vacuum the systemd journal",
-            function: clean_system_logs,
-            requires_root: true,
-        },
-        CleanerInfo {
-            name: "System Caches",
-            description: "Clean system-wide cache directories (fontconfig, man, ldconfig)",
-            function: clean_system_caches,
-            requires_root: true,
-        },
-        CleanerInfo {
-            name: "Temporary Files",
-            description: "Clean old temporary files in /tmp and /var/tmp",
-            function: clean_temp_files,
-            requires_root: true,
-        },
-        CleanerInfo {
-            name: "Old Kernels",
-            description: "Remove old unused kernels (requires purge-old-kernels)",
-            function: clean_old_kernels,
-            requires_root: true,
-        },
-        CleanerInfo {
-            name: "Crash Reports",
-            description: "Remove system crash reports and core dumps",
-            function: clean_crash_reports,
-            requires_root: true,
-        },
+        cleaner!(
+            "Package Manager Caches",
+            "Clean package manager caches (apt, pacman, dnf)",
+            clean_package_caches,
+            requires_root: true
+        ),
+        cleaner!(
+            "System Logs",
+            "Clean rotated system logs and vacuum the systemd journal",
+            clean_system_logs,
+            requires_root: true
+        ),
+        cleaner!(
+            "System Caches",
+            "Clean system-wide cache directories (fontconfig, man, ldconfig)",
+            clean_system_caches,
+            requires_root: true
+        ),
+        cleaner!(
+            "Temporary Files",
+            "Clean old temporary files in /tmp and /var/tmp",
+            clean_temp_files,
+            requires_root: true
+        ),
+        cleaner!(
+            "Old Kernels",
+            "Remove old unused kernels (requires purge-old-kernels)",
+            clean_old_kernels,
+            requires_root: true
+        ),
+        cleaner!(
+            "Crash Reports",
+            "Remove system crash reports and core dumps",
+            clean_crash_reports,
+            requires_root: true
+        ),
     ]
 }
 
@@ -245,16 +286,7 @@ fn clean_package_caches(opts: RunOptions) -> Result<CleaningResult> {
             Path::new("/var/cache/apt/archives"),
             "APT cache",
             opts,
-            || {
-                let output = execute_with_sudo("apt-get", &["clean"])?;
-                if !output.status.success() {
-                    warn!(
-                        "Failed to clean APT cache: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    );
-                }
-                Ok(output.status.success())
-            },
+            || run_sudo_step("APT cache", "apt-get", &["clean"]),
         )?;
     }
 
@@ -265,16 +297,7 @@ fn clean_package_caches(opts: RunOptions) -> Result<CleaningResult> {
             Path::new("/var/cache/pacman/pkg"),
             "Pacman cache",
             opts,
-            || {
-                let output = execute_with_sudo("pacman", &["-Sc", "--noconfirm"])?;
-                if !output.status.success() {
-                    warn!(
-                        "Failed to clean Pacman cache: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    );
-                }
-                Ok(output.status.success())
-            },
+            || run_sudo_step("Pacman cache", "pacman", &["-Sc", "--noconfirm"]),
         )?;
     }
 
@@ -285,16 +308,7 @@ fn clean_package_caches(opts: RunOptions) -> Result<CleaningResult> {
             Path::new("/var/cache/dnf"),
             "DNF cache",
             opts,
-            || {
-                let output = execute_with_sudo("dnf", &["clean", "all"])?;
-                if !output.status.success() {
-                    warn!(
-                        "Failed to clean DNF cache: {}",
-                        String::from_utf8_lossy(&output.stderr)
-                    );
-                }
-                Ok(output.status.success())
-            },
+            || run_sudo_step("DNF cache", "dnf", &["clean", "all"]),
         )?;
     }
 
@@ -396,13 +410,7 @@ fn clean_system_logs(opts: RunOptions) -> Result<CleaningResult> {
                 Path::new("/var/log/journal"),
                 "systemd journal",
                 opts,
-                || {
-                    let output = execute_with_sudo("journalctl", &["--vacuum-time=7d"])?;
-                    if !output.status.success() {
-                        print_error("Failed to clean system journal logs");
-                    }
-                    Ok(output.status.success())
-                },
+                || run_sudo_step("systemd journal", "journalctl", &["--vacuum-time=7d"]),
             )?;
         }
     }
@@ -562,11 +570,7 @@ fn clean_old_kernels(opts: RunOptions) -> Result<CleaningResult> {
         )?
     {
         measure_around(&mut result, Path::new("/boot"), "old kernels", opts, || {
-            let output = execute_with_sudo("purge-old-kernels", &["--keep", "1"])?;
-            if !output.status.success() {
-                print_error("Failed to remove old kernels");
-            }
-            Ok(output.status.success())
+            run_sudo_step("old kernels", "purge-old-kernels", &["--keep", "1"])
         })?;
     }
 
@@ -591,38 +595,37 @@ fn clean_crash_reports(opts: RunOptions) -> Result<CleaningResult> {
 #[cfg(target_os = "macos")]
 fn macos_cleaners() -> Vec<CleanerInfo> {
     vec![
-        CleanerInfo {
-            name: "Homebrew Cache",
-            description: "Clean the Homebrew download cache (brew cleanup)",
-            function: clean_homebrew_cache,
-            // Homebrew must NOT be run as root/sudo.
-            requires_root: false,
-        },
-        CleanerInfo {
-            name: "Xcode Derived Data",
-            description:
-                "Clean Xcode DerivedData build caches (~/Library/Developer/Xcode/DerivedData)",
-            function: clean_xcode_derived_data,
-            requires_root: false,
-        },
-        CleanerInfo {
-            name: "iOS Simulator Caches",
-            description: "Clean unavailable iOS/watchOS/tvOS Simulator devices and their caches",
-            function: clean_ios_simulator_caches,
-            requires_root: false,
-        },
-        CleanerInfo {
-            name: "System Logs",
-            description: "Remove old rotated system logs",
-            function: clean_system_logs,
-            requires_root: true,
-        },
-        CleanerInfo {
-            name: "Crash Reports",
-            description: "Remove system diagnostic/crash reports",
-            function: clean_crash_reports,
-            requires_root: true,
-        },
+        // Homebrew must NOT be run as root/sudo.
+        cleaner!(
+            "Homebrew Cache",
+            "Clean the Homebrew download cache (brew cleanup)",
+            clean_homebrew_cache,
+            requires_root: false
+        ),
+        cleaner!(
+            "Xcode Derived Data",
+            "Clean Xcode DerivedData build caches (~/Library/Developer/Xcode/DerivedData)",
+            clean_xcode_derived_data,
+            requires_root: false
+        ),
+        cleaner!(
+            "iOS Simulator Caches",
+            "Clean unavailable iOS/watchOS/tvOS Simulator devices and their caches",
+            clean_ios_simulator_caches,
+            requires_root: false
+        ),
+        cleaner!(
+            "System Logs",
+            "Remove old rotated system logs",
+            clean_system_logs,
+            requires_root: true
+        ),
+        cleaner!(
+            "Crash Reports",
+            "Remove system diagnostic/crash reports",
+            clean_crash_reports,
+            requires_root: true
+        ),
     ]
 }
 
@@ -658,12 +661,12 @@ fn clean_homebrew_cache(opts: RunOptions) -> Result<CleaningResult> {
                 measure_around(&mut result, cache_path, "Homebrew cache", opts, || {
                     let output = Command::new("brew").args(["cleanup", "-s"]).output()?;
                     if !output.status.success() {
-                        warn!(
+                        anyhow::bail!(
                             "brew cleanup failed: {}",
-                            String::from_utf8_lossy(&output.stderr)
+                            String::from_utf8_lossy(&output.stderr).trim()
                         );
                     }
-                    Ok(output.status.success())
+                    Ok(true)
                 })?;
             }
         }
@@ -771,12 +774,12 @@ fn clean_ios_simulator_caches(opts: RunOptions) -> Result<CleaningResult> {
                         .args(["simctl", "delete", "unavailable"])
                         .output()?;
                     if !output.status.success() {
-                        warn!(
+                        anyhow::bail!(
                             "xcrun simctl delete unavailable failed: {}",
-                            String::from_utf8_lossy(&output.stderr)
+                            String::from_utf8_lossy(&output.stderr).trim()
                         );
                     }
-                    Ok(output.status.success())
+                    Ok(true)
                 },
             )?;
         }
@@ -818,11 +821,12 @@ fn clean_system_logs(opts: RunOptions) -> Result<CleaningResult> {
                     true,
                 )?
             {
-                let output = execute_with_sudo(
+                let cleaned = run_sudo_step(
+                    "rotated system logs",
                     "find",
                     &["/private/var/log", "-type", "f", "-name", "*.gz", "-delete"],
                 )?;
-                if output.status.success() {
+                if cleaned {
                     print_success(&format!(
                         "Cleaned old rotated logs in /private/var/log ({})",
                         format_size(size_to_clean)
@@ -875,24 +879,24 @@ fn clean_crash_reports(opts: RunOptions) -> Result<CleaningResult> {
 #[cfg(target_os = "windows")]
 fn windows_cleaners() -> Vec<CleanerInfo> {
     vec![
-        CleanerInfo {
-            name: "Windows Update Cache",
-            description: "Clean the Windows Update download cache (requires Administrator)",
-            function: clean_windows_update_cache,
-            requires_root: true,
-        },
-        CleanerInfo {
-            name: "System Temp Files",
-            description: "Clean C:\\Windows\\Temp (requires Administrator)",
-            function: clean_windows_system_temp,
-            requires_root: true,
-        },
-        CleanerInfo {
-            name: "Recycle Bin",
-            description: "Empty the Recycle Bin for all drives (requires Administrator)",
-            function: clean_recycle_bin,
-            requires_root: false,
-        },
+        cleaner!(
+            "Windows Update Cache",
+            "Clean the Windows Update download cache (requires Administrator)",
+            clean_windows_update_cache,
+            requires_root: true
+        ),
+        cleaner!(
+            "System Temp Files",
+            "Clean C:\\Windows\\Temp (requires Administrator)",
+            clean_windows_system_temp,
+            requires_root: true
+        ),
+        cleaner!(
+            "Recycle Bin",
+            "Empty the Recycle Bin for all drives (requires Administrator)",
+            clean_recycle_bin,
+            requires_root: false
+        ),
     ]
 }
 
@@ -1096,6 +1100,35 @@ mod windows_shell {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Regression test for the `run_sudo_step` helper extracted from the
+    /// ~7 duplicated "run a privileged command, warn+swallow on failure"
+    /// blocks: a failing command must now propagate as a real `Err` (so the
+    /// GUI/TUI can show it) instead of being silently reported as success
+    /// with nothing cleaned. `false` always exits non-zero regardless of
+    /// whether this runs as root or via `sudo -n`/`sudo -S`, so this is
+    /// deterministic in CI and on a developer machine alike.
+    #[cfg(unix)]
+    #[test]
+    fn run_sudo_step_propagates_command_failure_as_err() {
+        let result = run_sudo_step("test step", "false", &[]);
+        let err = result.expect_err("a failing command must produce Err, not Ok(false)");
+        assert!(
+            err.to_string().contains("test step"),
+            "error message should include the step's label: {err}"
+        );
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn run_sudo_step_errors_on_missing_binary() {
+        // A nonexistent command must surface as an Err either way: as a
+        // spawn failure if already root (direct exec), or as a non-zero
+        // exit from sudo itself failing to run it otherwise — never a
+        // silent Ok(false).
+        let result = run_sudo_step("test step", "definitely-not-a-real-command-12345", &[]);
+        assert!(result.is_err());
+    }
 
     #[test]
     fn get_cleaners_returns_platform_appropriate_list() {

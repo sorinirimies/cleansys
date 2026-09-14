@@ -297,6 +297,26 @@ crates/
         └── icons.rs          # Bootstrap icon glyph constants
 ```
 
+Adding a new cleaner is a one-line addition to the platform-appropriate
+`get_cleaners()`/`linux_cleaners()`/`macos_cleaners()`/`windows_cleaners()`
+list in `cleaners/user_cleaners.rs` or `cleaners/system_cleaners.rs`, via the
+local `cleaner!` macro rather than a full `CleanerInfo { .. }` struct literal:
+
+```rust
+cleaner!(
+    "My New Cleaner",
+    "Short description shown in the TUI/GUI",
+    clean_my_new_thing,
+    requires_root: false   // omit this argument in user_cleaners.rs
+),
+```
+
+Every privileged (`requires_root: true`) cleaner should perform its actual
+removal via the shared `execute_with_sudo`/`run_sudo_step` helpers in
+`system_cleaners.rs` rather than shelling out directly — `run_sudo_step`
+turns a failed command into a real `Err` (visible in the TUI/GUI as ❌)
+instead of a silently-swallowed "nothing was cleaned".
+
 ## 🖥️ Platform Support
 
 Cleaners are **real and platform-native** on every OS — not just Linux paths

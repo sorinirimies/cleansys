@@ -15,6 +15,21 @@ pub struct CleanerInfo {
     pub function: CleanerFn,
 }
 
+/// Shorthand for a [`CleanerInfo`] entry. Collapses the repeated
+/// `CleanerInfo { name, description, function }` struct literal (identical
+/// shape for every one of the entries in [`get_cleaners`]) down to a single
+/// line per cleaner, so the list reads like a table of contents instead of
+/// ~30 lines of boilerplate.
+macro_rules! cleaner {
+    ($name:literal, $description:literal, $function:expr) => {
+        CleanerInfo {
+            name: $name,
+            description: $description,
+            function: $function,
+        }
+    };
+}
+
 pub fn list_cleaners() -> Vec<String> {
     get_cleaners()
         .iter()
@@ -28,36 +43,32 @@ pub fn list_cleaners() -> Vec<String> {
 /// rather than failing, and "Browser Caches" checks OS-appropriate paths.
 pub fn get_cleaners() -> Vec<CleanerInfo> {
     vec![
-        CleanerInfo {
-            name: "Browser Caches",
-            description: "Clean Firefox, Chrome/Chromium, Edge, and Safari caches",
-            function: clean_browser_caches,
-        },
-        CleanerInfo {
-            name: "Application Caches",
-            description: "Clean general-purpose application caches",
-            function: clean_app_caches,
-        },
-        CleanerInfo {
-            name: "Thumbnail Caches",
-            description: "Clean thumbnail/preview image caches",
-            function: clean_thumbnail_caches,
-        },
-        CleanerInfo {
-            name: "Temporary Files",
-            description: "Clean temporary files owned by the current user",
-            function: clean_temp_files,
-        },
-        CleanerInfo {
-            name: "Package Manager Caches",
-            description: "Clean user package manager caches (pip, npm, cargo)",
-            function: clean_package_caches,
-        },
-        CleanerInfo {
-            name: "Trash",
-            description: "Empty the trash / recycle bin",
-            function: clean_trash,
-        },
+        cleaner!(
+            "Browser Caches",
+            "Clean Firefox, Chrome/Chromium, Edge, and Safari caches",
+            clean_browser_caches
+        ),
+        cleaner!(
+            "Application Caches",
+            "Clean general-purpose application caches",
+            clean_app_caches
+        ),
+        cleaner!(
+            "Thumbnail Caches",
+            "Clean thumbnail/preview image caches",
+            clean_thumbnail_caches
+        ),
+        cleaner!(
+            "Temporary Files",
+            "Clean temporary files owned by the current user",
+            clean_temp_files
+        ),
+        cleaner!(
+            "Package Manager Caches",
+            "Clean user package manager caches (pip, npm, cargo)",
+            clean_package_caches
+        ),
+        cleaner!("Trash", "Empty the trash / recycle bin", clean_trash),
     ]
 }
 
