@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.6.6 - 2026-09-14
+### ♻️ Refactor
+- refactor(core): extract cleaner!/run_sudo_step macros+helper, fix silent error swallowing, docs
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.5...v0.6.6
 ## 0.6.5 - 2026-09-14
 ### 🐛 Bug Fixes
 - fix: deep-analysis pass -- TUI/GUI bugs, dedupe, panic hardening
@@ -10,6 +14,8 @@ All notable changes to this project will be documented in this file.
 - docs: regenerate CHANGELOG.md after merging Gitea auto-releases
 ### 📦 Other Changes
 - merge: reconcile Gitea nightly-deps auto-releases (v0.6.3, v0.6.4) with GUI sudo fix
+### 🔧 Chores
+- chore: bump version to 0.6.5
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.4...v0.6.5
 ## 0.6.4 - 2026-09-14
 ### 🐛 Bug Fixes
