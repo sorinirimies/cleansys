@@ -193,19 +193,23 @@ pub fn print_error(message: &str) {
 /// Ask for user confirmation
 pub fn confirm(prompt: &str, default: bool) -> Result<bool> {
     let yes_no = if default { "[Y/n]" } else { "[y/N]" };
-    print!("{} {} ", prompt, yes_no);
-    io::stdout().flush()?;
+    loop {
+        print!("{} {} ", prompt, yes_no);
+        io::stdout().flush()?;
 
-    let mut response = String::new();
-    io::stdin().read_line(&mut response)?;
+        let mut response = String::new();
+        io::stdin().read_line(&mut response)?;
 
-    match response.trim().to_lowercase().as_str() {
-        "y" | "yes" => Ok(true),
-        "n" | "no" => Ok(false),
-        "" => Ok(default),
-        _ => {
-            print_warning("Invalid response. Please enter 'y' or 'n'.");
-            confirm(prompt, default)
+        match response.trim().to_lowercase().as_str() {
+            "y" | "yes" => return Ok(true),
+            "n" | "no" => return Ok(false),
+            "" => return Ok(default),
+            _ => {
+                print_warning("Invalid response. Please enter 'y' or 'n'.");
+                // Loop and re-prompt instead of recursing — an automated
+                // or malicious pipe feeding endless invalid lines must not
+                // be able to grow the call stack unboundedly.
+            }
         }
     }
 }
@@ -232,9 +236,11 @@ pub fn format_size(bytes: u64) -> String {
 /// Implemented as a pure-Rust recursive walk (no shell-out to `du`), so it
 /// works identically on Linux, macOS, and Windows — the previous `du -sb`
 /// implementation relied on a GNU-only flag and silently reported `0` on
-/// BSD/macOS `du`. Symlinks are not followed (their own size is counted,
-/// not the target's), matching `du`'s default behaviour and avoiding
-/// infinite loops on cyclic symlinks.
+/// BSD/macOS `du`. Symlinks are never followed and are always counted as
+/// `0` bytes (matching `du`'s default, non-`-L` behaviour), avoiding both
+/// infinite loops on cyclic symlinks and double-counting a target that a
+/// regular file/directory entry elsewhere in the same tree may already
+/// account for.
 pub fn get_size(path: &str) -> Result<u64> {
     const MAX_DEPTH: u32 = 512;
     Ok(dir_size(std::path::Path::new(path), 0, MAX_DEPTH))

@@ -461,3 +461,89 @@ fn deselect_all_everywhere_deselects_every_category() {
         .iter()
         .all(|c| c.items.iter().all(|i| !i.selected)));
 }
+
+#[test]
+fn begin_execution_skips_reprompt_when_already_authenticated() {
+    // Regression test: `begin_execution` used to gate elevation purely on
+    // `is_root` (which never changes once the process starts), completely
+    // ignoring `password_prompt.is_authenticated()`. That meant a user who
+    // had already authenticated once via the sudo dialog would be prompted
+    // again on every subsequent run — unlike the GUI, which correctly
+    // remembers authentication for the whole session.
+    let mut app = app_with_categories();
+    app.confirmation_mode = false;
+    app.is_root = false;
+    app.password_prompt.mark_authenticated_for_tests();
+    app.categories[1].items[0].selected = true; // requires_root cleaner
+
+    app.request_run().unwrap();
+
+    assert!(
+        !app.needs_sudo,
+        "should not re-show the password prompt once already authenticated"
+    );
+    assert!(app.is_running, "run should start immediately");
+}
+
+#[test]
+fn begin_execution_still_prompts_when_not_yet_authenticated() {
+    let mut app = app_with_categories();
+    app.confirmation_mode = false;
+    app.is_root = false;
+    app.categories[1].items[0].selected = true; // requires_root cleaner
+
+    app.request_run().unwrap();
+
+    if cleansys_core::utils::supports_sudo_prompt() {
+        assert!(app.needs_sudo);
+    }
+    assert!(!app.is_running);
+}
+
+#[test]
+fn password_authentication_success_path_resets_all_item_status_and_bytes() {
+    // Regression test: the post-password-authentication branch in
+    // `handle_key` used to duplicate `begin_execution`'s "start a run" logic
+    // by hand, and that copy had drifted — it reset `bytes_cleaned` for
+    // every item but forgot to also reset `status`, so stale Success/Error
+    // statuses from a *previous* run could linger on unrelated items after
+    // authenticating through the sudo dialog. Both paths now share
+    // `start_operations`, so this must hold for the password-prompt path
+    // too.
+    let mut app = app_with_categories();
+    app.confirmation_mode = false;
+
+    // Simulate a stale status left over from an earlier, unrelated run.
+    app.categories[0].items[1].status = Some(cleansys_core::Status::Error(
+        "stale from last run".to_string(),
+    ));
+    app.categories[0].items[1].bytes_cleaned = 1234;
+
+    // Now trigger a *new* run that requires elevation and goes through the
+    // password-prompt success path.
+    app.is_root = false;
+    app.categories[1].items[0].selected = true; // requires_root cleaner
+    app.request_run().unwrap();
+    assert!(app.needs_sudo || app.needs_admin_notice);
+
+    if cleansys_core::utils::supports_sudo_prompt() {
+        // Drive the exact same path `handle_key`'s Enter-on-password-prompt
+        // branch takes on successful authentication.
+        app.password_prompt.mark_authenticated_for_tests();
+        app.needs_sudo = false;
+        app.password_prompt.hide();
+        let selected_cleaners = app.pending_operations.clone();
+        app.pending_operations.clear();
+        assert!(!selected_cleaners.is_empty());
+        app.start_operations_for_tests(&selected_cleaners);
+
+        // The stale status/bytes from the earlier unrelated run must be gone.
+        assert!(app.categories[0].items[1].status.is_none());
+        assert_eq!(app.categories[0].items[1].bytes_cleaned, 0);
+        // The newly-selected root item should now be Pending.
+        assert!(matches!(
+            app.categories[1].items[0].status,
+            Some(cleansys_core::Status::Pending)
+        ));
+    }
+}

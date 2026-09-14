@@ -436,25 +436,16 @@ impl App {
         self.preview_results.clear();
     }
 
-    /// Actually start execution of the given selected cleaners: prompts for
-    /// elevation if needed (sudo password on Unix, an "Administrator
-    /// required" notice on Windows), or starts the run directly.
-    fn begin_execution(&mut self, selected_cleaners: Vec<PendingOperation>) -> Result<()> {
-        let has_root_operations = selected_cleaners.iter().any(|(_, _, _, _, root)| *root);
-
-        // Check if we need elevation
-        if has_root_operations && !self.is_root {
-            self.pending_operations.clone_from(&selected_cleaners);
-            if cleansys_core::utils::supports_sudo_prompt() {
-                self.needs_sudo = true;
-                self.password_prompt.show();
-            } else {
-                self.needs_admin_notice = true;
-            }
-            return Ok(());
-        }
-
-        // Start processing
+    /// Actually kick off execution: reset per-run counters/logs, clear all
+    /// items' previous status/bytes_cleaned, and mark the given selection as
+    /// `Pending`. Shared by both the direct (already-elevated) path in
+    /// [`Self::begin_execution`] and the post-password-authentication path in
+    /// [`Self::handle_key`] so the two can never drift out of sync again (a
+    /// previous copy-pasted duplicate of this omitted the `item.status =
+    /// None` reset and the trailing `update_counters()` call, which could
+    /// leave stale status/error counts from a prior run visible after
+    /// authenticating via the sudo password prompt).
+    fn start_operations(&mut self, selected_cleaners: &[PendingOperation]) {
         self.is_running = true;
         self.show_progress_screen = true;
         self.operation_start_time = Some(Instant::now());
@@ -467,7 +458,7 @@ impl App {
         self.detailed_cleaned_items.clear(); // Clear previous cleaning results
         self.current_cleaner_index = 0;
 
-        // Reset bytes_cleaned for all items to start fresh
+        // Reset status and bytes_cleaned for all items to start fresh
         for category in &mut self.categories {
             for item in &mut category.items {
                 item.bytes_cleaned = 0;
@@ -476,13 +467,51 @@ impl App {
         }
 
         // Set all selected cleaners to Pending
-        for (cat_idx, item_idx, _, _, _) in &selected_cleaners {
+        for (cat_idx, item_idx, _, _, _) in selected_cleaners {
             self.categories[*cat_idx].items[*item_idx].status = Some(Status::Pending);
         }
+
+        self.update_counters();
 
         // Operations will be processed by update_demo_operations over time.
         // The is_running flag will be automatically turned off when all
         // operations complete.
+    }
+
+    /// Test-only public wrapper around the private [`Self::start_operations`],
+    /// so integration tests in `tests/` (a separate crate, which can only
+    /// see `pub` items) can drive the exact same post-authentication code
+    /// path `handle_key` uses. Only compiled into debug builds.
+    #[cfg(debug_assertions)]
+    pub fn start_operations_for_tests(&mut self, selected_cleaners: &[PendingOperation]) {
+        self.start_operations(selected_cleaners);
+    }
+
+    /// Actually start execution of the given selected cleaners: prompts for
+    /// elevation if needed (sudo password on Unix, an "Administrator
+    /// required" notice on Windows), or starts the run directly.
+    fn begin_execution(&mut self, selected_cleaners: Vec<PendingOperation>) -> Result<()> {
+        let has_root_operations = selected_cleaners.iter().any(|(_, _, _, _, root)| *root);
+
+        // Check if we need elevation. `is_root` reflects whether the process
+        // itself was launched with actual root privileges (e.g. `sudo
+        // cleansys`) and never changes at runtime; `password_prompt` tracks
+        // whether the user has already authenticated via the in-app sudo
+        // dialog this session. Both must be considered here, or a user who
+        // already authenticated once would be re-prompted for their
+        // password on every subsequent run.
+        if has_root_operations && !self.is_root && !self.password_prompt.is_authenticated() {
+            self.pending_operations.clone_from(&selected_cleaners);
+            if cleansys_core::utils::supports_sudo_prompt() {
+                self.needs_sudo = true;
+                self.password_prompt.show();
+            } else {
+                self.needs_admin_notice = true;
+            }
+            return Ok(());
+        }
+
+        self.start_operations(&selected_cleaners);
 
         Ok(())
     }
@@ -698,33 +727,7 @@ impl App {
                             self.pending_operations.clear();
 
                             if !selected_cleaners.is_empty() {
-                                // Start processing
-                                self.is_running = true;
-                                self.show_progress_screen = true;
-                                self.operation_start_time = Some(Instant::now());
-                                self.operation_end_time = None;
-                                self.total_bytes_cleaned = 0;
-                                self.demo_operation_timer = Some(Instant::now());
-                                self.demo_operations_completed = 0;
-                                self.result_messages.clear();
-                                self.operation_logs.clear();
-                                self.detailed_cleaned_items.clear();
-                                self.current_cleaner_index = 0;
-
-                                // Reset bytes_cleaned for all items to start fresh
-                                for category in &mut self.categories {
-                                    for item in &mut category.items {
-                                        item.bytes_cleaned = 0;
-                                    }
-                                }
-
-                                // Set all selected cleaners to Pending
-                                for (cat_idx, item_idx, _, _, _) in &selected_cleaners {
-                                    self.categories[*cat_idx].items[*item_idx].status =
-                                        Some(Status::Pending);
-                                }
-
-                                self.update_counters();
+                                self.start_operations(&selected_cleaners);
                             }
                         }
                         Ok(false) => {

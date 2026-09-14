@@ -60,6 +60,15 @@ impl PasswordPrompt {
         self.authenticated
     }
 
+    /// Force the "already authenticated this session" flag for tests,
+    /// without shelling out to a real `sudo` process. Only compiled into
+    /// debug builds (which is what `cargo test` uses), never shipped in a
+    /// release binary.
+    #[cfg(debug_assertions)]
+    pub fn mark_authenticated_for_tests(&mut self) {
+        self.authenticated = true;
+    }
+
     /// Add a character to the password input
     pub fn add_char(&mut self, c: char) {
         self.password_input.push(c);

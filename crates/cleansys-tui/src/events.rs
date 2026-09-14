@@ -34,20 +34,35 @@ impl Events {
                     .checked_sub(last_tick.elapsed())
                     .unwrap_or_else(|| Duration::from_secs(0));
 
-                if event::poll(timeout).unwrap() {
-                    match event::read().unwrap() {
-                        CrosstermEvent::Key(key) => {
-                            event_tx.send(Event::Input(key)).unwrap();
+                match event::poll(timeout) {
+                    Ok(true) => match event::read() {
+                        Ok(CrosstermEvent::Key(key)) => {
+                            if event_tx.send(Event::Input(key)).is_err() {
+                                // Receiver dropped (app is shutting down) —
+                                // exit quietly instead of panicking on the
+                                // next send.
+                                break;
+                            }
                         }
-                        CrosstermEvent::Resize(width, height) => {
-                            event_tx.send(Event::Resize(width, height)).unwrap();
+                        Ok(CrosstermEvent::Resize(width, height)) => {
+                            if event_tx.send(Event::Resize(width, height)).is_err() {
+                                break;
+                            }
                         }
-                        _ => {}
-                    }
+                        Ok(_) => {}
+                        // Terminal event stream error (e.g. stdin closed) —
+                        // nothing sensible to do but stop polling.
+                        Err(_) => break,
+                    },
+                    Ok(false) => {}
+                    // Polling itself failed — same as above, stop cleanly.
+                    Err(_) => break,
                 }
 
                 if last_tick.elapsed() >= tick_rate {
-                    event_tx.send(Event::Tick).unwrap();
+                    if event_tx.send(Event::Tick).is_err() {
+                        break;
+                    }
                     last_tick = Instant::now();
                 }
             }
