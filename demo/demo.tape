@@ -27,7 +27,7 @@ Type "clear"
 Enter
 Sleep 500ms
 
-Type "cargo run"
+Type "cargo run -p cleansys"
 Enter
 
 # Wait for app to load
