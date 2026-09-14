@@ -2,9 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## 0.6.5 - 2026-09-14
+### 🐛 Bug Fixes
+- fix: deep-analysis pass -- TUI/GUI bugs, dedupe, panic hardening
+- fix(demo): demo.tape used bare 'cargo run', broken since the cleansys-tui->cleansys package rename
+### 📚 Documentation
+- docs: regenerate CHANGELOG.md after merging Gitea auto-releases
 ### 📦 Other Changes
 - merge: reconcile Gitea nightly-deps auto-releases (v0.6.3, v0.6.4) with GUI sudo fix
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.4...v0.6.5
 ## 0.6.4 - 2026-09-14
 ### 🐛 Bug Fixes
 - fix(gui): system cleaners silently no-op after password entry
