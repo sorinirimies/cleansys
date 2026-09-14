@@ -2,12 +2,13 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.6.5 - 2026-09-14
+## 0.6.6 - 2026-09-14
 ### 📚 Documentation
 - docs: update README and CHANGELOG for v0.6.4
+- docs: update README and CHANGELOG for v0.6.5
 ### 📦 Other Changes
 - merge: reconcile GitHub auto-generated README/CHANGELOG update
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.6...v0.6.5
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.6...v0.6.6
 ## 0.6.6 - 2026-09-14
 ### ♻️ Refactor
 - refactor(core): extract cleaner!/run_sudo_step macros+helper, fix silent error swallowing, docs
