@@ -20,8 +20,17 @@ CleanSys is a Cargo workspace with three crates:
 
 ## 🎬 Demo
 
-### Main Demo
-![CleanSys Demo](demo
+### Terminal UI
+![CleanSys TUI Demo](demo/previews/demo.gif)
+
+### User-Land Cleaners (no root required)
+![CleanSys User Cleaners Demo](demo/previews/userland-cleaners.gif)
+
+### System Cleaners (requires authentication)
+![CleanSys System Cleaners Demo](demo/previews/system-cleaners.gif)
+
+### Desktop GUI
+![CleanSys GUI Preview](demo/previews/gui.png)
 
 ## ✨ Features
 
@@ -417,7 +426,23 @@ just vhs-all
 just vhs-clean
 ```
 
-All generated GIF files are output to `demo/target/` and are git-ignored.
+All generated GIF files are output to `demo/target/` and are git-ignored
+(they're build artifacts, regenerated on demand — not tracked so the repo
+history doesn't accumulate binary diffs every time a tape is re-recorded).
+
+The actual images embedded in this README's [Demo](#-demo) section above
+live in [`demo/previews/`](demo/previews/), which **is** committed. After
+changing a `.tape` file (or the TUI/GUI's look), refresh them with:
+
+```bash
+just vhs-refresh-previews   # regenerates every tape + copies into demo/previews/
+git status                  # review the diff
+git add demo/previews && git commit -m "docs: refresh demo previews"
+```
+
+See [`demo/previews/README.md`](demo/previews/README.md) for details,
+including the GUI screenshot (`gui.png`), which is captured manually since
+VHS only records terminal sessions, not native GUI windows.
 
 ## 🗺️ Roadmap / Ideas
 

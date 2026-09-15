@@ -150,6 +150,19 @@ vhs-system: _check-vhs
 vhs-all: vhs vhs-userland vhs-system
     @echo "✅ All demos generated!"
 
+# Copy the freshly-generated demo GIFs from demo/target/ (git-ignored) into
+# demo/previews/ (committed, referenced by README.md's Demo section).
+# Run `just vhs-all` first.
+vhs-update-previews:
+    @mkdir -p demo/previews
+    @cp demo/target/demo.gif demo/previews/demo.gif
+    @cp demo/target/userland-cleaners.gif demo/previews/userland-cleaners.gif
+    @cp demo/target/system-cleaners.gif demo/previews/system-cleaners.gif
+    @echo "✅ demo/previews/*.gif updated — review with 'git status'/'git diff --stat' and commit."
+
+# Regenerate every demo GIF and update the committed previews in one step.
+vhs-refresh-previews: vhs-all vhs-update-previews
+
 vhs-clean:
     @echo "Cleaning VHS output files…"
     @rm -f demo/target/*.gif
