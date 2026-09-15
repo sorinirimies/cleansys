@@ -359,27 +359,32 @@ fn clean_system_logs(opts: RunOptions) -> Result<CleaningResult> {
                     true,
                 )?
             {
-                let output = execute_with_sudo(
+                match run_sudo_step(
+                    "rotated system logs",
                     "find",
                     &[
                         "/var/log", "-type", "f", "-name", "*.gz", "-o", "-name", "*.old", "-o",
                         "-name", "*.1", "-o", "-name", "*.2", "-o", "-name", "*.3", "-o", "-name",
                         "*.4", "-delete",
                     ],
-                )?;
-
-                if output.status.success() {
-                    print_success(&format!(
-                        "Cleaned old logs in /var/log ({})",
-                        format_size(size_to_clean)
-                    ));
-                    result.add_item(CleanedItem::directory(
-                        log_path.to_path_buf(),
-                        size_to_clean,
-                        "rotated system logs",
-                    ));
-                } else {
-                    print_error("Failed to clean logs in /var/log");
+                ) {
+                    Ok(_) => {
+                        print_success(&format!(
+                            "Cleaned old logs in /var/log ({})",
+                            format_size(size_to_clean)
+                        ));
+                        result.add_item(CleanedItem::directory(
+                            log_path.to_path_buf(),
+                            size_to_clean,
+                            "rotated system logs",
+                        ));
+                    }
+                    // Log-rotation cleanup and the journald vacuum below are
+                    // independent steps — a failure here must not prevent
+                    // the journal vacuum from still being attempted, so this
+                    // is caught (and surfaced via print_error) rather than
+                    // propagated with `?`.
+                    Err(e) => print_error(&e.to_string()),
                 }
             } else {
                 debug!("No old logs found in /var/log");
@@ -436,11 +441,9 @@ fn clean_system_caches(opts: RunOptions) -> Result<CleaningResult> {
             .status
             .success();
         if has_updatedb && (opts.skip_confirmation || confirm("Update locate database?", true)?) {
-            let output = execute_with_sudo("updatedb", &[])?;
-            if output.status.success() {
-                print_success("Updated locate database");
-            } else {
-                print_error("Failed to update locate database");
+            match run_sudo_step("locate database", "updatedb", &[]) {
+                Ok(_) => print_success("Updated locate database"),
+                Err(e) => print_error(&e.to_string()),
             }
         }
     }
@@ -487,23 +490,29 @@ fn clean_temp_files(opts: RunOptions) -> Result<CleaningResult> {
         if opts.skip_confirmation
             || confirm(&format!("Clean old temporary files in {temp_path}?"), true)?
         {
-            let output = execute_with_sudo(
+            match run_sudo_step(
+                temp_path,
                 "find",
                 &[temp_path, "-type", "f", "-atime", "+1", "-delete"],
-            )?;
-
-            if output.status.success() {
-                let after = get_size(temp_path).unwrap_or(before);
-                let freed = before.saturating_sub(after);
-                if freed > 0 {
-                    print_success(&format!(
-                        "Cleaned old temporary files in {temp_path} ({})",
-                        format_size(freed)
-                    ));
-                    result.add_item(CleanedItem::directory(path.to_path_buf(), freed, temp_path));
+            ) {
+                Ok(_) => {
+                    let after = get_size(temp_path).unwrap_or(before);
+                    let freed = before.saturating_sub(after);
+                    if freed > 0 {
+                        print_success(&format!(
+                            "Cleaned old temporary files in {temp_path} ({})",
+                            format_size(freed)
+                        ));
+                        result.add_item(CleanedItem::directory(
+                            path.to_path_buf(),
+                            freed,
+                            temp_path,
+                        ));
+                    }
                 }
-            } else {
-                print_error(&format!("Failed to clean temporary files in {temp_path}"));
+                // /tmp and /var/tmp are independent — a failure on one must
+                // not skip attempting the other.
+                Err(e) => print_error(&e.to_string()),
             }
         }
     }
