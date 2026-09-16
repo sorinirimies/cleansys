@@ -2,6 +2,18 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.6.8 - 2026-09-16
+### 🐛 Bug Fixes
+- fix(docs): repair corrupted README demo preview + commit real GIF/PNG assets
+- fix(gui): activity log (and whole main screen) didn't stretch full width on resize
+### 📚 Documentation
+- docs: update README and CHANGELOG for v0.6.7
+- docs: add real, committed demo previews (GIFs + GUI screenshot)
+### 📦 Other Changes
+- merge: reconcile GitHub auto-generated README/CHANGELOG update
+### 🧪 Testing
+- test(tui): add render.rs smoke-test suite; cleanup: finish DRY'ing system_cleaners.rs sudo call sites
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.7...v0.6.8
 ## 0.6.7 - 2026-09-15
 ### 📚 Documentation
 - docs: update README and CHANGELOG for v0.6.4
@@ -21,11 +33,9 @@ All notable changes to this project will be documented in this file.
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.5...v0.6.6
 ## 0.6.5 - 2026-09-14
 ### 🐛 Bug Fixes
-- fix(gui): system cleaners silently no-op after password entry
 - fix: deep-analysis pass -- TUI/GUI bugs, dedupe, panic hardening
 - fix(demo): demo.tape used bare 'cargo run', broken since the cleansys-tui->cleansys package rename
 ### 📚 Documentation
-- docs: regenerate CHANGELOG.md with correct per-version sections
 - docs: regenerate CHANGELOG.md after merging Gitea auto-releases
 ### 📦 Other Changes
 - merge: reconcile Gitea nightly-deps auto-releases (v0.6.3, v0.6.4) with GUI sudo fix
@@ -33,7 +43,10 @@ All notable changes to this project will be documented in this file.
 - chore: bump version to 0.6.5
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.4...v0.6.5
 ## 0.6.4 - 2026-09-14
+### 🐛 Bug Fixes
+- fix(gui): system cleaners silently no-op after password entry
 ### 📚 Documentation
+- docs: regenerate CHANGELOG.md with correct per-version sections
 - docs: update README and CHANGELOG for v0.6.2
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-13
