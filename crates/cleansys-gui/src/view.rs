@@ -29,16 +29,7 @@ pub fn view(state: &CleanSysGui) -> Element<'_, Message> {
         return preview_dialog(state, &c);
     }
 
-    let content = column![
-        top_bar(state, &c),
-        controls_bar(state, &c),
-        tab_bar(state, &c),
-        active_category_panel(state, &c),
-        log_panel(state, &c),
-    ]
-    .spacing(14)
-    .padding(20)
-    .height(Length::Fill);
+    let content = main_content(state, &c);
 
     container(content)
         .width(Length::Fill)
@@ -49,6 +40,28 @@ pub fn view(state: &CleanSysGui) -> Element<'_, Message> {
             ..Default::default()
         })
         .into()
+}
+
+/// The main (non-overlay) screen's content: header, controls, tabs, the
+/// active category's cleaner list, and the activity log. Extracted from
+/// [`view`] so its layout properties (in particular, that it must fill the
+/// window's width — iced's `Column` defaults to `Length::Shrink`, which
+/// previously left the whole screen, activity log included, stuck at its
+/// natural content width instead of stretching when the window was resized)
+/// can be asserted on directly in tests.
+fn main_content<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> {
+    column![
+        top_bar(state, c),
+        controls_bar(state, c),
+        tab_bar(state, c),
+        active_category_panel(state, c),
+        log_panel(state, c),
+    ]
+    .spacing(14)
+    .padding(20)
+    .width(Length::Fill)
+    .height(Length::Fill)
+    .into()
 }
 
 // ── Sections ────────────────────────────────────────────────────────────────
@@ -760,6 +773,21 @@ fn preview_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Me
 mod tests {
     use super::*;
     use crate::state::CleanSysGui;
+
+    #[test]
+    fn view_root_fills_window_width() {
+        // Regression test: main_content()'s column previously only set
+        // `.height(Length::Fill)`, never `.width(...)`. iced's `Column`
+        // defaults width to `Length::Shrink`, so the whole layout (activity
+        // log included) only ever shrank to its natural content width
+        // instead of stretching to fill the window on resize.
+        let state = CleanSysGui::new();
+        let c = state.colors();
+        let element = main_content(&state, &c);
+        let size = element.as_widget().size();
+        assert_eq!(size.width, Length::Fill);
+        assert_eq!(size.height, Length::Fill);
+    }
 
     #[test]
     fn view_does_not_panic_for_default_state() {
