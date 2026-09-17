@@ -2,6 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.6.8 - 2026-09-17
+### 🐛 Bug Fixes
+- fix(docs): repair corrupted README demo preview + commit real GIF/PNG assets
+- fix(gui): activity log (and whole main screen) didn't stretch full width on resize
+### 📚 Documentation
+- docs: update README and CHANGELOG for v0.6.7
+- docs: add real, committed demo previews (GIFs + GUI screenshot)
+### 📦 Other Changes
+- merge: reconcile GitHub auto-generated README/CHANGELOG update
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-17
+### 🧪 Testing
+- test(tui): add render.rs smoke-test suite; cleanup: finish DRY'ing system_cleaners.rs sudo call sites
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.7...v0.6.8
 ## 0.6.7 - 2026-09-15
 ### 📚 Documentation
 - docs: update README and CHANGELOG for v0.6.4
