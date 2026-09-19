@@ -2,11 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.6.10 - 2026-09-19
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-19
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.9...v0.6.10
 ## 0.6.9 - 2026-09-17
 ### 📚 Documentation
 - docs: update README and CHANGELOG for v0.6.8
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-17
+- chore: bump version to 0.6.9
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.8...v0.6.9
 ## 0.6.8 - 2026-09-16
 ### 🐛 Bug Fixes
