@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.6.9 - 2026-09-19
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-19
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.8...v0.6.9
 ## 0.6.8 - 2026-09-17
 ### 🐛 Bug Fixes
 - fix(docs): repair corrupted README demo preview + commit real GIF/PNG assets
@@ -13,6 +17,7 @@ All notable changes to this project will be documented in this file.
 - merge: reconcile GitHub auto-generated README/CHANGELOG update
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-17
+- chore: bump version to 0.6.8
 ### 🧪 Testing
 - test(tui): add render.rs smoke-test suite; cleanup: finish DRY'ing system_cleaners.rs sudo call sites
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.7...v0.6.8
