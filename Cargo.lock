@@ -4360,9 +4360,9 @@ dependencies = [
 
 [[package]]
 name = "tui-spinner"
-version = "0.4.21"
+version = "0.4.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "77e8624514fbeb9a02708822905770ff8c8467523f1bf4059c2d5d801ade99ff"
+checksum = "a3ec08c2b6853e6bcc019289bd64a69afe1a5d9a938890ccc7fd7acda2faa59c"
 dependencies = [
  "ratatui",
 ]
