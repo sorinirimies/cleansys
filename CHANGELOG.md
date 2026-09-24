@@ -2,10 +2,11 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.6.14 - 2026-09-23
+## 0.6.14 - 2026-09-24
 ### 🔀 Reconciliation
 - merge: reconcile diverged GitHub/Gitea nightly auto-release histories (both mirrors had independently cut colliding 0.6.8-0.6.13 tags with different content since the deps-update workflow ran unattended on each side)
 ### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-24 (github lineage: thiserror 2.0.20→2.0.21)
 - chore(deps): nightly dependency upgrade 2026-09-23 (github lineage; gitea lineage produced an identical dep set independently)
 - chore(deps): nightly dependency upgrade 2026-09-22 (github lineage)
 - chore(deps): nightly dependency upgrade 2026-09-22 (gitea lineage)
