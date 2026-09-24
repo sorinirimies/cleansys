@@ -2,17 +2,17 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.6.13 - 2026-09-23
+## 0.6.14 - 2026-09-23
 ### 🔀 Reconciliation
-- merge: reconcile diverged GitHub/Gitea nightly auto-release histories (both mirrors had independently cut colliding 0.6.8-0.6.12 tags with different content since the deps-update workflow ran unattended on each side)
+- merge: reconcile diverged GitHub/Gitea nightly auto-release histories (both mirrors had independently cut colliding 0.6.8-0.6.13 tags with different content since the deps-update workflow ran unattended on each side)
 ### 🔧 Chores
-- chore(deps): nightly dependency upgrade 2026-09-23 (github lineage)
+- chore(deps): nightly dependency upgrade 2026-09-23 (github lineage; gitea lineage produced an identical dep set independently)
 - chore(deps): nightly dependency upgrade 2026-09-22 (github lineage)
 - chore(deps): nightly dependency upgrade 2026-09-22 (gitea lineage)
 - chore(deps): nightly dependency upgrade 2026-09-20 (gitea lineage)
 - chore(deps): nightly dependency upgrade 2026-09-19 (both lineages)
 - chore(deps): nightly dependency upgrade 2026-09-17 (both lineages)
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.8...v0.6.13
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.8...v0.6.14
 ## 0.6.8 - 2026-09-16
 ### 🐛 Bug Fixes
 - fix(docs): repair corrupted README demo preview + commit real GIF/PNG assets
