@@ -5,11 +5,16 @@ name: Nightly Dependency Upgrade
 # push) with no human approval step. The quality gate (fmt, clippy, test)
 # must pass before either the dependency commit or the release tag are ever
 # pushed, so a bad upgrade simply fails the workflow instead of shipping.
+#
+# NOTE: the `schedule:` trigger is intentionally disabled here. GitHub
+# (.github/workflows/deps-update.yml) is the single source of truth for the
+# nightly auto-release; this Gitea mirror previously ran its own independent
+# nightly job on a separate schedule, and the two cut colliding version
+# numbers (0.6.8-0.6.12 diverged with different content on each side,
+# requiring a manual history reconciliation). Keep workflow_dispatch only, so
+# it can still be run by hand if the mirror ever needs to catch up manually.
 
 on:
-  schedule:
-    # Runs at 02:00 UTC every day (03:00 CET)
-    - cron: "0 2 * * *"
   workflow_dispatch:
 
 env:
