@@ -2,19 +2,50 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.6.14 - 2026-09-24
-### 🔀 Reconciliation
-- merge: reconcile diverged GitHub/Gitea nightly auto-release histories (both mirrors had independently cut colliding 0.6.8-0.6.13 tags with different content since the deps-update workflow ran unattended on each side)
+## 0.6.15 - 2026-09-25
+### 🐛 Bug Fixes
+- fix(ci): disable Gitea nightly deps-update schedule to prevent dual auto-release
+### 📚 Documentation
+- docs: update README and CHANGELOG for v0.6.8
+### 📦 Other Changes
+- merge: reconcile diverged GitHub/gitea-starscream nightly auto-release histories
+- merge: reconcile second round of gitea nightly divergence, bump to 0.6.14
+- merge: reconcile github's 2026-09-24 nightly run (thiserror bump) into 0.6.14
 ### 🔧 Chores
-- chore(deps): nightly dependency upgrade 2026-09-24 (github lineage: thiserror 2.0.20→2.0.21)
-- chore(deps): nightly dependency upgrade 2026-09-23 (github lineage; gitea lineage produced an identical dep set independently)
-- chore(deps): nightly dependency upgrade 2026-09-22 (github lineage)
-- chore(deps): nightly dependency upgrade 2026-09-22 (gitea lineage)
-- chore(deps): nightly dependency upgrade 2026-09-20 (gitea lineage)
-- chore(deps): nightly dependency upgrade 2026-09-19 (both lineages)
-- chore(deps): nightly dependency upgrade 2026-09-17 (both lineages)
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.8...v0.6.14
-## 0.6.8 - 2026-09-16
+- chore: bump version to 0.6.8
+- chore(deps): nightly dependency upgrade 2026-09-17
+- chore: bump version to 0.6.9
+- chore(deps): nightly dependency upgrade 2026-09-19
+- chore: bump version to 0.6.10
+- chore(deps): nightly dependency upgrade 2026-09-20
+- chore: bump version to 0.6.11
+- chore(deps): nightly dependency upgrade 2026-09-22
+- chore: bump version to 0.6.12
+- chore(deps): nightly dependency upgrade 2026-09-23
+- chore: bump version to 0.6.13
+- chore(deps): nightly dependency upgrade 2026-09-25
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.12...v0.6.15
+## 0.6.12 - 2026-09-24
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-24
+- chore: bump version to 0.6.12
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.11...v0.6.12
+## 0.6.11 - 2026-09-23
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-23
+- chore: bump version to 0.6.11
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.10...v0.6.11
+## 0.6.10 - 2026-09-22
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-22
+- chore: bump version to 0.6.10
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.9...v0.6.10
+## 0.6.9 - 2026-09-19
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-19
+- chore: bump version to 0.6.9
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.8...v0.6.9
+## 0.6.8 - 2026-09-17
 ### 🐛 Bug Fixes
 - fix(docs): repair corrupted README demo preview + commit real GIF/PNG assets
 - fix(gui): activity log (and whole main screen) didn't stretch full width on resize
@@ -56,36 +87,39 @@ All notable changes to this project will be documented in this file.
 - docs: regenerate CHANGELOG.md after merging Gitea auto-releases
 ### 📦 Other Changes
 - merge: reconcile Gitea nightly-deps auto-releases (v0.6.3, v0.6.4) with GUI sudo fix
-### 🔄 Updated
-- Update jiff crates to latest patch versions
 ### 🔧 Chores
-- chore(deps): nightly dependency upgrade 2026-09-14
-- chore: bump version to 0.6.3
 - chore: bump version to 0.6.5
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.4...v0.6.5
 ## 0.6.4 - 2026-09-14
-### 🔧 Chores
-- chore(deps): nightly dependency upgrade 2026-09-14
-- chore: bump version to 0.6.4
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.3...v0.6.4
-## 0.6.3 - 2026-09-13
 ### 📚 Documentation
 - docs: update README and CHANGELOG for v0.6.2
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-13
 - chore: bump version to 0.6.3
+- chore(deps): nightly dependency upgrade 2026-09-14
+- chore: bump version to 0.6.4
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.3...v0.6.4
+## 0.6.3 - 2026-09-14
+### 🔄 Updated
+- Update jiff crates to latest patch versions
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-14
+- chore: bump version to 0.6.3
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.2...v0.6.3
 ## 0.6.2 - 2026-09-12
 ### 🐛 Bug Fixes
 - fix(ci): install aarch64 cross-libc + alien/fakeroot for Gitea Linux release job
+### 🔧 Chores
+- chore: bump version to 0.6.2
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.1...v0.6.2
+## 0.6.1 - 2026-09-12
 ### 📦 Other Changes
 - Rename TUI crate package to cleansys across tooling
 ### 🔄 Updated
 - Update lockfile dependency patch versions
 ### 🔧 Chores
 - chore: bump version to 0.6.1
-- chore: bump version to 0.6.2
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.0...v0.6.2
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.0...v0.6.1
 ## 0.6.0 - 2026-09-11
 ### ➕ Added
 - Add Starscream remote tasks and bulk pull/force push
@@ -240,11 +274,6 @@ All notable changes to this project will be documented in this file.
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.6...v0.0.7
 ## 0.0.6 - 2025-10-02
 ### 📦 Other Changes
-- Initial commit
-- Implements release workflow with git-cliff
-- Allows publishing crates with uncommitted changes
-- Updates crate category to comply with crates.io
-- Improves progress screen behavior and controls
 - keep cargolock
 ### 🔄 Updated
 - update readme
@@ -252,3 +281,20 @@ All notable changes to this project will be documented in this file.
 - chore: bump version to 0.0.5
 - chore: bump version to 0.0.5
 - chore: bump version to 0.0.6
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.4...v0.0.6
+## 0.0.4 - 2025-06-05
+### 📦 Other Changes
+- Improves progress screen behavior and controls
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.3...v0.0.4
+## 0.0.3 - 2025-06-05
+### 📦 Other Changes
+- Updates crate category to comply with crates.io
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.2...v0.0.3
+## 0.0.2 - 2025-06-05
+### 📦 Other Changes
+- Allows publishing crates with uncommitted changes
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.1...v0.0.2
+## 0.0.1 - 2025-06-05
+### 📦 Other Changes
+- Initial commit
+- Implements release workflow with git-cliff
