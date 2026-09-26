@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.6.16 - 2026-09-26
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-26
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.15...v0.6.16
 ## 0.6.15 - 2026-09-25
 ### 🐛 Bug Fixes
 - fix(ci): disable Gitea nightly deps-update schedule to prevent dual auto-release
@@ -24,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - chore(deps): nightly dependency upgrade 2026-09-23
 - chore: bump version to 0.6.13
 - chore(deps): nightly dependency upgrade 2026-09-25
+- chore: bump version to 0.6.15
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.12...v0.6.15
 ## 0.6.12 - 2026-09-24
 ### 🔧 Chores
