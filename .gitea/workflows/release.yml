@@ -65,7 +65,13 @@ jobs:
             libgl1-mesa-dev libfontconfig1-dev libssl-dev
       - name: Install Rust stable
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          # Retry: runner network to static.rust-lang.org is occasionally flaky.
+          for attempt in 1 2 3 4 5; do
+            curl --proto '=https' --tlsv1.2 -sSf --retry 3 --retry-delay 5 https://sh.rustup.rs | sh -s -- -y --default-toolchain stable && break
+            echo "rustup install failed (attempt $attempt/5), retrying in $((attempt*15))s..."
+            sleep $((attempt*15))
+            [ "$attempt" = 5 ] && exit 1
+          done
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
@@ -103,7 +109,13 @@ jobs:
 
       - name: Install Rust stable + target
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          # Retry: runner network to static.rust-lang.org is occasionally flaky.
+          for attempt in 1 2 3 4 5; do
+            curl --proto '=https' --tlsv1.2 -sSf --retry 3 --retry-delay 5 https://sh.rustup.rs | sh -s -- -y --default-toolchain stable && break
+            echo "rustup install failed (attempt $attempt/5), retrying in $((attempt*15))s..."
+            sleep $((attempt*15))
+            [ "$attempt" = 5 ] && exit 1
+          done
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           . "$HOME/.cargo/env"
           rustup target add ${{ matrix.target }}
@@ -176,7 +188,13 @@ jobs:
 
       - name: Install Rust stable + Windows target
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          # Retry: runner network to static.rust-lang.org is occasionally flaky.
+          for attempt in 1 2 3 4 5; do
+            curl --proto '=https' --tlsv1.2 -sSf --retry 3 --retry-delay 5 https://sh.rustup.rs | sh -s -- -y --default-toolchain stable && break
+            echo "rustup install failed (attempt $attempt/5), retrying in $((attempt*15))s..."
+            sleep $((attempt*15))
+            [ "$attempt" = 5 ] && exit 1
+          done
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           . "$HOME/.cargo/env"
           rustup target add x86_64-pc-windows-gnu
@@ -229,7 +247,13 @@ jobs:
 
       - name: Install Rust stable
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          # Retry: runner network to static.rust-lang.org is occasionally flaky.
+          for attempt in 1 2 3 4 5; do
+            curl --proto '=https' --tlsv1.2 -sSf --retry 3 --retry-delay 5 https://sh.rustup.rs | sh -s -- -y --default-toolchain stable && break
+            echo "rustup install failed (attempt $attempt/5), retrying in $((attempt*15))s..."
+            sleep $((attempt*15))
+            [ "$attempt" = 5 ] && exit 1
+          done
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - name: Install git-cliff
         run: cargo install git-cliff --locked
@@ -312,7 +336,13 @@ jobs:
       - name: Install Rust stable
         if: env.HAS_TOKEN == 'true'
         run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
+          # Retry: runner network to static.rust-lang.org is occasionally flaky.
+          for attempt in 1 2 3 4 5; do
+            curl --proto '=https' --tlsv1.2 -sSf --retry 3 --retry-delay 5 https://sh.rustup.rs | sh -s -- -y --default-toolchain stable && break
+            echo "rustup install failed (attempt $attempt/5), retrying in $((attempt*15))s..."
+            sleep $((attempt*15))
+            [ "$attempt" = 5 ] && exit 1
+          done
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
       - name: Cache Cargo
         if: env.HAS_TOKEN == 'true'
