@@ -73,6 +73,11 @@ jobs:
       - name: Pre-warm cargo registry (refresh index + fetch sources)
         run: cargo update && cargo fetch
 
+      # Snapshot the lockfile as committed on main, to tell later whether any
+      # *direct* dependency really moved (vs. transitive-only churn).
+      - name: Snapshot committed Cargo.lock (release gate)
+        run: git show HEAD:Cargo.lock > "$RUNNER_TEMP/Cargo.lock.head"
+
       # ── Snapshot Cargo.lock BEFORE upgrading, for the downgrade guard ───────
       - name: Snapshot Cargo.lock (pre-upgrade)
         run: cp Cargo.lock Cargo.lock.before
@@ -118,6 +123,13 @@ jobs:
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
 
+      # Transitive-only lock churn (syn, libc, ...) is still committed, but
+      # must NOT cut a release. Release only if a direct dependency changed.
+      - name: Check for direct dependency changes
+        id: direct
+        run: |
+          echo "release=$(nu scripts/ci/direct_deps_changed.nu --before "$RUNNER_TEMP/Cargo.lock.head" --after Cargo.lock)" >> "$GITHUB_OUTPUT"
+
       # ── Quality gate ───────────────────────────────────────────────────────
       - name: Check formatting
         if: steps.check.outputs.has_changes == 'true'
@@ -154,11 +166,11 @@ jobs:
       # in the loop, matching the "nightly libs auto update that merges
       # automatically and creates a new patched version" requirement.
       - name: Install git-cliff
-        if: steps.check.outputs.has_changes == 'true'
+        if: steps.check.outputs.has_changes == 'true' && steps.direct.outputs.release == 'true'
         run: cargo install git-cliff --locked
 
       - name: Cut automatic patch release
-        if: steps.check.outputs.has_changes == 'true'
+        if: steps.check.outputs.has_changes == 'true' && steps.direct.outputs.release == 'true'
         run: nu scripts/ci/auto_patch_release.nu
 
       # ── Explicitly dispatch the Release workflow ────────────────────────────
@@ -167,12 +179,12 @@ jobs:
       # and Gitea) — so we dispatch release.yml directly via the Actions API,
       # which the same default token IS allowed to do.
       - name: Get newly-released version
-        if: steps.check.outputs.has_changes == 'true'
+        if: steps.check.outputs.has_changes == 'true' && steps.direct.outputs.release == 'true'
         id: new_version
         run: echo "tag=v$(grep -m1 '^version' Cargo.toml | sed -E 's/version[[:space:]]*=[[:space:]]*"(.*)"/\1/')" >> "$GITHUB_OUTPUT"
 
       - name: Dispatch Release workflow on Gitea
-        if: steps.check.outputs.has_changes == 'true'
+        if: steps.check.outputs.has_changes == 'true' && steps.direct.outputs.release == 'true'
         run: |
           TAG="${{ steps.new_version.outputs.tag }}"
           WORKFLOW_ID="release.yml"
@@ -187,6 +199,10 @@ jobs:
             -d "{\"ref\":\"main\",\"inputs\":{\"tag\":\"${TAG}\"}}"
 
           echo "✅ Dispatched release.yml for ${TAG}"
+
+      - name: Transitive-only update — no release
+        if: steps.check.outputs.has_changes == 'true' && steps.direct.outputs.release != 'true'
+        run: echo "ℹ️ Only transitive deps changed — lockfile committed, release skipped."
 
       - name: Nothing to update
         if: steps.check.outputs.has_changes == 'false'
