@@ -2,6 +2,8 @@
 
 [![Crates.io](https://img.shields.io/crates/v/cleansys)](https://crates.io/crates/cleansys)
 [![Documentation](https://docs.rs/cleansys/badge.svg)](https://docs.rs/cleansys)
+[![TUI Downloads](https://img.shields.io/crates/d/cleansys?label=TUI%20downloads)](https://crates.io/crates/cleansys)
+[![GUI Downloads](https://img.shields.io/crates/d/cleansys-gui?label=GUI%20downloads)](https://crates.io/crates/cleansys-gui)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Release](https://github.com/sorinirimies/cleansys/actions/workflows/release.yml/badge.svg)](https://github.com/sorinirimies/cleansys/actions/workflows/release.yml)
 [![CI](https://github.com/sorinirimies/cleansys/actions/workflows/ci.yml/badge.svg)](https://github.com/sorinirimies/cleansys/actions/workflows/ci.yml)
