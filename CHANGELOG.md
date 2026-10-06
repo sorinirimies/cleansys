@@ -2,6 +2,19 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.7.0 - 2026-10-06
+### ✨ Features
+- feat(core): declarative cleaner engine with dev, build-artifact and AI/LLM cleaners
+- feat(engine): command action, sudo deletes, and ~130 more cleaners
+- feat: schedule (systemd/cron/launchd/schtasks), auto command, process guard, recommended preset
+- feat(gui): responsive redesign — sidebar nav, background scan with sizes, search, action bar
+- feat(tui): responsive sidebar layout, live sizes, filter, hide-empty; shared ScanBoard in core
+- feat(web): cleansys-web (Topcoat) + nushell-only tooling, new tapes/GIFs/screenshots (git-lfs)
+### 🐛 Bug Fixes
+- fix(gui): stop macOS 'Choose Application' dialog after cleaning
+### 📦 Other Changes
+- docs+ux: responsive redesign docs, new tapes/GIFs/screenshots (git-lfs), synthetic demo fixture
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.22...v0.7.0
 ## 0.6.22 - 2026-10-06
 ### 📚 Documentation
 - docs(readme): add TUI and GUI crates.io download badges
@@ -11,6 +24,7 @@ All notable changes to this project will be documented in this file.
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-10-05
 - chore(deps): nightly dependency upgrade 2026-10-06
+- chore: bump version to 0.6.22
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.21...v0.6.22
 ## 0.6.21 - 2026-10-04
 ### 🔧 Chores
@@ -43,6 +57,13 @@ All notable changes to this project will be documented in this file.
 - chore: bump version to 0.6.16
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.15...v0.6.16
 ## 0.6.15 - 2026-09-25
+### 📦 Other Changes
+- merge: reconcile github's 2026-09-24 nightly run (thiserror bump) into 0.6.14
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-25
+- chore: bump version to 0.6.15
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.12...v0.6.15
+## 0.6.12 - 2026-09-24
 ### 🐛 Bug Fixes
 - fix(ci): disable Gitea nightly deps-update schedule to prevent dual auto-release
 ### 📚 Documentation
@@ -50,9 +71,7 @@ All notable changes to this project will be documented in this file.
 ### 📦 Other Changes
 - merge: reconcile diverged GitHub/gitea-starscream nightly auto-release histories
 - merge: reconcile second round of gitea nightly divergence, bump to 0.6.14
-- merge: reconcile github's 2026-09-24 nightly run (thiserror bump) into 0.6.14
 ### 🔧 Chores
-- chore: bump version to 0.6.8
 - chore(deps): nightly dependency upgrade 2026-09-17
 - chore: bump version to 0.6.9
 - chore(deps): nightly dependency upgrade 2026-09-19
@@ -63,14 +82,13 @@ All notable changes to this project will be documented in this file.
 - chore: bump version to 0.6.12
 - chore(deps): nightly dependency upgrade 2026-09-23
 - chore: bump version to 0.6.13
-- chore(deps): nightly dependency upgrade 2026-09-25
-- chore: bump version to 0.6.15
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.12...v0.6.15
-## 0.6.12 - 2026-09-24
-### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-24
 - chore: bump version to 0.6.12
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.11...v0.6.12
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.8...v0.6.12
+## 0.6.8 - 2026-09-16
+### 🔧 Chores
+- chore: bump version to 0.6.8
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.11...v0.6.8
 ## 0.6.11 - 2026-09-23
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-23
@@ -82,11 +100,6 @@ All notable changes to this project will be documented in this file.
 - chore: bump version to 0.6.10
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.9...v0.6.10
 ## 0.6.9 - 2026-09-19
-### 🔧 Chores
-- chore(deps): nightly dependency upgrade 2026-09-19
-- chore: bump version to 0.6.9
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.8...v0.6.9
-## 0.6.8 - 2026-09-17
 ### 🐛 Bug Fixes
 - fix(docs): repair corrupted README demo preview + commit real GIF/PNG assets
 - fix(gui): activity log (and whole main screen) didn't stretch full width on resize
@@ -98,9 +111,11 @@ All notable changes to this project will be documented in this file.
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-17
 - chore: bump version to 0.6.8
+- chore(deps): nightly dependency upgrade 2026-09-19
+- chore: bump version to 0.6.9
 ### 🧪 Testing
 - test(tui): add render.rs smoke-test suite; cleanup: finish DRY'ing system_cleaners.rs sudo call sites
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.7...v0.6.8
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.7...v0.6.9
 ## 0.6.7 - 2026-09-15
 ### 📚 Documentation
 - docs: update README and CHANGELOG for v0.6.4
@@ -120,11 +135,9 @@ All notable changes to this project will be documented in this file.
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.5...v0.6.6
 ## 0.6.5 - 2026-09-14
 ### 🐛 Bug Fixes
-- fix(gui): system cleaners silently no-op after password entry
 - fix: deep-analysis pass -- TUI/GUI bugs, dedupe, panic hardening
 - fix(demo): demo.tape used bare 'cargo run', broken since the cleansys-tui->cleansys package rename
 ### 📚 Documentation
-- docs: regenerate CHANGELOG.md with correct per-version sections
 - docs: regenerate CHANGELOG.md after merging Gitea auto-releases
 ### 📦 Other Changes
 - merge: reconcile Gitea nightly-deps auto-releases (v0.6.3, v0.6.4) with GUI sudo fix
@@ -132,7 +145,10 @@ All notable changes to this project will be documented in this file.
 - chore: bump version to 0.6.5
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.4...v0.6.5
 ## 0.6.4 - 2026-09-14
+### 🐛 Bug Fixes
+- fix(gui): system cleaners silently no-op after password entry
 ### 📚 Documentation
+- docs: regenerate CHANGELOG.md with correct per-version sections
 - docs: update README and CHANGELOG for v0.6.2
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-13
