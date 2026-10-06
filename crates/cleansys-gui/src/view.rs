@@ -2,7 +2,8 @@
 
 use cleansys_core::{format_size, Status};
 use iced::widget::{
-    button, checkbox, column, container, row, rule, scrollable, text, text_input, Space,
+    button, checkbox, column, container, pick_list, responsive, row, rule, scrollable, text,
+    text_input, tooltip, Space,
 };
 use iced::{Alignment, Color, Element, Length};
 
@@ -45,31 +46,83 @@ pub fn view(state: &CleanSysGui) -> Element<'_, Message> {
         .into()
 }
 
-/// The main (non-overlay) screen's content: header, controls, tabs, the
-/// active category's cleaner list, and the activity log. Extracted from
-/// [`view`] so its layout properties (in particular, that it must fill the
-/// window's width — iced's `Column` defaults to `Length::Shrink`, which
-/// previously left the whole screen, activity log included, stuck at its
-/// natural content width instead of stretching when the window was resized)
-/// can be asserted on directly in tests.
-fn main_content<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> {
-    column![
-        top_bar(state, c),
-        controls_bar(state, c),
-        tab_bar(state, c),
-        active_category_panel(state, c),
-        log_panel(state, c),
-    ]
-    .spacing(14)
-    .padding(20)
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .into()
+/// Width breakpoints (logical pixels) for the responsive layout.
+const WIDE: f32 = 980.0; // sidebar + list
+const MEDIUM: f32 = 700.0; // narrower sidebar
+                           // below MEDIUM: no sidebar — a category drop-down above the list
+
+/// How the main screen is laid out at a given window width.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Layout {
+    Wide,
+    Medium,
+    Narrow,
 }
 
-// ── Sections ────────────────────────────────────────────────────────────────
+impl Layout {
+    fn for_width(w: f32) -> Self {
+        if w >= WIDE {
+            Layout::Wide
+        } else if w >= MEDIUM {
+            Layout::Medium
+        } else {
+            Layout::Narrow
+        }
+    }
 
-fn top_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> {
+    fn sidebar_width(self) -> Option<f32> {
+        match self {
+            Layout::Wide => Some(300.0),
+            Layout::Medium => Some(230.0),
+            Layout::Narrow => None,
+        }
+    }
+}
+
+/// The main (non-overlay) screen. Responsive: it re-lays itself out from the
+/// real window width (`iced::widget::responsive`), see [`Layout`].
+fn main_content<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> {
+    let c = *c;
+    responsive(move |size| main_layout(state, &c, size.width)).into()
+}
+
+/// The screen for a concrete width. Separate from [`main_content`] so tests
+/// can build every layout directly.
+fn main_layout<'a>(state: &'a CleanSysGui, c: &ThemeColors, width: f32) -> Element<'a, Message> {
+    let layout = Layout::for_width(width);
+    let pad = if layout == Layout::Narrow { 10 } else { 16 };
+
+    let list_pane = column![
+        category_header(state, c, layout),
+        item_list(state, c, layout),
+    ]
+    .spacing(10)
+    .width(Length::Fill)
+    .height(Length::Fill);
+
+    let body: Element<'a, Message> = match layout.sidebar_width() {
+        Some(w) => row![sidebar(state, c, w), list_pane]
+            .spacing(14)
+            .height(Length::Fill)
+            .into(),
+        None => list_pane.into(),
+    };
+
+    let mut page = column![header(state, c, layout), body].spacing(12);
+    if state.show_log {
+        page = page.push(log_panel(state, c));
+    }
+    page = page.push(action_bar(state, c, layout));
+
+    page.padding(pad)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .into()
+}
+
+// ── Header ───────────────────────────────────────────────────────────────────
+
+fn header<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> Element<'a, Message> {
     let c = *c;
     let root_badge = if state.is_root {
         badge("ROOT", c.green)
@@ -77,250 +130,370 @@ fn top_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> 
         badge("USER", c.accent)
     };
 
-    let title_row = row![
-        text("🧹 CleanSys").size(26).color(c.text_primary),
-        root_badge,
-        Space::new().width(Length::Fill),
-        text("Theme").size(13).color(c.text_secondary),
-        theme_selector(state.theme_index),
-    ]
-    .spacing(12)
-    .align_y(Alignment::Center);
-
-    container(
-        column![
-            title_row,
-            text(if state.is_root {
-                "Running with root privileges — all cleaners can run directly."
-            } else {
-                "Running as a normal user — system cleaners will prompt for your sudo password."
-            })
-            .size(13)
-            .color(c.text_secondary),
-        ]
-        .spacing(4),
+    let search = text_input(
+        "Search cleaners…  (browsers, gradle, docker, logs)",
+        &state.search,
     )
-    .padding([16, 20])
-    .width(Length::Fill)
-    .style(move |_theme: &iced::Theme| container::Style {
-        background: Some(c.header_bg.into()),
-        border: iced::Border {
-            radius: 10.0.into(),
-            ..Default::default()
-        },
-        ..Default::default()
-    })
-    .into()
-}
-
-fn controls_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> {
-    let selected = state.selected_count();
-    let run_label = if state.is_running {
-        "⏳ Cleaning…".to_string()
-    } else if selected == 0 {
-        "Select cleaners to run".to_string()
+    .on_input(Message::SearchChanged)
+    .padding(8)
+    .size(14)
+    .width(Length::Fill);
+    let clear: Element<'a, Message> = if state.search.is_empty() {
+        Space::new().width(Length::Fixed(0.0)).into()
     } else {
-        format!("▶ Run {} selected", selected)
+        button(text("✕").size(13))
+            .padding([6, 10])
+            .style(button::secondary)
+            .on_press(Message::ClearSearch)
+            .into()
     };
 
-    let busy = state.is_running || state.previewing;
-
-    let run_button = button(text(run_label).size(14))
-        .padding([10, 20])
-        .style(button::primary)
-        .on_press_maybe(if busy || selected == 0 {
-            None
-        } else {
-            Some(Message::RequestRun)
-        });
-
-    let preview_label = if state.previewing {
-        "⏳ Previewing…".to_string()
+    let schedule_label = if layout == Layout::Narrow {
+        "⏰"
     } else {
-        "🔍 Preview".to_string()
+        "⏰ Schedule"
     };
-    let preview_button = button(text(preview_label).size(14))
-        .padding([10, 16])
+    let schedule = button(text(schedule_label).size(13))
+        .padding([8, 12])
         .style(button::secondary)
-        .on_press_maybe(if busy || selected == 0 {
-            None
-        } else {
-            Some(Message::RequestPreview)
-        });
+        .on_press_maybe((!(state.is_running)).then_some(Message::OpenSchedule));
 
-    let recommended_button = button(text("✨ Recommended").size(12))
-        .padding([6, 12])
-        .style(button::secondary)
-        .on_press_maybe((!busy).then_some(Message::SelectRecommended));
-    let schedule_button = button(text("⏰ Schedule").size(14))
-        .padding([10, 16])
-        .style(button::secondary)
-        .on_press_maybe((!busy).then_some(Message::OpenSchedule));
-
-    let select_all_button = button(text("Select all").size(12))
-        .padding([6, 12])
-        .style(button::secondary)
-        .on_press_maybe((!busy).then_some(Message::SelectAllEverywhere));
-    let select_none_button = button(text("Select none").size(12))
-        .padding([6, 12])
-        .style(button::secondary)
-        .on_press_maybe((!busy).then_some(Message::DeselectAllEverywhere));
-
-    let summary = column![
-        text(format!(
-            "Total freed this run: {}",
-            format_size(state.total_bytes_cleaned)
-        ))
-        .size(14)
-        .color(c.text_primary),
-        text(format!(
-            "{} item(s) selected across all categories",
-            selected
-        ))
-        .size(12)
-        .color(c.muted),
-    ]
-    .spacing(2);
-
-    let mut rows = column![row![
-        run_button,
-        preview_button,
-        schedule_button,
-        Space::new().width(Length::Fixed(12.0)),
-        recommended_button,
-        select_all_button,
-        select_none_button,
-        Space::new().width(Length::Fill),
-        summary,
+    let title = row![
+        text("🧹 CleanSys")
+            .size(if layout == Layout::Narrow { 20 } else { 24 })
+            .color(c.text_primary),
+        root_badge
     ]
     .spacing(10)
-    .align_y(Alignment::Center)]
-    .spacing(10);
+    .align_y(Alignment::Center);
 
-    if busy && state.operations_total > 0 {
-        let label = if state.previewing {
-            format!(
-                "Previewing {}/{}…",
-                state.operations_completed, state.operations_total
-            )
-        } else {
-            format!(
-                "Cleaning {}/{}…",
-                state.operations_completed, state.operations_total
-            )
-        };
-        rows = rows.push(
-            column![
-                iced::widget::progress_bar(0.0..=1.0, state.progress_fraction())
-                    .girth(Length::Fixed(8.0)),
-                text(label).size(11).color(c.muted),
-            ]
-            .spacing(4),
-        );
-    }
+    let content: Element<'a, Message> = match layout {
+        Layout::Narrow => column![
+            row![title, Space::new().width(Length::Fill), schedule].align_y(Alignment::Center),
+            row![search, clear].spacing(6).align_y(Alignment::Center),
+        ]
+        .spacing(8)
+        .into(),
+        _ => row![
+            title,
+            Space::new().width(Length::Fixed(12.0)),
+            search,
+            clear,
+            schedule,
+            theme_selector(state.theme_index),
+        ]
+        .spacing(10)
+        .align_y(Alignment::Center)
+        .into(),
+    };
 
-    container(rows)
-        .padding(16)
+    container(content)
+        .padding([12, 16])
         .width(Length::Fill)
-        .style(surface_style(*c))
+        .style(move |_t: &iced::Theme| container::Style {
+            background: Some(c.header_bg.into()),
+            border: iced::Border {
+                radius: 10.0.into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
         .into()
 }
 
-fn tab_bar<'a>(state: &'a CleanSysGui, _c: &ThemeColors) -> Element<'a, Message> {
-    let tabs: Vec<Element<'a, Message>> = state
-        .categories
-        .iter()
-        .enumerate()
-        .map(|(idx, category)| {
-            let is_active = idx == state.active_tab;
-            let icon_glyph = if category.items.iter().any(|i| i.requires_root) {
-                "🛡️"
-            } else {
-                "👤"
-            };
-            let label = text(format!(
-                "{icon_glyph} {} ({}/{})",
-                category.name,
-                state.selected_count_in(idx),
-                category.items.len()
-            ))
-            .size(13);
+// ── Sidebar / category navigation ────────────────────────────────────────────
 
-            button(label)
-                .padding([8, 16])
-                .style(if is_active {
-                    button::primary
-                } else {
-                    button::secondary
-                })
-                .on_press(Message::SwitchCategoryTab(idx))
-                .into()
-        })
-        .collect();
-
-    row(tabs).spacing(8).into()
+/// `true` for categories on the root/system side of the UI.
+fn is_root_category(name: &str, items: &[cleansys_core::CleanerItem]) -> bool {
+    name == "System Cleaners"
+        || name.ends_with(cleansys_core::model::ROOT_SUFFIX)
+        || (!items.is_empty() && items.iter().all(|i| i.requires_root))
 }
 
-fn active_category_panel<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> {
-    let Some(category) = state.categories.get(state.active_tab) else {
-        return Space::new().into();
+fn sidebar<'a>(state: &'a CleanSysGui, c: &ThemeColors, width: f32) -> Element<'a, Message> {
+    let c = *c;
+    let mut user_rows: Vec<Element<'a, Message>> = Vec::new();
+    let mut root_rows: Vec<Element<'a, Message>> = Vec::new();
+
+    for (idx, cat) in state.categories.iter().enumerate() {
+        if !state.category_visible(idx) {
+            continue;
+        }
+        let row_el = category_button(state, &c, idx);
+        if is_root_category(&cat.name, &cat.items) {
+            root_rows.push(row_el);
+        } else {
+            user_rows.push(row_el);
+        }
+    }
+
+    let section = |label: &'static str, hint: &'static str| -> Element<'a, Message> {
+        column![
+            text(label).size(11).color(c.muted),
+            text(hint).size(10).color(c.muted),
+        ]
+        .spacing(1)
+        .padding([8, 6])
+        .into()
     };
-    let cat_idx = state.active_tab;
 
-    let title_row = row![
-        text(category.description.clone()).size(13).color(c.muted),
-        Space::new().width(Length::Fill),
-        button(text("Select all").size(12))
-            .padding([5, 12])
-            .style(button::secondary)
-            .on_press(Message::SelectAllCategory(cat_idx)),
-        button(text("Select none").size(12))
-            .padding([5, 12])
-            .style(button::secondary)
-            .on_press(Message::DeselectAllCategory(cat_idx)),
-    ]
-    .spacing(8)
-    .align_y(Alignment::Center);
+    let mut col = column![section("USER LAND", "no password needed")].spacing(3);
+    col = col.push(column(user_rows).spacing(3));
+    if !root_rows.is_empty() {
+        col = col.push(section("SYSTEM · ROOT", "asks for your password"));
+        col = col.push(column(root_rows).spacing(3));
+    }
 
-    let items: Vec<Element<'a, Message>> = category
-        .items
-        .iter()
-        .enumerate()
-        .map(|(item_idx, item)| item_row(cat_idx, item_idx, item, c))
-        .collect();
-
-    let list = scrollable(column(items).spacing(4)).height(Length::Fill);
-
-    container(
-        column![title_row, rule::horizontal(1), list]
-            .spacing(12)
-            .height(Length::Fill),
-    )
-    .padding(18)
-    .width(Length::Fill)
-    .height(Length::Fill)
-    .style(surface_style(*c))
-    .into()
+    container(scrollable(col.padding([4, 6])).height(Length::Fill))
+        .width(Length::Fixed(width))
+        .height(Length::Fill)
+        .style(surface_style(c))
+        .into()
 }
 
-fn item_row<'a>(
-    cat_idx: usize,
-    item_idx: usize,
-    item: &'a cleansys_core::CleanerItem,
+fn category_button<'a>(
+    state: &'a CleanSysGui,
     c: &ThemeColors,
+    idx: usize,
 ) -> Element<'a, Message> {
-    let box_ = checkbox(item.selected)
-        .label(item.name.clone())
-        .size(16)
-        .on_toggle(move |_| Message::ToggleItem(cat_idx, item_idx));
+    let c = *c;
+    let cat = &state.categories[idx];
+    let active = idx == state.active_tab && state.search.trim().is_empty();
+    let ticked = state.selected_count_in(idx);
 
-    let root_tag: Element<'_, Message> = if item.requires_root {
-        badge("ROOT", c.accent)
+    let right: Element<'a, Message> = match state.category_bytes(idx) {
+        Some(b) if b > 0 => text(format_size(b))
+            .size(12)
+            .color(size_color(&c, b))
+            .into(),
+        Some(_) => text("—").size(12).color(c.muted).into(),
+        None if state.scan_pending > 0 => text("…").size(12).color(c.muted).into(),
+        None => Space::new().into(),
+    };
+    let tick: Element<'a, Message> = if ticked > 0 {
+        text(format!("{ticked} ✓")).size(11).color(c.accent).into()
     } else {
         Space::new().into()
     };
 
-    let status_line: Element<'_, Message> = match &item.status {
+    let label = row![
+        text(
+            cat.name
+                .trim_end_matches(cleansys_core::model::ROOT_SUFFIX)
+                .to_string()
+        )
+        .size(13)
+        .width(Length::Fill),
+        tick,
+        right,
+    ]
+    .spacing(8)
+    .align_y(Alignment::Center);
+
+    button(label)
+        .padding([8, 10])
+        .width(Length::Fill)
+        .style(move |theme: &iced::Theme, status: button::Status| {
+            let base = button::text(theme, status);
+            let hovered = matches!(status, button::Status::Hovered);
+            button::Style {
+                background: if active {
+                    Some(c.selection.into())
+                } else if hovered {
+                    Some(c.surface_highlight.into())
+                } else {
+                    None
+                },
+                text_color: if active {
+                    c.text_primary
+                } else {
+                    c.text_secondary
+                },
+                border: iced::Border {
+                    radius: 6.0.into(),
+                    ..Default::default()
+                },
+                ..base
+            }
+        })
+        .on_press(Message::SwitchCategoryTab(idx))
+        .into()
+}
+
+/// Colour a size by how much it is: small = normal, big = warm.
+fn size_color(c: &ThemeColors, bytes: u64) -> Color {
+    const GB: u64 = 1 << 30;
+    const MB: u64 = 1 << 20;
+    if bytes >= 5 * GB {
+        c.red
+    } else if bytes >= 500 * MB {
+        c.yellow
+    } else {
+        c.text_primary
+    }
+}
+
+/// Category title + description + bulk buttons (or the search summary), and
+/// — on narrow windows — the category drop-down that replaces the sidebar.
+fn category_header<'a>(
+    state: &'a CleanSysGui,
+    c: &ThemeColors,
+    layout: Layout,
+) -> Element<'a, Message> {
+    let c = *c;
+    let searching = !state.search.trim().is_empty();
+
+    let mut col = column![].spacing(8);
+
+    if layout == Layout::Narrow && !searching {
+        #[derive(Clone, PartialEq, Eq)]
+        struct Opt(usize, String);
+        impl std::fmt::Display for Opt {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+                f.write_str(&self.1)
+            }
+        }
+        let opts: Vec<Opt> = state
+            .categories
+            .iter()
+            .enumerate()
+            .filter(|(i, _)| state.category_visible(*i))
+            .map(|(i, cat)| {
+                let size = state
+                    .category_bytes(i)
+                    .filter(|b| *b > 0)
+                    .map(|b| format!("  ·  {}", format_size(b)))
+                    .unwrap_or_default();
+                Opt(i, format!("{}{size}", cat.name))
+            })
+            .collect();
+        let selected = opts.iter().find(|o| o.0 == state.active_tab).cloned();
+        col = col.push(
+            pick_list(opts, selected, |o: Opt| Message::SwitchCategoryTab(o.0))
+                .text_size(14.0)
+                .width(Length::Fill),
+        );
+    }
+
+    let (title, subtitle) = if searching {
+        let n = state.visible_items().len();
+        (
+            format!("Search results ({n})"),
+            format!("Matching “{}” in every category", state.search.trim()),
+        )
+    } else if let Some(cat) = state.categories.get(state.active_tab) {
+        (
+            cat.name
+                .trim_end_matches(cleansys_core::model::ROOT_SUFFIX)
+                .to_string(),
+            cat.description.clone(),
+        )
+    } else {
+        (String::new(), String::new())
+    };
+
+    let cat_idx = state.active_tab;
+    let bulk: Element<'a, Message> = if searching {
+        Space::new().into()
+    } else {
+        row![
+            button(text("All").size(12))
+                .padding([4, 10])
+                .style(button::secondary)
+                .on_press(Message::SelectAllCategory(cat_idx)),
+            button(text("None").size(12))
+                .padding([4, 10])
+                .style(button::secondary)
+                .on_press(Message::DeselectAllCategory(cat_idx)),
+        ]
+        .spacing(6)
+        .into()
+    };
+
+    col = col.push(
+        row![
+            column![
+                text(title).size(20).color(c.text_primary),
+                text(subtitle).size(12).color(c.muted),
+            ]
+            .spacing(2)
+            .width(Length::Fill),
+            bulk,
+        ]
+        .spacing(8)
+        .align_y(Alignment::Center),
+    );
+    col.into()
+}
+
+// ── Cleaner list ─────────────────────────────────────────────────────────────
+
+fn item_list<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> Element<'a, Message> {
+    let c = *c;
+    let visible = state.visible_items();
+
+    let body: Element<'a, Message> = if visible.is_empty() {
+        let msg = if !state.search.trim().is_empty() {
+            "No cleaner matches your search."
+        } else if state.scan_pending > 0 {
+            "Scanning your system…"
+        } else {
+            "Nothing to clean here — this category is already tidy ✨"
+        };
+        container(text(msg).size(14).color(c.muted))
+            .padding(30)
+            .center_x(Length::Fill)
+            .into()
+    } else {
+        let rows: Vec<Element<'a, Message>> = visible
+            .into_iter()
+            .map(|(ci, ii)| item_row(state, ci, ii, &c, layout))
+            .collect();
+        scrollable(column(rows).spacing(6).padding(iced::Padding {
+            right: 12.0,
+            ..Default::default()
+        }))
+        .height(Length::Fill)
+        .into()
+    };
+
+    container(body)
+        .padding(10)
+        .width(Length::Fill)
+        .height(Length::Fill)
+        .style(surface_style(c))
+        .into()
+}
+
+fn item_row<'a>(
+    state: &'a CleanSysGui,
+    cat_idx: usize,
+    item_idx: usize,
+    c: &ThemeColors,
+    layout: Layout,
+) -> Element<'a, Message> {
+    let c = *c;
+    let item = &state.categories[cat_idx].items[item_idx];
+    let info = state.scan_info(cat_idx, item_idx);
+
+    let name_check = checkbox(item.selected)
+        .label(item.name.clone())
+        .size(17)
+        .text_size(14)
+        .on_toggle(move |_| Message::ToggleItem(cat_idx, item_idx));
+
+    let mut badges = row![].spacing(6).align_y(Alignment::Center);
+    match item.risk {
+        cleansys_core::Risk::Safe => {}
+        cleansys_core::Risk::Moderate => badges = badges.push(badge("MODERATE", c.yellow)),
+        cleansys_core::Risk::Caution => badges = badges.push(badge("CAUTION", c.red)),
+    }
+    if item.requires_root {
+        badges = badges.push(badge("ROOT", c.accent));
+    }
+
+    // Right-hand column: run status while/after running, else the scanned size.
+    let right: Element<'a, Message> = match &item.status {
         Some(Status::Success(msg)) => row![
             icon(icons::CHECK_CIRCLE_FILL, c.green),
             text(msg.clone()).size(12).color(c.green),
@@ -344,68 +517,301 @@ fn item_row<'a>(
         .into(),
         Some(Status::Pending) => row![
             icon(icons::CLOCK, c.muted),
-            text("pending").size(12).color(c.muted),
+            text("queued").size(12).color(c.muted),
         ]
         .spacing(6)
         .align_y(Alignment::Center)
         .into(),
-        None => Space::new().into(),
+        None => match info {
+            Some(s) if s.error.is_some() => text("scan failed").size(12).color(c.red).into(),
+            Some(s) if s.bytes > 0 => column![
+                text(format_size(s.bytes))
+                    .size(16)
+                    .color(size_color(&c, s.bytes)),
+                text(format!("{} item(s)", s.items)).size(11).color(c.muted),
+            ]
+            .align_x(Alignment::End)
+            .into(),
+            Some(_) => text("nothing to clean").size(12).color(c.muted).into(),
+            None => text(if state.scan_pending > 0 {
+                "scanning…"
+            } else {
+                ""
+            })
+            .size(12)
+            .color(c.muted)
+            .into(),
+        },
     };
 
-    let header_row = row![
-        box_,
-        root_tag,
-        Space::new().width(Length::Fill),
-        status_line
-    ]
-    .spacing(10)
-    .align_y(Alignment::Center);
+    let mut left = column![row![name_check, badges]
+        .spacing(10)
+        .align_y(Alignment::Center)]
+    .spacing(3);
+    left = left.push(text(item.description.clone()).size(12).color(c.muted));
+    if let Some(top) = info.and_then(|s| s.top_path.as_ref()) {
+        left = left.push(text(format!("📁 {top}")).size(11).color(c.text_secondary));
+    }
 
-    let mut body = column![
-        header_row,
-        text(item.description.clone()).size(12).color(c.muted),
-    ]
-    .spacing(2);
-
-    // Show a real per-file/per-directory breakdown of what was actually
-    // cleaned (path + size), not just the aggregate total.
+    // Per-path breakdown of the last *real* run.
     if let Some(result) = &item.last_result {
-        if !result.items.is_empty() {
-            let mut items_sorted: Vec<_> = result.items.iter().collect();
-            items_sorted.sort_by_key(|i| std::cmp::Reverse(i.size));
-
-            let mut detail_lines: Vec<Element<'a, Message>> = items_sorted
-                .iter()
-                .take(5)
-                .map(|cleaned| {
-                    text(format!(
-                        "    • {} — {}",
-                        cleaned.path_str(),
-                        format_size(cleaned.size)
-                    ))
+        let mut sorted: Vec<_> = result.items.iter().collect();
+        sorted.sort_by_key(|i| std::cmp::Reverse(i.size));
+        for cleaned in sorted.iter().take(4) {
+            left = left.push(
+                text(format!(
+                    "   • {} — {}",
+                    cleaned.path_str(),
+                    format_size(cleaned.size)
+                ))
+                .size(11)
+                .color(c.text_secondary),
+            );
+        }
+        if sorted.len() > 4 {
+            left = left.push(
+                text(format!("   … and {} more", sorted.len() - 4))
                     .size(11)
-                    .color(c.text_secondary)
-                    .into()
-                })
-                .collect();
-
-            if items_sorted.len() > 5 {
-                detail_lines.push(
-                    text(format!("    … and {} more", items_sorted.len() - 5))
-                        .size(11)
-                        .color(c.muted)
-                        .into(),
-                );
-            }
-
-            body = body.push(column(detail_lines).spacing(1));
+                    .color(c.muted),
+            );
         }
     }
 
-    container(body)
-        .padding([8, 10])
+    let content: Element<'a, Message> = if layout == Layout::Narrow {
+        column![left, right].spacing(6).into()
+    } else {
+        row![left.width(Length::Fill), right]
+            .spacing(12)
+            .align_y(Alignment::Center)
+            .into()
+    };
+
+    let selected = item.selected;
+    container(content)
+        .padding([10, 12])
         .width(Length::Fill)
-        .style(item_row_style(*c))
+        .style(move |_t: &iced::Theme| container::Style {
+            background: Some(
+                if selected {
+                    c.selection
+                } else {
+                    c.surface_highlight
+                }
+                .into(),
+            ),
+            border: iced::Border {
+                radius: 8.0.into(),
+                color: if selected {
+                    c.accent
+                } else {
+                    Color::TRANSPARENT
+                },
+                width: if selected { 1.0 } else { 0.0 },
+            },
+            ..Default::default()
+        })
+        .into()
+}
+
+// ── Action bar (always visible) ──────────────────────────────────────────────
+
+fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> Element<'a, Message> {
+    let c = *c;
+    let selected = state.selected_count();
+    let busy = state.is_running || state.previewing;
+    let scanning = state.scan_pending > 0;
+    let reclaim = state.selected_reclaimable();
+    let compact = layout != Layout::Wide;
+
+    // Summary / progress
+    let summary: Element<'a, Message> = if state.is_running || state.previewing {
+        let label = if state.previewing {
+            "Previewing"
+        } else {
+            "Cleaning"
+        };
+        column![
+            text(format!(
+                "{label} {}/{}…",
+                state.operations_completed, state.operations_total
+            ))
+            .size(13)
+            .color(c.text_primary),
+            iced::widget::progress_bar(0.0..=1.0, state.progress_fraction())
+                .girth(Length::Fixed(6.0)),
+        ]
+        .spacing(4)
+        .width(Length::Fill)
+        .into()
+    } else if scanning {
+        let done = state.scan_total - state.scan_pending;
+        column![
+            text(format!("Scanning your system… {done}/{}", state.scan_total))
+                .size(13)
+                .color(c.text_primary),
+            iced::widget::progress_bar(
+                0.0..=1.0,
+                if state.scan_total == 0 {
+                    0.0
+                } else {
+                    done as f32 / state.scan_total as f32
+                }
+            )
+            .girth(Length::Fixed(6.0)),
+        ]
+        .spacing(4)
+        .width(Length::Fill)
+        .into()
+    } else {
+        let headline = if state.total_bytes_cleaned > 0 {
+            format!("✓ Freed {}", format_size(state.total_bytes_cleaned))
+        } else if selected == 0 {
+            format!(
+                "{} can be freed — tick cleaners or press Recommended",
+                format_size(state.total_reclaimable())
+            )
+        } else {
+            format!("{selected} selected · {} to free", format_size(reclaim))
+        };
+        column![
+            text(headline)
+                .size(14)
+                .color(if state.total_bytes_cleaned > 0 {
+                    c.green
+                } else {
+                    c.text_primary
+                }),
+            text(format!(
+                "{} reclaimable in total",
+                format_size(state.total_reclaimable())
+            ))
+            .size(11)
+            .color(c.muted),
+        ]
+        .spacing(2)
+        .width(Length::Fill)
+        .into()
+    };
+
+    let clean_label = if state.is_running {
+        "⏳ Cleaning…".to_string()
+    } else if selected == 0 {
+        "Select cleaners".to_string()
+    } else if reclaim > 0 {
+        format!("🧹 Clean {selected} · {}", format_size(reclaim))
+    } else {
+        format!("🧹 Clean {selected}")
+    };
+    let clean = button(text(clean_label).size(14))
+        .padding([10, 18])
+        .style(button::primary)
+        .on_press_maybe((!busy && selected > 0).then_some(Message::RequestRun));
+
+    // Small secondary button with a hover tooltip (essential when compact
+    // layouts reduce the label to an icon).
+    let small =
+        |label: &str, tip: &'static str, msg: Message, enabled: bool| -> Element<'a, Message> {
+            tooltip(
+                button(text(label.to_string()).size(12))
+                    .padding([6, 10])
+                    .style(button::secondary)
+                    .on_press_maybe(enabled.then_some(msg)),
+                container(text(tip).size(12))
+                    .padding(6)
+                    .style(container::rounded_box),
+                tooltip::Position::Top,
+            )
+            .into()
+        };
+
+    let recommended = small(
+        if compact { "✨" } else { "✨ Recommended" },
+        "Tick only the safe, user-land cleaners",
+        Message::SelectRecommended,
+        !busy,
+    );
+    let none = small(
+        if compact { "☐" } else { "Select none" },
+        "Untick everything",
+        Message::DeselectAllEverywhere,
+        !busy,
+    );
+    let rescan = small(
+        if compact { "⟳" } else { "⟳ Rescan" },
+        "Measure what every cleaner can free again",
+        Message::ScanAll,
+        !busy && !scanning,
+    );
+    let preview = small(
+        if compact { "🔍" } else { "🔍 Preview" },
+        "Show exactly what would be removed (deletes nothing)",
+        Message::RequestPreview,
+        !busy && selected > 0,
+    );
+    let hide = checkbox(state.hide_empty)
+        .label(if compact {
+            "Hide empty"
+        } else {
+            "Hide empty cleaners"
+        })
+        .size(15)
+        .text_size(12)
+        .on_toggle(|_| Message::ToggleHideEmpty);
+    let log_btn = small(
+        if state.show_log {
+            "Activity ▾"
+        } else {
+            "Activity ▴"
+        },
+        "Show or hide the activity log",
+        Message::ToggleLog,
+        true,
+    );
+
+    let content: Element<'a, Message> = match layout {
+        Layout::Wide => row![
+            summary,
+            hide,
+            log_btn,
+            rescan,
+            recommended,
+            none,
+            preview,
+            clean,
+        ]
+        .spacing(10)
+        .align_y(Alignment::Center)
+        .into(),
+        Layout::Medium => column![
+            row![summary, clean].spacing(12).align_y(Alignment::Center),
+            row![
+                hide,
+                Space::new().width(Length::Fill),
+                log_btn,
+                rescan,
+                recommended,
+                none,
+                preview
+            ]
+            .spacing(8)
+            .align_y(Alignment::Center),
+        ]
+        .spacing(8)
+        .into(),
+        Layout::Narrow => column![
+            summary,
+            row![recommended, none, preview, rescan, log_btn].spacing(6),
+            row![hide, Space::new().width(Length::Fill)].align_y(Alignment::Center),
+            clean.width(Length::Fill),
+        ]
+        .spacing(8)
+        .into(),
+    };
+
+    container(content)
+        .padding([10, 14])
+        .width(Length::Fill)
+        .style(surface_style(c))
         .into()
 }
 
@@ -425,21 +831,19 @@ fn log_panel<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message
     container(
         column![
             row![
-                text("Activity log").size(14).color(c.text_primary),
+                text("Activity").size(13).color(c.text_primary),
                 Space::new().width(Length::Fill),
-                button(text("Clear").size(12))
-                    .padding([4, 10])
+                button(text("Clear").size(11))
+                    .padding([3, 8])
                     .style(button::secondary)
                     .on_press(Message::ClearLog),
             ]
-            .spacing(8)
             .align_y(Alignment::Center),
-            rule::horizontal(1),
-            scrollable(column(log_lines).spacing(3)).height(Length::Fixed(130.0)),
+            scrollable(column(log_lines).spacing(2)).height(Length::Fixed(120.0)),
         ]
-        .spacing(8),
+        .spacing(6),
     )
-    .padding(14)
+    .padding(10)
     .width(Length::Fill)
     .style(surface_style(*c))
     .into()
@@ -456,18 +860,6 @@ fn surface_style(c: ThemeColors) -> impl Fn(&iced::Theme) -> container::Style {
             color: c.border,
             width: 1.0,
             radius: 8.0.into(),
-        },
-        ..Default::default()
-    }
-}
-
-/// A slightly-highlighted row background, used for individual cleaner items.
-fn item_row_style(c: ThemeColors) -> impl Fn(&iced::Theme) -> container::Style {
-    move |_theme: &iced::Theme| container::Style {
-        background: Some(c.surface_highlight.into()),
-        border: iced::Border {
-            radius: 6.0.into(),
-            ..Default::default()
         },
         ..Default::default()
     }
@@ -721,7 +1113,6 @@ fn choice<T: Clone + PartialEq + Eq>(value: T, label: impl Into<String>) -> Choi
 /// Dialog for configuring automatic (scheduled) cleaning.
 fn schedule_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> {
     use cleansys_core::engine::schedule::{Backend, Frequency, Scope, WEEKDAYS};
-    use iced::widget::pick_list;
 
     let c = *c;
     let d = &state.schedule_draft;
@@ -1045,10 +1436,12 @@ mod tests {
         // instead of stretching to fill the window on resize.
         let state = CleanSysGui::new();
         let c = state.colors();
-        let element = main_content(&state, &c);
-        let size = element.as_widget().size();
-        assert_eq!(size.width, Length::Fill);
-        assert_eq!(size.height, Length::Fill);
+        for w in [380.0, 600.0, 800.0, 1000.0, 1600.0] {
+            let element = main_layout(&state, &c, w);
+            let size = element.as_widget().size();
+            assert_eq!(size.width, Length::Fill, "width {w}");
+            assert_eq!(size.height, Length::Fill, "width {w}");
+        }
     }
 
     #[test]
@@ -1154,6 +1547,45 @@ mod tests {
             state.schedule_draft.frequency = f;
             state.schedule_draft.minute = 7; // not a 5-minute step
             let _ = view(&state);
+        }
+    }
+
+    #[test]
+    fn layout_breakpoints() {
+        assert_eq!(Layout::for_width(1400.0), Layout::Wide);
+        assert_eq!(Layout::for_width(980.0), Layout::Wide);
+        assert_eq!(Layout::for_width(800.0), Layout::Medium);
+        assert_eq!(Layout::for_width(699.0), Layout::Narrow);
+        assert!(Layout::Narrow.sidebar_width().is_none());
+        assert!(Layout::Wide.sidebar_width() > Layout::Medium.sidebar_width());
+    }
+
+    #[test]
+    fn every_layout_renders_with_scan_results_search_and_log() {
+        use crate::state::ScanInfo;
+        let mut state = CleanSysGui::new();
+        state.show_log = true;
+        state.push_log("hello");
+        state.scan_total = 3;
+        state.scan_pending = 1;
+        state.scan[0][0] = Some(ScanInfo {
+            bytes: 6 << 30,
+            items: 3,
+            top_path: Some("/tmp/x".into()),
+            error: None,
+        });
+        state.scan[0][1] = Some(ScanInfo {
+            error: Some("boom".into()),
+            ..Default::default()
+        });
+        state.categories[0].items[0].selected = true;
+        let c = state.colors();
+        for w in [360.0, 640.0, 760.0, 1100.0] {
+            let _ = main_layout(&state, &c, w);
+        }
+        state.search = "cache".into();
+        for w in [360.0, 1100.0] {
+            let _ = main_layout(&state, &c, w);
         }
     }
 }

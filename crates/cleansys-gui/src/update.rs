@@ -61,6 +61,59 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        Message::SearchChanged(q) => {
+            state.search = q;
+            Task::none()
+        }
+        Message::ClearSearch => {
+            state.search.clear();
+            Task::none()
+        }
+        Message::ToggleHideEmpty => {
+            state.hide_empty = !state.hide_empty;
+            state.ensure_active_visible();
+            Task::none()
+        }
+        Message::ToggleLog => {
+            state.show_log = !state.show_log;
+            Task::none()
+        }
+        Message::ScanAll => start_scan(state),
+        Message::ScanItemFinished(cat_idx, item_idx, result) => {
+            let info = match result {
+                Ok(r) => {
+                    let top = r.items.iter().max_by_key(|i| i.size).map(|i| i.path_str());
+                    crate::state::ScanInfo {
+                        bytes: r.total_bytes,
+                        items: r.item_count(),
+                        top_path: top,
+                        error: None,
+                    }
+                }
+                Err(e) => crate::state::ScanInfo {
+                    error: Some(e),
+                    ..Default::default()
+                },
+            };
+            if let Some(slot) = state
+                .scan
+                .get_mut(cat_idx)
+                .and_then(|row| row.get_mut(item_idx))
+            {
+                *slot = Some(info);
+            }
+            state.scan_pending = state.scan_pending.saturating_sub(1);
+            if state.scan_pending == 0 {
+                state.ensure_active_visible();
+                let total = state.total_reclaimable();
+                state.push_log(format!(
+                    "\u{1f50e} Scan complete \u{2014} {} can be freed",
+                    format_size(total)
+                ));
+            }
+            Task::none()
+        }
+
         Message::SelectRecommended => {
             let n = cleansys_core::select_recommended(&mut state.categories, state.is_root);
             state.push_log(format!("Selected {n} recommended (safe) cleaners"));
@@ -310,6 +363,8 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
                 );
                 state.push_log(format!("\u{1f389} {summary}"));
                 crate::platform::notify_completion(&summary);
+                // Sizes changed: re-measure so the list shows what is left.
+                return start_scan(state);
             }
 
             Task::none()
@@ -347,6 +402,77 @@ fn run_selected(state: &mut CleanSysGui) -> Task<Message> {
     start_pending_operations(state)
 }
 
+/// Run `f` on its own OS thread and await the result, so blocking cleaner
+/// work (disk walks, `sudo` commands) never stalls the UI or async executor.
+fn blocking(
+    f: impl FnOnce() -> anyhow::Result<cleansys_core::CleaningResult> + Send + 'static,
+) -> impl std::future::Future<Output = anyhow::Result<cleansys_core::CleaningResult>> {
+    let (tx, rx) = iced::futures::channel::oneshot::channel();
+    std::thread::spawn(move || {
+        let _ = tx.send(f());
+    });
+    async move {
+        rx.await
+            .unwrap_or_else(|_| Err(anyhow::anyhow!("worker thread terminated unexpectedly")))
+    }
+}
+
+type ScanResult = Result<cleansys_core::CleaningResult, String>;
+
+/// Run the queued scans on a small pool of OS threads (never on the UI /
+/// async executor threads, so a slow disk walk can't freeze the window).
+/// Each job reports through its own one-shot channel.
+fn spawn_scan_pool(
+    jobs: Vec<(
+        cleansys_core::CleanerFn,
+        iced::futures::channel::oneshot::Sender<ScanResult>,
+    )>,
+) {
+    use std::collections::VecDeque;
+    use std::sync::{Arc, Mutex};
+    let queue = Arc::new(Mutex::new(VecDeque::from(jobs)));
+    let workers = std::thread::available_parallelism()
+        .map(|n| n.get().clamp(2, 6))
+        .unwrap_or(4);
+    for _ in 0..workers {
+        let queue = Arc::clone(&queue);
+        std::thread::spawn(move || loop {
+            let job = queue.lock().unwrap_or_else(|e| e.into_inner()).pop_front();
+            let Some((function, tx)) = job else { break };
+            let _ = tx.send(function(RunOptions::preview()).map_err(|e| e.to_string()));
+        });
+    }
+}
+
+/// Measure every cleaner in the background (read-only previews).
+fn start_scan(state: &mut CleanSysGui) -> Task<Message> {
+    if state.scan_pending > 0 || state.is_running {
+        return Task::none();
+    }
+    let mut tasks = Vec::new();
+    let mut jobs = Vec::new();
+    for (cat_idx, cat) in state.categories.iter().enumerate() {
+        for (item_idx, item) in cat.items.iter().enumerate() {
+            let (tx, rx) = iced::futures::channel::oneshot::channel::<ScanResult>();
+            jobs.push((item.function.clone(), tx));
+            tasks.push(Task::perform(
+                async move {
+                    rx.await
+                        .unwrap_or_else(|_| Err("scan cancelled".to_string()))
+                },
+                move |result| Message::ScanItemFinished(cat_idx, item_idx, result),
+            ));
+        }
+    }
+    spawn_scan_pool(jobs);
+    for row in &mut state.scan {
+        row.iter_mut().for_each(|s| *s = None);
+    }
+    state.scan_total = tasks.len();
+    state.scan_pending = tasks.len();
+    Task::batch(tasks)
+}
+
 /// Spawn background tasks for every operation in `pending_root_ops`.
 fn start_pending_operations(state: &mut CleanSysGui) -> Task<Message> {
     let ops = std::mem::take(&mut state.pending_root_ops);
@@ -355,6 +481,7 @@ fn start_pending_operations(state: &mut CleanSysGui) -> Task<Message> {
     }
 
     state.is_running = true;
+    state.show_log = true;
     state.total_bytes_cleaned = 0;
     state.operations_total = ops.len();
     state.operations_completed = 0;
@@ -375,7 +502,7 @@ fn start_pending_operations(state: &mut CleanSysGui) -> Task<Message> {
         state.push_log(format!("\u{1f504} Running: {}", name));
 
         tasks.push(Task::perform(
-            async move { function(RunOptions::execute()) },
+            blocking(move || function(RunOptions::execute())),
             move |result| {
                 Message::OperationFinished(cat_idx, item_idx, result.map_err(|e| e.to_string()))
             },
@@ -419,7 +546,7 @@ fn request_preview(state: &mut CleanSysGui) -> Task<Message> {
         let function = item.function.clone();
 
         tasks.push(Task::perform(
-            async move { function(RunOptions::preview()) },
+            blocking(move || function(RunOptions::preview())),
             move |result| {
                 Message::PreviewFinished(cat_idx, item_idx, result.map_err(|e| e.to_string()))
             },

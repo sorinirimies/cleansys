@@ -1,7 +1,20 @@
 use cleansys_gui::{update, view, CleanSysGui, Message};
 
 fn boot() -> (CleanSysGui, iced::Task<Message>) {
-    (CleanSysGui::new(), iced::Task::none())
+    // Measure what every cleaner can free as soon as the window opens.
+    (CleanSysGui::new(), iced::Task::done(Message::ScanAll))
+}
+
+/// Initial window size; `CLEANSYS_GUI_SIZE=WxH` overrides (handy for testing
+/// the responsive layouts).
+fn initial_size() -> iced::Size {
+    std::env::var("CLEANSYS_GUI_SIZE")
+        .ok()
+        .and_then(|v| {
+            let (w, h) = v.split_once('x')?;
+            Some(iced::Size::new(w.parse().ok()?, h.parse().ok()?))
+        })
+        .unwrap_or(iced::Size::new(1180.0, 780.0))
 }
 
 fn main() -> iced::Result {
@@ -15,8 +28,8 @@ fn main() -> iced::Result {
             ..Default::default()
         })
         .window(iced::window::Settings {
-            size: iced::Size::new(1000.0, 760.0),
-            min_size: Some(iced::Size::new(720.0, 480.0)),
+            size: initial_size(),
+            min_size: Some(iced::Size::new(420.0, 520.0)),
             ..Default::default()
         })
         .run()

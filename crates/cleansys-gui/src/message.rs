@@ -48,6 +48,18 @@ pub enum Message {
     OperationFinished(usize, usize, Result<cleansys_core::CleaningResult, String>),
     /// Clear the operation log and reset counters for a fresh run.
     ClearLog,
+    /// The search box changed (filters cleaners across every category).
+    SearchChanged(String),
+    /// Clear the search box.
+    ClearSearch,
+    /// Measure how much every cleaner could free (read-only), in the background.
+    ScanAll,
+    /// One cleaner's background scan finished.
+    ScanItemFinished(usize, usize, Result<cleansys_core::CleaningResult, String>),
+    /// Toggle hiding cleaners that have nothing to clean.
+    ToggleHideEmpty,
+    /// Show/hide the activity log drawer.
+    ToggleLog,
     /// Tick exactly the recommended cleaners (safe, user-land unless root).
     SelectRecommended,
     /// Open the automatic-cleaning (schedule) dialog.
