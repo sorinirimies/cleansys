@@ -314,7 +314,7 @@ jobs:
     runs-on: ubuntu-latest
     continue-on-error: true   # housekeeping must never fail a release
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - name: Install Rust
         run: |
           for i in 1 2 3; do
