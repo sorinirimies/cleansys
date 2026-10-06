@@ -75,6 +75,9 @@ async fn home(cx: &Cx) -> Result<impl View> {
     }
     let searching = !q.trim().is_empty();
     let back = nav_href(active, &q, hide);
+    // The header badge shows the scope you are in: ROOT while a system category is open.
+    let root_scope =
+        snap.is_root || (!searching && snap.categories.get(active).is_some_and(|c| c.root));
 
     let rows: Vec<usize> = st
         .visible(active, &q, hide)
@@ -111,7 +114,7 @@ async fn home(cx: &Cx) -> Result<impl View> {
 
     Ok(view! {
         document(refresh: refresh, theme: theme_idx, title: "CleanSys".to_string(),
-            top_bar(is_root: snap.is_root, q: q.clone(), cat: active, hide: hide, theme: theme_idx, back: back.clone())
+            top_bar(is_root: root_scope, q: q.clone(), cat: active, hide: hide, theme: theme_idx, back: back.clone())
             if let Some((cls, msg)) = &banner {
                 <div class=(format!("banner {cls}"))>(msg.clone()) " " <a href="/progress">"View"</a></div>
             }

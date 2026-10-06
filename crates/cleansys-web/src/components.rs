@@ -53,7 +53,7 @@ pub async fn top_bar(
         <header class="top">
             <h1><a href="/" style="color:inherit">"🧹 CleanSys"</a></h1>
             if is_root {
-                <span class="badge root">"ROOT"</span>
+                <span class="badge caut" title="System (root) section">"ROOT"</span>
             } else {
                 <span class="badge user">"USER"</span>
             }

@@ -124,8 +124,15 @@ fn main_layout<'a>(state: &'a CleanSysGui, c: &ThemeColors, width: f32) -> Eleme
 
 fn header<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> Element<'a, Message> {
     let c = *c;
-    let root_badge = if state.is_root {
-        badge("ROOT", c.green)
+    // The badge shows the scope you are working in: ROOT while a system (root)
+    // category is open or when the app itself runs as root, otherwise USER.
+    let in_root_section = state.search.trim().is_empty()
+        && state
+            .categories
+            .get(state.active_tab)
+            .is_some_and(|cat| is_root_category(&cat.name, &cat.items));
+    let root_badge = if state.is_root || in_root_section {
+        badge("ROOT", c.red)
     } else {
         badge("USER", c.accent)
     };

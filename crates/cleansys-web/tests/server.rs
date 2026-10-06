@@ -288,3 +288,25 @@ async fn cross_origin_post_is_refused() {
     stream.read_to_string(&mut raw).await.unwrap();
     assert!(raw.starts_with("HTTP/1.1 403"), "{raw}");
 }
+
+#[tokio::test]
+async fn header_badge_switches_to_root_when_a_root_category_is_open() {
+    let addr = start().await;
+    wait_for_scan(addr).await;
+    let cats: serde_json::Value =
+        serde_json::from_str(&get(addr, "/api/categories").await.body).unwrap();
+    let list = cats["categories"].as_array().unwrap();
+    let user_idx = list.iter().position(|c| c["root"] == false).unwrap();
+    let root_idx = list.iter().position(|c| c["root"] == true).unwrap();
+
+    let user = get(addr, &format!("/?cat={user_idx}")).await;
+    assert!(user.body.contains("badge user"), "user land shows USER");
+    assert!(!user.body.contains("System (root) section"));
+
+    let root = get(addr, &format!("/?cat={root_idx}")).await;
+    assert!(
+        root.body.contains("System (root) section"),
+        "root category shows ROOT"
+    );
+    assert!(!root.body.contains("badge user"));
+}
