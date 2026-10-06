@@ -2,9 +2,20 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.6.22 - 2026-10-06
+### 📚 Documentation
+- docs(readme): add TUI and GUI crates.io download badges
+### 🔄 CI
+- ci(deps): only cut patch release when a direct dependency changes
+- ci(gitea): retry rustup install on flaky network
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-10-05
+- chore(deps): nightly dependency upgrade 2026-10-06
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.21...v0.6.22
 ## 0.6.21 - 2026-10-04
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-10-04
+- chore: bump version to 0.6.21
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.20...v0.6.21
 ## 0.6.20 - 2026-10-03
 ### 🔧 Chores
