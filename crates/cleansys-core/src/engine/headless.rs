@@ -52,7 +52,17 @@ pub fn select(specs: &[CleanerSpec], sel: &Selection) -> Result<Vec<CleanerSpec>
 /// Print every available declarative cleaner grouped by category.
 pub fn print_list() {
     let mut last = String::new();
-    for s in load_specs() {
+    let mut specs = load_specs();
+    // Stable sort: groups same-named categories that came from different
+    // files while keeping first-seen category order.
+    let order: Vec<String> = specs.iter().fold(Vec::new(), |mut acc, s| {
+        if !acc.contains(&s.category) {
+            acc.push(s.category.clone());
+        }
+        acc
+    });
+    specs.sort_by_key(|s| order.iter().position(|c| c == &s.category));
+    for s in specs {
         if s.category != last {
             println!("\n{}:", s.category);
             last = s.category.clone();
@@ -78,7 +88,7 @@ pub fn run_selection(sel: &Selection, opts: RunOptions) -> Result<u64> {
     let verb = if opts.dry_run { "reclaimable" } else { "freed" };
     let mut total = 0u64;
     for spec in chosen {
-        if spec.requires_root && !crate::utils::check_root() {
+        if spec.requires_root && !opts.dry_run && !crate::utils::check_root() {
             print_warning(&format!("Skipping '{}' (needs root)", spec.name));
             continue;
         }

@@ -10,15 +10,28 @@ pub fn lookup_env(name: &str) -> Option<String> {
             return Some(v);
         }
     }
+    let upper = name.to_ascii_uppercase();
+    let name = if matches!(
+        upper.as_str(),
+        "SYSTEMROOT" | "WINDIR" | "PROGRAMDATA" | "TEMP" | "TMP"
+    ) {
+        upper.as_str()
+    } else {
+        name
+    };
     let home = || crate::cleaners::platform::home_dir();
     let under = |rel: &str| home().map(|h| h.join(rel).to_string_lossy().into_owned());
     match name {
         "HOME" | "USERPROFILE" => home().map(|h| h.to_string_lossy().into_owned()),
         "XDG_CACHE_HOME" => under(".cache"),
+        "XDG_STATE_HOME" => under(".local/state"),
         "XDG_DATA_HOME" => under(".local/share"),
         "XDG_CONFIG_HOME" => under(".config"),
         "LOCALAPPDATA" => under("AppData/Local"),
         "APPDATA" => under("AppData/Roaming"),
+        "SYSTEMROOT" | "WINDIR" => Some("C:\\Windows".to_string()),
+        "PROGRAMDATA" => Some("C:\\ProgramData".to_string()),
+        "TEMP" | "TMP" => Some(std::env::temp_dir().to_string_lossy().into_owned()),
         _ => None,
     }
 }
@@ -106,6 +119,31 @@ pub fn resolve(template: &str, env: &dyn Fn(&str) -> Option<String>) -> Vec<Path
     found.sort();
     found.dedup();
     found
+}
+
+/// Locate an executable on `PATH` (or accept an absolute path).
+pub fn find_program(program: &str) -> Option<PathBuf> {
+    let direct = PathBuf::from(program);
+    if direct.is_absolute() {
+        return direct.is_file().then_some(direct);
+    }
+    let exts: Vec<String> = if cfg!(windows) {
+        vec![
+            "".into(),
+            ".exe".into(),
+            ".cmd".into(),
+            ".bat".into(),
+            ".com".into(),
+        ]
+    } else {
+        vec!["".into()]
+    };
+    std::env::split_paths(&std::env::var_os("PATH")?).find_map(|dir| {
+        exts.iter().find_map(|e| {
+            let candidate = dir.join(format!("{program}{e}"));
+            candidate.is_file().then_some(candidate)
+        })
+    })
 }
 
 #[cfg(test)]

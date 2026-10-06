@@ -69,7 +69,29 @@ pub enum Action {
         /// Recreate the (now empty) directory afterwards.
         #[serde(default)]
         recreate: bool,
+        /// Remove via `sudo rm -rf` when not already root. Defaults to the
+        /// cleaner's `requires_root`.
+        #[serde(default)]
+        sudo: Option<bool>,
         /// Label shown next to each removed item.
+        #[serde(default)]
+        label: Option<String>,
+    },
+    /// Run an external program (e.g. `docker system prune -f`). Skipped when
+    /// the program is not on `PATH`. Never run in preview mode; instead the
+    /// `measure` paths are reported. Args support the same templating as
+    /// paths.
+    Command {
+        program: String,
+        #[serde(default)]
+        args: Vec<String>,
+        /// Run through `sudo` when not already root.
+        #[serde(default)]
+        sudo: bool,
+        /// Directories whose size is measured before/after the command to
+        /// report the real bytes freed.
+        #[serde(default)]
+        measure: Vec<String>,
         #[serde(default)]
         label: Option<String>,
     },

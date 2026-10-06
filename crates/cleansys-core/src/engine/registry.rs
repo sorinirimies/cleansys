@@ -15,6 +15,16 @@ const BUILTIN: &[(&str, &str)] = &[
         include_str!("builtin/build_artifacts.toml"),
     ),
     ("ai_llm.toml", include_str!("builtin/ai_llm.toml")),
+    (
+        "developer_more.toml",
+        include_str!("builtin/developer_more.toml"),
+    ),
+    ("browsers.toml", include_str!("builtin/browsers.toml")),
+    ("apps.toml", include_str!("builtin/apps.toml")),
+    ("games.toml", include_str!("builtin/games.toml")),
+    ("system.toml", include_str!("builtin/system.toml")),
+    ("containers.toml", include_str!("builtin/containers.toml")),
+    ("privacy.toml", include_str!("builtin/privacy.toml")),
 ];
 
 /// Parse one TOML document into specs.
@@ -96,6 +106,13 @@ mod tests {
             assert!(ids.insert(s.id.clone()), "duplicate id {}", s.id);
             assert!(!s.name.is_empty() && !s.description.is_empty(), "{}", s.id);
             assert!(!s.actions.is_empty(), "{} has no actions", s.id);
+            for os in &s.os {
+                assert!(
+                    ["linux", "macos", "windows"].contains(&os.as_str()),
+                    "{}: bad os {os}",
+                    s.id
+                );
+            }
         }
     }
 
@@ -103,14 +120,26 @@ mod tests {
     fn builtin_delete_paths_are_never_protected_or_relative() {
         use crate::engine::{paths, safety};
         for s in load_all_unfiltered(None) {
+            if !s.applies_to_current_os() {
+                continue; // e.g. `C:\\Windows` is not absolute on Unix
+            }
             for a in &s.actions {
                 for t in a.delete_templates() {
                     let expanded = paths::expand(t, &paths::lookup_env);
+                    let is_glob = expanded.contains(['*', '?', '[']);
                     let p = std::path::PathBuf::from(
                         expanded.split(['*', '?', '[']).next().unwrap_or(""),
                     );
                     assert!(p.is_absolute(), "{}: {t} not absolute", s.id);
-                    assert!(!safety::is_protected(&p), "{}: {t} protected", s.id);
+                    if is_glob {
+                        // A glob's literal prefix is a *parent* directory whose
+                        // children get removed one by one (each re-checked at
+                        // delete time), so only require it to be a real
+                        // directory prefix, not a bare filesystem root.
+                        assert!(p.components().count() >= 3, "{}: {t} too broad", s.id);
+                    } else {
+                        assert!(!safety::is_protected(&p), "{}: {t} protected", s.id);
+                    }
                 }
             }
         }

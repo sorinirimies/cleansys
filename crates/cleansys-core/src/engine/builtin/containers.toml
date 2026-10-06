@@ -1,0 +1,140 @@
+# Container runtimes, sandboxed app stores and package-store garbage.
+# Programs that are not installed are skipped automatically.
+
+[[cleaner]]
+id = "ctr-docker-prune"
+name = "Docker: Prune Unused Data"
+description = "docker system prune -f: stopped containers, dangling images, unused networks, build cache"
+category = "Containers & Virtualization"
+risk = "moderate"
+[[cleaner.action]]
+type = "command"
+program = "docker"
+args = ["system", "prune", "-f"]
+label = "docker system prune"
+
+[[cleaner]]
+id = "ctr-docker-builder"
+name = "Docker: Build Cache"
+description = "docker builder prune -f: BuildKit cache only"
+category = "Containers & Virtualization"
+[[cleaner.action]]
+type = "command"
+program = "docker"
+args = ["builder", "prune", "-f"]
+label = "docker builder prune"
+
+[[cleaner]]
+id = "ctr-docker-images"
+name = "Docker: All Unused Images"
+description = "docker image prune -a -f: every image not used by a container (re-pull needed)"
+category = "Containers & Virtualization"
+risk = "caution"
+[[cleaner.action]]
+type = "command"
+program = "docker"
+args = ["image", "prune", "-a", "-f"]
+label = "docker image prune -a"
+
+[[cleaner]]
+id = "ctr-docker-volumes"
+name = "Docker: Unused Volumes"
+description = "docker volume prune -f: volumes not attached to any container (DATA LOSS possible)"
+category = "Containers & Virtualization"
+risk = "caution"
+[[cleaner.action]]
+type = "command"
+program = "docker"
+args = ["volume", "prune", "-f"]
+label = "docker volume prune"
+
+[[cleaner]]
+id = "ctr-podman-prune"
+name = "Podman: Prune Unused Data"
+description = "podman system prune -f"
+category = "Containers & Virtualization"
+risk = "moderate"
+[[cleaner.action]]
+type = "command"
+program = "podman"
+args = ["system", "prune", "-f"]
+label = "podman system prune"
+
+[[cleaner]]
+id = "ctr-flatpak-user"
+name = "Flatpak: Unused Runtimes (user)"
+description = "flatpak uninstall --user --unused"
+category = "Containers & Virtualization"
+os = ["linux"]
+risk = "moderate"
+[[cleaner.action]]
+type = "command"
+program = "flatpak"
+args = ["uninstall", "--user", "--unused", "-y"]
+measure = ["~/.local/share/flatpak"]
+label = "flatpak user unused"
+
+[[cleaner]]
+id = "ctr-flatpak-system"
+name = "Flatpak: Unused Runtimes (system)"
+description = "flatpak uninstall --system --unused"
+category = "Containers & Virtualization"
+os = ["linux"]
+requires_root = true
+risk = "moderate"
+[[cleaner.action]]
+type = "command"
+program = "flatpak"
+args = ["uninstall", "--system", "--unused", "-y"]
+sudo = true
+measure = ["/var/lib/flatpak"]
+label = "flatpak system unused"
+
+[[cleaner]]
+id = "ctr-nix-gc"
+name = "Nix: Garbage Collect"
+description = "nix-collect-garbage -d: delete old generations and unreachable store paths"
+category = "Containers & Virtualization"
+risk = "caution"
+[[cleaner.action]]
+type = "command"
+program = "nix-collect-garbage"
+args = ["-d"]
+label = "nix-collect-garbage"
+
+[[cleaner]]
+id = "ctr-conda-clean"
+name = "Conda: Clean Packages & Caches"
+description = "conda clean --all -y: unused tarballs, packages and index caches"
+category = "Containers & Virtualization"
+risk = "moderate"
+[[cleaner.action]]
+type = "command"
+program = "conda"
+args = ["clean", "--all", "-y"]
+measure = ["~/miniconda3/pkgs", "~/anaconda3/pkgs", "~/miniforge3/pkgs", "~/.conda/pkgs"]
+label = "conda clean"
+
+[[cleaner]]
+id = "ctr-kube-helm"
+name = "Kubernetes / Helm / Minikube Caches"
+description = "kubectl discovery cache, Helm caches, Minikube cache"
+category = "Containers & Virtualization"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.kube/cache", "~/.kube/http-cache", "~/.minikube/cache"]
+linux = ["$XDG_CACHE_HOME/helm"]
+macos = ["~/Library/Caches/helm"]
+windows = ["$LOCALAPPDATA/Temp/helm"]
+label = "Kubernetes cache"
+
+[[cleaner]]
+id = "ctr-vagrant"
+name = "Vagrant Boxes"
+description = "Downloaded Vagrant base boxes (~/.vagrant.d/boxes)"
+category = "Containers & Virtualization"
+risk = "caution"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.vagrant.d/boxes/*", "~/.vagrant.d/tmp/*"]
+label = "Vagrant box"

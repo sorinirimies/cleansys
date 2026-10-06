@@ -1,0 +1,135 @@
+# More developer-tool caches (language ecosystems, Xcode, CI tooling).
+
+[[cleaner]]
+id = "dev-xcode-device-support"
+name = "Xcode Device Support Symbols"
+description = "iOS/watchOS/tvOS DeviceSupport symbol caches (re-created when a device connects)"
+category = "Developer Caches"
+os = ["macos"]
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/Library/Developer/Xcode/iOS DeviceSupport/*", "~/Library/Developer/Xcode/watchOS DeviceSupport/*", "~/Library/Developer/Xcode/tvOS DeviceSupport/*", "~/Library/Developer/Xcode/visionOS DeviceSupport/*"]
+label = "Device support"
+
+[[cleaner]]
+id = "dev-xcode-misc"
+name = "Xcode Caches & Documentation"
+description = "Xcode cache, documentation cache and SwiftUI preview data"
+category = "Developer Caches"
+os = ["macos"]
+[[cleaner.action]]
+type = "delete"
+paths = ["~/Library/Caches/com.apple.dt.Xcode", "~/Library/Developer/Xcode/DocumentationCache", "~/Library/Developer/Xcode/UserData/Previews", "~/Library/Developer/XCPGDevices/*", "~/Library/Developer/Xcode/DocumentationIndex"]
+label = "Xcode cache"
+
+[[cleaner]]
+id = "dev-xcode-archives"
+name = "Xcode Archives"
+description = "App archives from Product > Archive (needed for dSYMs / re-submission!)"
+category = "Developer Caches"
+os = ["macos"]
+risk = "caution"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/Library/Developer/Xcode/Archives/*"]
+label = "Xcode archive"
+
+[[cleaner]]
+id = "dev-ruby"
+name = "Ruby Gems & Bundler Caches"
+description = "gem and Bundler download caches"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.bundle/cache", "~/.gem/ruby/*/cache", "~/.local/share/gem/ruby/*/cache"]
+label = "Ruby cache"
+
+[[cleaner]]
+id = "dev-php"
+name = "Composer Cache"
+description = "PHP Composer download cache"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.composer/cache"]
+linux = ["$XDG_CACHE_HOME/composer"]
+macos = ["~/Library/Caches/composer"]
+windows = ["$LOCALAPPDATA/Composer"]
+label = "Composer cache"
+
+[[cleaner]]
+id = "dev-nuget"
+name = ".NET NuGet Caches"
+description = "NuGet http/plugins/temp caches and the global packages folder"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.nuget/packages", "~/.local/share/NuGet/http-cache", "~/.local/share/NuGet/plugins-cache", "~/.local/share/NuGet/v3-cache"]
+windows = ["$LOCALAPPDATA/NuGet/v3-cache", "$LOCALAPPDATA/NuGet/plugins-cache", "$LOCALAPPDATA/Temp/NuGetScratch"]
+label = "NuGet cache"
+
+[[cleaner]]
+id = "dev-jvm-tools"
+name = "sbt / Ivy / Coursier / Scala Caches"
+description = "Ivy2, sbt boot and Coursier caches"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.ivy2/cache", "~/.sbt/boot", "~/.cache/coursier", "~/.konan/cache", "~/.konan/dependencies"]
+macos = ["~/Library/Caches/Coursier"]
+windows = ["$LOCALAPPDATA/Coursier/cache"]
+label = "JVM tool cache"
+
+[[cleaner]]
+id = "dev-deno-julia-haskell"
+name = "Deno / Julia / Haskell Caches"
+description = "Deno module cache, Julia compiled cache, Haskell stack/cabal download caches"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.julia/compiled", "~/.cabal/packages", "~/.stack/indices"]
+linux = ["$XDG_CACHE_HOME/deno"]
+macos = ["~/Library/Caches/deno"]
+windows = ["$LOCALAPPDATA/deno"]
+label = "Language cache"
+
+[[cleaner]]
+id = "dev-ccache"
+name = "ccache"
+description = "C/C++ compiler cache"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["${CCACHE_DIR:-~/.ccache}"]
+linux = ["$XDG_CACHE_HOME/ccache"]
+macos = ["~/Library/Caches/ccache"]
+windows = ["$LOCALAPPDATA/ccache"]
+label = "ccache"
+
+[[cleaner]]
+id = "dev-ansible-tmp"
+name = "Ansible Temp & Fact Caches"
+description = "~/.ansible/tmp and cached facts"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.ansible/tmp/*", "~/.ansible/cp/*", "~/.ansible/facts_cache/*"]
+label = "Ansible temp"
+
+[[cleaner]]
+id = "dev-package-mgr-extras"
+name = "Linuxbrew / Scoop / Chocolatey Caches"
+description = "Download caches of Homebrew on Linux, Scoop and Chocolatey"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/Homebrew"]
+windows = ["~/scoop/cache/*", "C:/ProgramData/chocolatey/lib-bad/*", "$LOCALAPPDATA/Temp/chocolatey/*"]
+label = "Package-manager cache"

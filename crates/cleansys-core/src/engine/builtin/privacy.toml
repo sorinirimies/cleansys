@@ -1,0 +1,52 @@
+# Traces of your activity. Everything here is `moderate` or `caution`:
+# deleting it cannot be undone and is usually about privacy, not space.
+
+[[cleaner]]
+id = "priv-recent-documents"
+name = "Recent Documents Lists"
+description = "Recently-used file lists of the desktop and shell"
+category = "Privacy Traces"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_DATA_HOME/recently-used.xbel", "~/.recently-used", "$XDG_DATA_HOME/RecentDocuments/*"]
+macos = ["~/Library/Application Support/com.apple.sharedfilelist/*", "~/Library/Preferences/com.apple.recentitems.plist"]
+windows = ["$APPDATA/Microsoft/Windows/Recent/*.lnk", "$APPDATA/Microsoft/Windows/Recent/AutomaticDestinations/*", "$APPDATA/Microsoft/Windows/Recent/CustomDestinations/*"]
+label = "Recent documents"
+
+[[cleaner]]
+id = "priv-shell-history"
+name = "Shell Command Histories"
+description = "bash, zsh, fish, nushell, PowerShell and cmd histories"
+category = "Privacy Traces"
+risk = "caution"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.bash_history", "~/.zsh_history", "~/.zhistory", "~/.zsh_sessions/*", "~/.bash_sessions/*", "$XDG_DATA_HOME/fish/fish_history", "$XDG_DATA_HOME/nushell/history.txt", "$XDG_DATA_HOME/nushell/history.sqlite3", "$XDG_CONFIG_HOME/nushell/history.txt", "$XDG_CONFIG_HOME/nushell/history.sqlite3", "~/.local/share/xonsh/*history*"]
+macos = ["~/Library/Application Support/nushell/history.txt", "~/Library/Application Support/nushell/history.sqlite3"]
+windows = ["$APPDATA/Microsoft/Windows/PowerShell/PSReadLine/ConsoleHost_history.txt", "$APPDATA/nushell/history.txt", "$APPDATA/nushell/history.sqlite3"]
+label = "Shell history"
+
+[[cleaner]]
+id = "priv-repl-history"
+name = "REPL & Tool Histories"
+description = "Python, Node, Ruby, less, vim, sqlite, MySQL, PostgreSQL, Redis, wget history files"
+category = "Privacy Traces"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.python_history", "~/.node_repl_history", "~/.irb_history", "~/.lesshst", "~/.viminfo", "~/.sqlite_history", "~/.mysql_history", "~/.psql_history", "~/.rediscli_history", "~/.wget-hsts", "~/.dbshell"]
+label = "Tool history"
+
+[[cleaner]]
+id = "priv-editor-history"
+name = "Editor Workspace History"
+description = "Neovim/Vim swap, undo and shada files, VS Code workspace storage"
+category = "Privacy Traces"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_DATA_HOME/nvim/swap/*", "$XDG_STATE_HOME/nvim/swap/*", "$XDG_STATE_HOME/nvim/undo/*", "$XDG_STATE_HOME/nvim/shada/*", "~/.local/state/nvim/swap/*", "~/.local/state/nvim/undo/*", "~/.local/state/nvim/shada/*", "~/.vim/undo/*", "~/.vim/swap/*"]
+macos = ["~/.local/state/nvim/swap/*", "~/.local/state/nvim/undo/*", "~/.local/state/nvim/shada/*", "~/.vim/undo/*", "~/.vim/swap/*"]
+windows = ["$LOCALAPPDATA/nvim-data/swap/*", "$LOCALAPPDATA/nvim-data/shada/*", "$LOCALAPPDATA/nvim-data/undo/*"]
+label = "Editor history"

@@ -161,6 +161,14 @@ fn category_description(name: &str) -> &'static str {
             "Build output inside your projects (target/, build/, node_modules/, ...)"
         }
         "AI & LLM Caches" => "Model weights, agent caches and session histories",
+        "Web Browsers" => "Cache, cookies, sessions and history of installed browsers",
+        "Applications" => "Caches and logs of chat, media, productivity and creative apps",
+        "Games" => "Shader caches, launcher caches and logs of game platforms",
+        "System Maintenance" => {
+            "OS-level caches, logs, crash dumps and update leftovers (often needs root)"
+        }
+        "Containers & Virtualization" => "Docker, Podman, Flatpak, Snap and Nix garbage",
+        "Privacy Traces" => "Recent-file lists, shell/REPL histories and similar traces",
         _ => "Additional cleaners",
     }
 }

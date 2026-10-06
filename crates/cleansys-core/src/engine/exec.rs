@@ -34,9 +34,11 @@ pub fn run_spec_with(
                 contents_only,
                 recreate,
                 label,
+                sudo,
                 ..
             } => {
                 let label = label.as_deref().unwrap_or(&spec.name);
+                let elevated = sudo.unwrap_or(spec.requires_root);
                 for template in action.delete_templates() {
                     for path in paths::resolve(template, &paths::lookup_env) {
                         if *contents_only {
@@ -45,14 +47,32 @@ pub fn run_spec_with(
                                     rd.flatten().map(|e| e.path()).collect();
                                 kids.sort();
                                 for kid in kids {
-                                    remove_path(&mut result, &kid, label, opts, false, cfg)?;
+                                    remove_path(
+                                        &mut result,
+                                        &kid,
+                                        label,
+                                        opts,
+                                        false,
+                                        elevated,
+                                        cfg,
+                                    )?;
                                 }
                             }
                         } else {
-                            remove_path(&mut result, &path, label, opts, *recreate, cfg)?;
+                            remove_path(&mut result, &path, label, opts, *recreate, elevated, cfg)?;
                         }
                     }
                 }
+            }
+            Action::Command {
+                program,
+                args,
+                sudo,
+                measure,
+                label,
+            } => {
+                let label = label.as_deref().unwrap_or(&spec.name);
+                run_command(&mut result, program, args, *sudo, measure, label, opts)?;
             }
             Action::ProjectArtifacts {
                 markers,
@@ -66,7 +86,7 @@ pub fn run_spec_with(
                         .map(|n| n.to_string_lossy().into_owned())
                         .unwrap_or_default();
                     let item_label = format!("{label}: {name}");
-                    remove_path(&mut result, &artifact, &item_label, opts, false, cfg)?;
+                    remove_path(&mut result, &artifact, &item_label, opts, false, false, cfg)?;
                 }
             }
         }
@@ -80,6 +100,7 @@ pub fn run_spec_with(
 pub fn spec_has_targets(spec: &CleanerSpec) -> bool {
     spec.actions.iter().any(|a| match a {
         Action::ProjectArtifacts { .. } => true,
+        Action::Command { program, .. } => paths::find_program(program).is_some(),
         Action::Delete { .. } => a
             .delete_templates()
             .iter()
@@ -94,6 +115,7 @@ pub(crate) fn remove_path(
     label: &str,
     opts: RunOptions,
     recreate: bool,
+    elevated: bool,
     cfg: &EngineConfig,
 ) -> Result<()> {
     let Ok(meta) = fs::symlink_metadata(path) else {
@@ -140,7 +162,18 @@ pub(crate) fn remove_path(
         return Ok(());
     }
 
-    let removal = if is_dir {
+    let removal = if elevated && cfg!(unix) && !crate::utils::check_root() {
+        // Privileged path: delegate to `sudo rm -rf` (the path already passed
+        // the protected/exclusion checks above and is absolute).
+        let p = path.to_string_lossy();
+        match crate::utils::execute_with_sudo("rm", &["-rf", "--", p.as_ref()]) {
+            Ok(o) if o.status.success() => Ok(()),
+            Ok(o) => Err(std::io::Error::other(
+                String::from_utf8_lossy(&o.stderr).trim().to_string(),
+            )),
+            Err(e) => Err(std::io::Error::other(e.to_string())),
+        }
+    } else if is_dir {
         fs::remove_dir_all(path)
     } else {
         fs::remove_file(path)
@@ -250,6 +283,79 @@ fn project_index(cfg: &EngineConfig) -> Index {
         *guard = Some((key, std::time::Instant::now(), idx.clone()));
     }
     idx
+}
+
+/// Run an external program, reporting bytes freed from `measure` paths.
+fn run_command(
+    result: &mut CleaningResult,
+    program: &str,
+    args: &[String],
+    sudo: bool,
+    measure: &[String],
+    label: &str,
+    opts: RunOptions,
+) -> Result<()> {
+    if paths::find_program(program).is_none() {
+        debug!("{program} not found; skipping {label}");
+        return Ok(());
+    }
+    let measured: Vec<PathBuf> = measure
+        .iter()
+        .flat_map(|t| paths::resolve(t, &paths::lookup_env))
+        .filter(|p| !is_protected(p))
+        .collect();
+    let before: Vec<u64> = measured
+        .iter()
+        .map(|p| get_size(&p.to_string_lossy()).unwrap_or(0))
+        .collect();
+
+    if opts.dry_run {
+        for (p, b) in measured.iter().zip(&before) {
+            if *b > 0 {
+                result.add_item(CleanedItem::directory(p.clone(), *b, label));
+            }
+        }
+        return Ok(());
+    }
+
+    let args: Vec<String> = args
+        .iter()
+        .map(|a| paths::expand(a, &paths::lookup_env))
+        .collect();
+    let shown = format!("{program} {}", args.join(" "));
+    if !opts.skip_confirmation && !confirm(&format!("{label}: run `{}`?", shown.trim()), true)? {
+        return Ok(());
+    }
+
+    let arg_refs: Vec<&str> = args.iter().map(String::as_str).collect();
+    let output = if sudo {
+        crate::utils::execute_with_sudo(program, &arg_refs)?
+    } else {
+        std::process::Command::new(program)
+            .args(&arg_refs)
+            .output()?
+    };
+    if !output.status.success() {
+        anyhow::bail!(
+            "{label}: `{}` failed: {}",
+            shown.trim(),
+            String::from_utf8_lossy(&output.stderr).trim()
+        );
+    }
+
+    let mut freed_any = false;
+    for (p, b) in measured.iter().zip(&before) {
+        let after = get_size(&p.to_string_lossy()).unwrap_or(*b);
+        let freed = b.saturating_sub(after);
+        if freed > 0 {
+            freed_any = true;
+            result.add_item(CleanedItem::directory(p.clone(), freed, label));
+        }
+    }
+    if freed_any || measured.is_empty() {
+        print_success(&format!("{label}: ran `{}`", shown.trim()));
+    }
+    Ok(())
 }
 
 /// Scan project roots and return `(project_dir, artifact_dir)` pairs.
@@ -421,6 +527,7 @@ mod tests {
             "x",
             RunOptions::execute(),
             false,
+            false,
             &cfg,
         )
         .unwrap();
@@ -448,6 +555,7 @@ mod tests {
             Path::new("/usr"),
             "x",
             RunOptions::preview(),
+            false,
             false,
             &EngineConfig::default(),
         )

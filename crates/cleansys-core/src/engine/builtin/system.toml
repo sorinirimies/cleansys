@@ -1,0 +1,345 @@
+# OS-level maintenance cleaners. `requires_root` entries use `sudo rm -rf`
+# (or sudo commands) when cleansys is not already running as root.
+# Previews work without root.
+
+# ───────────────────────────── Linux ─────────────────────────────
+
+[[cleaner]]
+id = "sys-lin-apt-lists"
+name = "APT Package Lists"
+description = "Downloaded package indexes (/var/lib/apt/lists); run `apt update` afterwards"
+category = "System Maintenance"
+os = ["linux"]
+requires_root = true
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["/var/lib/apt/lists/*_*"]
+label = "APT lists"
+
+[[cleaner]]
+id = "sys-lin-apt-autoremove"
+name = "APT Autoremove (unused packages)"
+description = "Purge automatically installed packages that are no longer needed"
+category = "System Maintenance"
+os = ["linux"]
+requires_root = true
+risk = "caution"
+[[cleaner.action]]
+type = "command"
+program = "apt-get"
+args = ["autoremove", "--purge", "-y"]
+sudo = true
+label = "apt autoremove"
+
+[[cleaner]]
+id = "sys-lin-pkg-db-backups"
+name = "Package Database Backups"
+description = "dpkg/debconf *-old backups and compressed /var/backups archives"
+category = "System Maintenance"
+os = ["linux"]
+requires_root = true
+[[cleaner.action]]
+type = "delete"
+paths = ["/var/lib/dpkg/*-old", "/var/cache/debconf/*-old", "/var/backups/*.gz"]
+label = "Package DB backup"
+
+[[cleaner]]
+id = "sys-lin-other-pkg-caches"
+name = "Other Distro Package Caches"
+description = "zypper, yum, apk, xbps, eopkg and PackageKit download caches"
+category = "System Maintenance"
+os = ["linux"]
+requires_root = true
+[[cleaner.action]]
+type = "delete"
+paths = ["/var/cache/zypp/packages/*", "/var/cache/yum/*", "/var/cache/apk/*", "/var/cache/xbps/*", "/var/cache/eopkg/packages/*", "/var/cache/PackageKit/*", "/var/cache/libdnf5/*"]
+label = "Package cache"
+
+[[cleaner]]
+id = "sys-lin-rotated-logs"
+name = "Rotated & Archived Logs"
+description = "Compressed and numbered rotated logs under /var/log"
+category = "System Maintenance"
+os = ["linux"]
+requires_root = true
+[[cleaner.action]]
+type = "delete"
+paths = ["/var/log/*.gz", "/var/log/*.[0-9]", "/var/log/*.old", "/var/log/*.xz", "/var/log/*/*.gz", "/var/log/*/*.[0-9]", "/var/log/*/*.old", "/var/log/*/*.xz"]
+label = "Rotated log"
+
+[[cleaner]]
+id = "sys-lin-journal"
+name = "systemd Journal (keep 200 MB)"
+description = "Vacuum the systemd journal down to 200 MB"
+category = "System Maintenance"
+os = ["linux"]
+requires_root = true
+risk = "moderate"
+[[cleaner.action]]
+type = "command"
+program = "journalctl"
+args = ["--vacuum-size=200M"]
+sudo = true
+measure = ["/var/log/journal"]
+label = "journal vacuum"
+
+[[cleaner]]
+id = "sys-lin-coredumps"
+name = "Core Dumps & Crash Dirs"
+description = "systemd-coredump, apport and /var/crash dumps"
+category = "System Maintenance"
+os = ["linux"]
+requires_root = true
+[[cleaner.action]]
+type = "delete"
+paths = ["/var/lib/systemd/coredump/*", "/var/crash/*", "/var/lib/apport/coredump/*", "/var/lib/abrt/*"]
+label = "Core dump"
+
+[[cleaner]]
+id = "sys-lin-root-cache"
+name = "Root User Cache"
+description = "Contents of /root/.cache (left by sudo pip/npm/etc.)"
+category = "System Maintenance"
+os = ["linux"]
+requires_root = true
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["/root/.cache/*"]
+label = "Root cache"
+
+[[cleaner]]
+id = "sys-lin-snap-cache"
+name = "Snap Cache"
+description = "Snapd download cache"
+category = "System Maintenance"
+os = ["linux"]
+requires_root = true
+[[cleaner.action]]
+type = "delete"
+paths = ["/var/lib/snapd/cache/*", "/var/cache/snapd/*"]
+label = "Snap cache"
+
+[[cleaner]]
+id = "sys-lin-user-desktop-caches"
+name = "Desktop Environment Caches"
+description = "GNOME Software, Tracker, IBus, KDE and thumbnail-adjacent caches, X session logs"
+category = "System Maintenance"
+os = ["linux"]
+[[cleaner.action]]
+type = "delete"
+paths = ["$XDG_CACHE_HOME/gnome-software", "$XDG_CACHE_HOME/tracker3", "$XDG_CACHE_HOME/ibus", "$XDG_CACHE_HOME/plasma*", "$XDG_CACHE_HOME/krunner", "$XDG_CACHE_HOME/fontconfig", "$XDG_CACHE_HOME/mesa_shader_cache_db", "~/.xsession-errors", "~/.xsession-errors.old", "$XDG_DATA_HOME/xorg/*.log*"]
+label = "Desktop cache"
+
+# ───────────────────────────── macOS ─────────────────────────────
+
+[[cleaner]]
+id = "sys-mac-system-updates"
+name = "Downloaded macOS Updates"
+description = "Leftover installers in /Library/Updates"
+category = "System Maintenance"
+os = ["macos"]
+requires_root = true
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["/Library/Updates/*"]
+label = "macOS update"
+
+[[cleaner]]
+id = "sys-mac-dns-flush"
+name = "Flush DNS Cache"
+description = "dscacheutil -flushcache and restart mDNSResponder"
+category = "System Maintenance"
+os = ["macos"]
+requires_root = true
+[[cleaner.action]]
+type = "command"
+program = "dscacheutil"
+args = ["-flushcache"]
+sudo = true
+label = "dscacheutil"
+[[cleaner.action]]
+type = "command"
+program = "killall"
+args = ["-HUP", "mDNSResponder"]
+sudo = true
+label = "mDNSResponder"
+
+[[cleaner]]
+id = "sys-mac-quicklook"
+name = "Quick Look Thumbnail Cache"
+description = "Reset the Quick Look thumbnail cache (qlmanage -r cache)"
+category = "System Maintenance"
+os = ["macos"]
+[[cleaner.action]]
+type = "command"
+program = "qlmanage"
+args = ["-r", "cache"]
+label = "Quick Look cache"
+
+[[cleaner]]
+id = "sys-mac-purge"
+name = "Purge Inactive Memory"
+description = "Run `purge` to flush the disk cache and free inactive memory"
+category = "System Maintenance"
+os = ["macos"]
+requires_root = true
+risk = "moderate"
+[[cleaner.action]]
+type = "command"
+program = "purge"
+sudo = true
+label = "purge"
+
+[[cleaner]]
+id = "sys-mac-tm-snapshots"
+name = "Time Machine Local Snapshots"
+description = "Thin local APFS Time Machine snapshots to reclaim space"
+category = "System Maintenance"
+os = ["macos"]
+requires_root = true
+risk = "caution"
+[[cleaner.action]]
+type = "command"
+program = "tmutil"
+args = ["thinlocalsnapshots", "/", "99999999999", "4"]
+sudo = true
+label = "Time Machine snapshots"
+
+[[cleaner]]
+id = "sys-mac-ios-backups"
+name = "iOS Device Backups"
+description = "iPhone/iPad backups in ~/Library/Application Support/MobileSync/Backup (needs Full Disk Access)"
+category = "System Maintenance"
+os = ["macos"]
+risk = "caution"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/Library/Application Support/MobileSync/Backup/*"]
+label = "iOS backup"
+
+[[cleaner]]
+id = "sys-mac-mail-downloads"
+name = "Mail Attachment Downloads"
+description = "Copies of attachments opened from Mail"
+category = "System Maintenance"
+os = ["macos"]
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/Library/Containers/com.apple.mail/Data/Library/Mail Downloads/*"]
+label = "Mail download"
+
+[[cleaner]]
+id = "sys-mac-brew-autoremove"
+name = "Homebrew Autoremove"
+description = "Uninstall Homebrew formulae no longer needed by anything"
+category = "System Maintenance"
+os = ["macos", "linux"]
+risk = "moderate"
+[[cleaner.action]]
+type = "command"
+program = "brew"
+args = ["autoremove"]
+label = "brew autoremove"
+
+# ───────────────────────────── Windows ─────────────────────────────
+
+[[cleaner]]
+id = "sys-win-prefetch"
+name = "Prefetch Files"
+description = "Application launch prefetch data (C:\\Windows\\Prefetch)"
+category = "System Maintenance"
+os = ["windows"]
+requires_root = true
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["$SYSTEMROOT/Prefetch/*"]
+label = "Prefetch"
+
+[[cleaner]]
+id = "sys-win-logs-dumps"
+name = "Windows Logs & Memory Dumps"
+description = "CBS logs, minidumps, MEMORY.DMP and live kernel reports"
+category = "System Maintenance"
+os = ["windows"]
+requires_root = true
+[[cleaner.action]]
+type = "delete"
+paths = ["$SYSTEMROOT/Logs/CBS/*", "$SYSTEMROOT/Minidump/*", "$SYSTEMROOT/MEMORY.DMP", "$SYSTEMROOT/LiveKernelReports/*"]
+label = "Windows log/dump"
+
+[[cleaner]]
+id = "sys-win-wer"
+name = "Windows Error Reporting"
+description = "Queued and archived error reports plus user crash dumps"
+category = "System Maintenance"
+os = ["windows"]
+[[cleaner.action]]
+type = "delete"
+paths = ["$PROGRAMDATA/Microsoft/Windows/WER/ReportArchive/*", "$PROGRAMDATA/Microsoft/Windows/WER/ReportQueue/*", "$LOCALAPPDATA/Microsoft/Windows/WER/*", "$LOCALAPPDATA/CrashDumps/*"]
+label = "Error report"
+
+[[cleaner]]
+id = "sys-win-thumbnails"
+name = "Explorer Thumbnail & Icon Cache"
+description = "thumbcache_*.db and iconcache_*.db (Explorer must not be locking them)"
+category = "System Maintenance"
+os = ["windows"]
+[[cleaner.action]]
+type = "delete"
+paths = ["$LOCALAPPDATA/Microsoft/Windows/Explorer/thumbcache_*.db", "$LOCALAPPDATA/Microsoft/Windows/Explorer/iconcache_*.db", "$LOCALAPPDATA/IconCache.db"]
+label = "Explorer cache"
+
+[[cleaner]]
+id = "sys-win-inetcache"
+name = "Internet Cache (WinINet)"
+description = "Legacy IE/Edge-legacy and WinINet content cache"
+category = "System Maintenance"
+os = ["windows"]
+[[cleaner.action]]
+type = "delete"
+paths = ["$LOCALAPPDATA/Microsoft/Windows/INetCache/*"]
+label = "INetCache"
+
+[[cleaner]]
+id = "sys-win-delivery-optimization"
+name = "Delivery Optimization Cache"
+description = "Windows Update peer-to-peer download cache"
+category = "System Maintenance"
+os = ["windows"]
+requires_root = true
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["$SYSTEMROOT/ServiceProfiles/NetworkService/AppData/Local/Microsoft/Windows/DeliveryOptimization/Cache/*"]
+label = "Delivery Optimization"
+
+[[cleaner]]
+id = "sys-win-component-cleanup"
+name = "Component Store Cleanup (DISM)"
+description = "DISM /StartComponentCleanup — removes superseded Windows component versions (slow)"
+category = "System Maintenance"
+os = ["windows"]
+requires_root = true
+risk = "moderate"
+[[cleaner.action]]
+type = "command"
+program = "DISM.exe"
+args = ["/Online", "/Cleanup-Image", "/StartComponentCleanup"]
+label = "DISM component cleanup"
+
+[[cleaner]]
+id = "sys-win-dns-flush"
+name = "Flush DNS Cache"
+description = "ipconfig /flushdns"
+category = "System Maintenance"
+os = ["windows"]
+[[cleaner.action]]
+type = "command"
+program = "ipconfig"
+args = ["/flushdns"]
+label = "ipconfig /flushdns"
