@@ -779,7 +779,7 @@ impl App {
         // operations complete.
     }
 
-    /// Test-only public wrapper around the private [`Self::start_operations`],
+    /// Test-only public wrapper around the private `Self::start_operations`,
     /// so integration tests in `tests/` (a separate crate, which can only
     /// see `pub` items) can drive the exact same post-authentication code
     /// path `handle_key` uses. Only compiled into debug builds.

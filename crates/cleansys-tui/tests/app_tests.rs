@@ -581,6 +581,8 @@ fn schedule_overlay_fields_adjust_and_wrap() {
 #[test]
 fn recommended_selects_only_safe_user_land() {
     let mut app = App::new();
+    // CI containers often run as root, which would (correctly) include root cleaners.
+    app.is_root = false;
     app.categories = cleansys_core::load_categories();
     let n = app.select_recommended();
     assert!(n > 0);

@@ -888,6 +888,8 @@ mod tests {
     #[test]
     fn select_recommended_ticks_only_safe_user_land() {
         let mut state = CleanSysGui::new();
+        // CI containers often run as root, which would (correctly) include root cleaners.
+        state.is_root = false;
         let _ = update(&mut state, Message::SelectRecommended);
         assert!(state.selected_count() > 0);
         assert!(state
