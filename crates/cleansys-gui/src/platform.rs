@@ -6,6 +6,9 @@
 /// desktop environment/session has a notification daemon available, and
 /// that's fine — the in-app activity log always has the same information).
 pub fn notify_completion(summary: &str) {
+    #[cfg(target_os = "macos")]
+    ensure_macos_notification_app();
+
     let result = notify_rust::Notification::new()
         .summary("CleanSys")
         .body(summary)
@@ -15,6 +18,23 @@ pub fn notify_completion(summary: &str) {
     if let Err(e) = result {
         log::debug!("desktop notification failed (non-fatal): {e}");
     }
+}
+
+/// macOS: pick the sending application explicitly, exactly once.
+///
+/// If no application is set, `mac-notification-sys` resolves one by running
+/// the AppleScript `get id of application "use_default"`. No such app exists,
+/// so macOS pops up a "Where is use_default? / Choose Application" file
+/// picker after every cleaning run. Setting a real bundle id up front skips
+/// that lookup entirely.
+#[cfg(target_os = "macos")]
+fn ensure_macos_notification_app() {
+    static INIT: std::sync::Once = std::sync::Once::new();
+    INIT.call_once(|| {
+        if let Err(e) = notify_rust::set_application("com.apple.Terminal") {
+            log::debug!("could not set notification application (non-fatal): {e}");
+        }
+    });
 }
 
 /// Relaunch the current executable with an elevation request.
