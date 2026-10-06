@@ -1,0 +1,28 @@
+name: Prune release assets
+
+# Safety net for the post-release prune job: every Monday (and on demand) delete the uploads
+# of every release except the latest. Notes and tags stay. Safe to run repeatedly.
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+
+jobs:
+  prune:
+    name: Prune old release assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install Rust
+        run: |
+          for i in 1 2 3; do
+            curl --proto '=https' --tlsv1.2 -sSf --retry 3 --retry-delay 5 https://sh.rustup.rs | sh -s -- -y --default-toolchain stable && break
+            echo "rustup install failed, retrying ($i/3)…"; sleep 5
+          done
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+      - name: Install Nushell
+        run: cargo install nu --locked
+      - name: Prune
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: nu scripts/ci/prune_release_assets.nu gitea "${{ github.repository }}" --url "${{ github.server_url }}"

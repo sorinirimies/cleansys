@@ -1,0 +1,32 @@
+name: Prune release assets
+
+# Safety net for the post-release prune job: every Monday (and on demand) delete the uploads
+# of every release except the latest. Notes and tags stay. Safe to run repeatedly.
+on:
+  schedule:
+    - cron: "17 4 * * 1"
+  workflow_dispatch:
+    inputs:
+      dry_run:
+        description: "Only list what would be deleted"
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+jobs:
+  prune:
+    name: Prune old release assets
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hustcer/setup-nu@v3
+        with:
+          version: "*"
+      - name: Prune
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          if [ "${{ inputs.dry_run }}" = "true" ]; then FLAGS="--dry-run"; else FLAGS=""; fi
+          nu scripts/ci/prune_release_assets.nu github "${{ github.repository }}" $FLAGS
