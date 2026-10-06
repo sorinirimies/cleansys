@@ -80,6 +80,29 @@ pub fn load_all_unfiltered(user_dir: Option<&Path>) -> Vec<CleanerSpec> {
     specs
 }
 
+/// Every marker file name/glob used by any `project_artifacts` action of the built-in
+/// and user cleaner definitions (computed once). The project scan only records these.
+pub fn known_project_markers() -> Vec<String> {
+    static MARKERS: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    MARKERS
+        .get_or_init(|| {
+            let mut out: Vec<String> = Vec::new();
+            for spec in load_all_unfiltered(user_spec_dir().as_deref()) {
+                for action in &spec.actions {
+                    if let super::spec::Action::ProjectArtifacts { markers, .. } = action {
+                        for m in markers {
+                            if !out.contains(m) {
+                                out.push(m.clone());
+                            }
+                        }
+                    }
+                }
+            }
+            out
+        })
+        .clone()
+}
+
 fn merge(into: &mut Vec<CleanerSpec>, new: Vec<CleanerSpec>) {
     for s in new {
         match into.iter_mut().find(|e| e.id == s.id) {

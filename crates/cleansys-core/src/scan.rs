@@ -236,9 +236,15 @@ pub fn spawn_scan(categories: &[CleanerCategory]) -> (Receiver<(usize, usize, Sc
     let total = jobs.len();
     let queue = Arc::new(Mutex::new(jobs));
     let (tx, rx) = channel();
-    let workers = std::thread::available_parallelism()
-        .map(|n| n.get().clamp(2, 6))
-        .unwrap_or(4);
+    let workers = std::env::var("CLEANSYS_SCAN_THREADS")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get().clamp(2, 6))
+                .unwrap_or(4)
+        });
     for _ in 0..workers {
         let queue = Arc::clone(&queue);
         let tx = tx.clone();

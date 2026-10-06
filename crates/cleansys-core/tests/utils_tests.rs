@@ -234,3 +234,39 @@ fn get_size_sums_a_deep_tree_in_parallel_and_ignores_symlinks() {
         );
     }
 }
+
+#[test]
+fn remove_dir_all_parallel_deletes_deep_trees_and_never_follows_symlinks() {
+    let dir = tempfile::tempdir().unwrap();
+    let keep = dir.path().join("keep");
+    std::fs::create_dir_all(&keep).unwrap();
+    std::fs::write(keep.join("precious.txt"), "x").unwrap();
+
+    let victim = dir.path().join("victim");
+    for a in 0..3 {
+        for b in 0..3 {
+            let leaf = victim.join(format!("a{a}/b{b}/c/d/e/f"));
+            std::fs::create_dir_all(&leaf).unwrap();
+            for n in 0..5 {
+                std::fs::write(leaf.join(format!("f{n}")), "data").unwrap();
+            }
+        }
+    }
+    #[cfg(unix)]
+    std::os::unix::fs::symlink(&keep, victim.join("a0/link-to-keep")).unwrap();
+
+    cleansys_core::remove_dir_all_parallel(&victim).unwrap();
+    assert!(!victim.exists());
+    assert!(
+        keep.join("precious.txt").exists(),
+        "symlink target must survive"
+    );
+    // a symlink given as the root is removed itself, not followed
+    #[cfg(unix)]
+    {
+        let link = dir.path().join("rootlink");
+        std::os::unix::fs::symlink(&keep, &link).unwrap();
+        cleansys_core::remove_dir_all_parallel(&link).unwrap();
+        assert!(!link.exists() && keep.join("precious.txt").exists());
+    }
+}

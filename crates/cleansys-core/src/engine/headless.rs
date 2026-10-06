@@ -173,9 +173,15 @@ pub fn execute(jobs: &[Job], opts: RunOptions) -> Vec<Outcome> {
     }
     let next = AtomicUsize::new(0);
     let slots: Vec<Mutex<Option<Outcome>>> = jobs.iter().map(|_| Mutex::new(None)).collect();
-    let workers = std::thread::available_parallelism()
-        .map(|n| n.get().min(8))
-        .unwrap_or(4);
+    let workers = std::env::var("CLEANSYS_SCAN_THREADS")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| n.get().min(8))
+                .unwrap_or(4)
+        });
     std::thread::scope(|s| {
         for _ in 0..workers {
             s.spawn(|| loop {

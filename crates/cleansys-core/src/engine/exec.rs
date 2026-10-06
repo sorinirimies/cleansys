@@ -61,7 +61,7 @@ pub fn run_spec_with(
                 for template in action.delete_templates() {
                     for path in paths::resolve(template, &paths::lookup_env) {
                         let targets: Vec<PathBuf> = if *files_only {
-                            files_below(&path)
+                            files_below(&path, &filter)
                         } else if *contents_only {
                             let mut kids: Vec<PathBuf> = fs::read_dir(&path)
                                 .map(|rd| rd.flatten().map(|e| e.path()).collect())
@@ -155,9 +155,10 @@ impl PathFilter {
     }
 }
 
-/// All regular files below `root` (symlinks are never followed; a plain file
-/// yields itself). Deterministic order.
-fn files_below(root: &Path) -> Vec<PathBuf> {
+/// Regular files below `root` that pass `filter` (symlinks are never followed; a plain
+/// file yields itself). Filtering while walking keeps memory proportional to the
+/// *matches*, not to every file in the tree. Deterministic order.
+fn files_below(root: &Path, filter: &PathFilter) -> Vec<PathBuf> {
     let mut out = Vec::new();
     let mut stack = vec![root.to_path_buf()];
     while let Some(p) = stack.pop() {
@@ -168,7 +169,9 @@ fn files_below(root: &Path) -> Vec<PathBuf> {
             continue;
         }
         if meta.is_file() {
-            out.push(p);
+            if filter.accepts(&p) {
+                out.push(p);
+            }
         } else if meta.is_dir() {
             if let Ok(rd) = fs::read_dir(&p) {
                 stack.extend(rd.flatten().map(|e| e.path()));
@@ -259,7 +262,7 @@ pub(crate) fn remove_path(
             Err(e) => Err(std::io::Error::other(e.to_string())),
         }
     } else if is_dir {
-        fs::remove_dir_all(path)
+        crate::utils::remove_dir_all_parallel(path)
     } else {
         fs::remove_file(path)
     };
@@ -298,13 +301,21 @@ const SKIP_DESCENT: &[&str] = &[
     "Carthage",
 ];
 
-/// One scanned directory: its path and the names of the files directly in it.
+/// One scanned directory that contains at least one *marker* file, plus the names of
+/// those marker files. (Only directories with a marker are kept, and only the marker
+/// names — an index of every file under ~/Projects would cost hundreds of MB.)
 struct DirFiles {
     path: PathBuf,
     files: Vec<String>,
 }
 
-type Index = std::sync::Arc<Vec<DirFiles>>;
+/// The finished walk and the marker patterns it was built for.
+struct IndexData {
+    patterns: Vec<String>,
+    dirs: Vec<DirFiles>,
+}
+
+type Index = std::sync::Arc<IndexData>;
 
 /// How long a scanned directory index is reused (so a whole category of
 /// project cleaners shares a single filesystem walk).
@@ -317,57 +328,99 @@ fn index_cache() -> &'static std::sync::Mutex<Option<(String, std::time::Instant
     CACHE.get_or_init(|| std::sync::Mutex::new(None))
 }
 
-/// Walk the configured roots once (non-hidden, non-symlink dirs, bounded
-/// depth) and record the files in every directory.
-fn project_index(cfg: &EngineConfig) -> Index {
+/// One level of the walk: marker files found in `dir`, and its sub-directories to visit.
+fn scan_one_dir(
+    dir: &Path,
+    depth: usize,
+    cfg: &EngineConfig,
+    patterns: &[glob::Pattern],
+) -> (Option<DirFiles>, Vec<PathBuf>) {
+    let Ok(rd) = fs::read_dir(dir) else {
+        return (None, Vec::new());
+    };
+    let mut files = Vec::new();
+    let mut children = Vec::new();
+    for e in rd.flatten() {
+        let Ok(ft) = e.file_type() else { continue };
+        let name = e.file_name();
+        let Some(name) = name.to_str() else { continue };
+        if ft.is_file() {
+            if patterns.iter().any(|p| p.matches(name)) {
+                files.push(name.to_owned());
+            }
+        } else if ft.is_dir()
+            && !ft.is_symlink()
+            && depth < cfg.max_depth
+            && !name.starts_with('.')
+            && !SKIP_DESCENT.contains(&name)
+        {
+            children.push(e.path());
+        }
+    }
+    let found = (!files.is_empty()).then(|| DirFiles {
+        path: dir.to_path_buf(),
+        files,
+    });
+    (found, children)
+}
+
+/// Walk the configured roots once (non-hidden, non-symlink dirs, bounded depth),
+/// level by level with each level spread over the rayon pool, recording the marker
+/// files (any of `needed` plus every marker the cleaner definitions use).
+fn project_index(cfg: &EngineConfig, needed: &[String]) -> Index {
+    use rayon::prelude::*;
+
     // Serialise builds so parallel scans share one walk instead of each
     // starting their own.
     static BUILD: std::sync::Mutex<()> = std::sync::Mutex::new(());
     let _build = BUILD.lock().unwrap_or_else(|e| e.into_inner());
     let roots = cfg.effective_roots();
     let key = format!("{roots:?}|{}", cfg.max_depth);
+
     if let Ok(guard) = index_cache().lock() {
         if let Some((k, at, idx)) = guard.as_ref() {
-            if *k == key && at.elapsed() < INDEX_TTL {
+            let covers = needed.iter().all(|n| idx.patterns.contains(n));
+            if *k == key && at.elapsed() < INDEX_TTL && covers {
                 return idx.clone();
             }
         }
     }
 
-    let mut out = Vec::new();
-    let mut visited = 0usize;
-    'roots: for root in roots {
-        let mut stack = vec![(root, 0usize)];
-        while let Some((dir, depth)) = stack.pop() {
-            visited += 1;
-            if visited > MAX_VISITED_DIRS {
-                warn!("project scan aborted: too many directories");
-                break 'roots;
-            }
-            let Ok(rd) = fs::read_dir(&dir) else { continue };
-            let mut files = Vec::new();
-            for e in rd.flatten() {
-                let Ok(ft) = e.file_type() else { continue };
-                let Some(name) = e.file_name().to_str().map(str::to_owned) else {
-                    continue;
-                };
-                if ft.is_file() {
-                    files.push(name);
-                } else if ft.is_dir()
-                    && !ft.is_symlink()
-                    && depth < cfg.max_depth
-                    && !name.starts_with('.')
-                    && !SKIP_DESCENT.contains(&name.as_str())
-                {
-                    stack.push((e.path(), depth + 1));
-                }
-            }
-            if !files.is_empty() {
-                out.push(DirFiles { path: dir, files });
-            }
+    let mut patterns: Vec<String> = super::registry::known_project_markers();
+    for n in needed {
+        if !patterns.contains(n) {
+            patterns.push(n.clone());
         }
     }
-    let idx: Index = std::sync::Arc::new(out);
+    let compiled: Vec<glob::Pattern> = patterns
+        .iter()
+        .filter_map(|m| glob::Pattern::new(m).ok())
+        .collect();
+
+    let mut dirs = Vec::new();
+    let mut frontier: Vec<PathBuf> = roots;
+    let mut depth = 0usize;
+    let mut visited = 0usize;
+    while !frontier.is_empty() {
+        visited += frontier.len();
+        if visited > MAX_VISITED_DIRS {
+            warn!("project scan aborted: too many directories");
+            break;
+        }
+        let level: Vec<(Option<DirFiles>, Vec<PathBuf>)> = frontier
+            .par_iter()
+            .map(|d| scan_one_dir(d, depth, cfg, &compiled))
+            .collect();
+        frontier = Vec::new();
+        for (found, children) in level {
+            dirs.extend(found);
+            frontier.extend(children);
+        }
+        depth += 1;
+    }
+    dirs.sort_by(|a, b| a.path.cmp(&b.path));
+
+    let idx: Index = std::sync::Arc::new(IndexData { patterns, dirs });
     if let Ok(mut guard) = index_cache().lock() {
         *guard = Some((key, std::time::Instant::now(), idx.clone()));
     }
@@ -460,7 +513,7 @@ pub fn find_project_artifacts(
     let min_age = Duration::from_secs(cfg.min_age_days.saturating_mul(86_400));
     let mut found = Vec::new();
 
-    for d in project_index(cfg).iter() {
+    for d in project_index(cfg, markers).dirs.iter() {
         if !d
             .files
             .iter()

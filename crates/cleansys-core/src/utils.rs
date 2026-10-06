@@ -251,6 +251,41 @@ pub fn get_size(path: &str) -> Result<u64> {
 /// splitting tiny directories would only cost time.
 const PARALLEL_DEPTH: u32 = 4;
 
+/// Recursively delete a directory tree, spreading the first [`PARALLEL_DEPTH`] levels
+/// over the rayon pool. Same semantics as [`std::fs::remove_dir_all`] (symlinks are
+/// removed, never followed; the first error aborts), but several times faster on
+/// big trees such as `target/`, `node_modules/` or Gradle caches.
+pub fn remove_dir_all_parallel(path: &std::path::Path) -> std::io::Result<()> {
+    // A symlink (even to a directory) is just a file as far as deletion goes.
+    if std::fs::symlink_metadata(path)?.file_type().is_symlink() {
+        return std::fs::remove_file(path);
+    }
+    remove_tree(path, 0)
+}
+
+fn remove_tree(path: &std::path::Path, depth: u32) -> std::io::Result<()> {
+    let entries: Vec<std::fs::DirEntry> = std::fs::read_dir(path)?.flatten().collect();
+    let one = |entry: &std::fs::DirEntry| -> std::io::Result<()> {
+        if entry.file_type()?.is_dir() {
+            remove_tree(&entry.path(), depth + 1)
+        } else {
+            std::fs::remove_file(entry.path())
+        }
+    };
+    if depth < PARALLEL_DEPTH && entries.len() > 1 {
+        use rayon::prelude::*;
+        entries
+            .par_iter()
+            .map(one)
+            .collect::<std::io::Result<()>>()?;
+    } else {
+        for e in &entries {
+            one(e)?;
+        }
+    }
+    std::fs::remove_dir(path)
+}
+
 fn dir_size(path: &std::path::Path, depth: u32, max_depth: u32) -> u64 {
     let metadata = match std::fs::symlink_metadata(path) {
         Ok(m) => m,

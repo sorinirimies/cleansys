@@ -153,7 +153,7 @@ fn clean_path(
     }
 
     let removal = if is_dir {
-        remove_dir_all(path)
+        crate::utils::remove_dir_all_parallel(path)
     } else {
         remove_file(path)
     };

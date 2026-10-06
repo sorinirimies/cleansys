@@ -50,4 +50,6 @@ pub use model::{load_categories, select_recommended, CleanerCategory, CleanerIte
 pub use scan::{spawn_scan, ScanBoard, ScanInfo};
 pub use settings::{load_settings, save_settings, Settings};
 pub use theme::{theme_by_index, theme_index_by_name, AppTheme, Rgb, THEME_COUNT, THEME_NAMES};
-pub use utils::{check_root, confirm, format_size, get_size, print_error, print_header};
+pub use utils::{
+    check_root, confirm, format_size, get_size, print_error, print_header, remove_dir_all_parallel,
+};
