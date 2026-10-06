@@ -14,6 +14,8 @@ All notable changes to this project will be documented in this file.
 - fix(gui): stop macOS 'Choose Application' dialog after cleaning
 ### 📦 Other Changes
 - docs+ux: responsive redesign docs, new tapes/GIFs/screenshots (git-lfs), synthetic demo fixture
+### 🔧 Chores
+- chore: bump version to 0.7.0
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.22...v0.7.0
 ## 0.6.22 - 2026-10-06
 ### 📚 Documentation
