@@ -1,23 +1,23 @@
 # CleanSys CLI — one command to scan, JSON for scripts, schedule help
-# Runs against a synthetic HOME (demo/fixture.sh).
+# Runs against a synthetic HOME (demo/fixture.nu).
 
 Output demo/previews/cli.gif
 
 Set Width 1400
 Set Height 900
-Set Shell "bash"
+Set Shell "nu"
 Set FontSize 14
 Set Padding 12
 Set Theme "Catppuccin Mocha"
 Set TypingSpeed 45ms
 
 Hide
-Type "source demo/fixture.sh >/dev/null 2>&1 && clear"
+Type "source-env demo/fixture.nu; clear"
 Enter
 Sleep 3s
 Show
 
-Type "./target/release/cleansys auto -n | head -42"
+Type "./target/release/cleansys auto -n | ^head -42"
 Enter
 Sleep 8s
 
@@ -29,12 +29,12 @@ Sleep 5s
 
 Type "clear"
 Enter
-Type "./target/release/cleansys scan -i proj-rust --json | head -22"
+Type "./target/release/cleansys scan -i proj-rust --json | ^head -22"
 Enter
 Sleep 4s
 
 Type "clear"
 Enter
-Type "./target/release/cleansys schedule install --help | head -24"
+Type "./target/release/cleansys schedule install --help | ^head -24"
 Enter
 Sleep 5s

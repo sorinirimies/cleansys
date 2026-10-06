@@ -130,40 +130,58 @@ check-all: fmt clippy test test-nu
 check-release: check-all build-release
     @echo "✅ Release quality gate passed (fmt + clippy + test + nu + release build)!"
 
-# ── Demos (GIFs + screenshots) ────────────────────────────────────────────────
-# All demos run against a synthetic HOME built by demo/fixture.sh (sparse files,
-# no real paths, nothing of yours is touched). They use the release binaries.
+# ── Demos (GIFs + screenshots) — all nushell ──────────────────────────────────
+# Everything runs against a synthetic HOME built by demo/fixture.nu (sparse files, no
+# real paths; nothing of yours is touched) and uses the release binaries.
 
-TAPES := "tui-overview tui-system-root tui-schedule tui-narrow tui-clean cli"
+TAPES := "tui-overview tui-system-root tui-schedule tui-narrow tui-clean cli web-api"
 
-# Build the release binaries the tapes run.
+# Build the release binaries the tapes and screenshot scripts run.
 _demo-build:
-    cargo build --release -p cleansys -p cleansys-gui
+    cargo build --release -p cleansys -p cleansys-gui -p cleansys-web
 
 # Record one tape: `just vhs tui-overview`  (writes demo/previews/<name>.gif)
-vhs name: _check-vhs _demo-build
+vhs name: _check-vhs _check-nu _demo-build
     @mkdir -p demo/previews demo/target
     vhs demo/{{name}}.tape
     @echo "✅ demo/previews/{{name}}.gif"
 
-# Record every tape.
-vhs-all: _check-vhs _demo-build
+# Record every terminal tape.
+vhs-all: _check-vhs _check-nu _demo-build
     @mkdir -p demo/previews demo/target
     @for t in {{TAPES}}; do echo "▶ $t"; vhs demo/$t.tape || exit 1; done
     @echo "✅ All GIFs refreshed in demo/previews/"
 
-# GUI screenshots (macOS only; needs osascript/screencapture): wide, medium, narrow, schedule.
-gui-screenshots: _demo-build
-    scripts/gui-screenshots.sh
+# GUI screenshots (macOS only: osascript + screencapture).
+gui-screenshots: _check-nu _demo-build
+    nu scripts/gui-screenshots.nu
+
+# Web screenshots + GIFs (needs ffmpeg and a Chromium-based browser; BROWSER=/path overrides).
+web-screenshots: _check-nu _demo-build
+    nu scripts/web-screenshots.nu
 
 # Regenerate everything shown in the README.
-vhs-refresh-previews: vhs-all gui-screenshots
+vhs-refresh-previews: vhs-all gui-screenshots web-screenshots
     @echo "✅ demo/previews updated — review with 'git status' and commit (GIFs/PNGs are tracked with git-lfs)."
 
 vhs-clean:
     @echo "Cleaning VHS scratch files…"
     @rm -f demo/target/*.png
     @echo "✅ done"
+
+# Regenerate the browser/app/game cleaner packs from scripts/gen_content_packs.nu.
+gen-packs: _check-nu
+    nu scripts/gen_content_packs.nu
+
+# ── Web UI (Topcoat; needs Rust 1.98+) ─────────────────────────────────────────
+
+# Serve the web UI on http://127.0.0.1:3000
+run-web:
+    cargo run -p cleansys-web
+
+# Test only the web crate
+test-web:
+    cargo test -p cleansys-web
 
 # ── Packaging ────────────────────────────────────────────────────────
 

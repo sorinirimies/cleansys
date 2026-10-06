@@ -5,14 +5,14 @@ Output demo/previews/tui-schedule.gif
 
 Set Width 1400
 Set Height 800
-Set Shell "bash"
+Set Shell "nu"
 Set FontSize 14
 Set Padding 12
 Set Theme "Catppuccin Mocha"
 Set TypingSpeed 45ms
 
 Hide
-Type "source demo/fixture.sh >/dev/null 2>&1 && clear"
+Type "source-env demo/fixture.nu; clear"
 Enter
 Sleep 3s
 Show

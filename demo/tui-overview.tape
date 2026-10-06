@@ -1,9 +1,9 @@
 # CleanSys TUI — overview: live sizes, sidebar, recommended preset, filter, preview
-# Everything runs against a synthetic HOME (demo/fixture.sh) — no real paths shown.
+# Everything runs against a synthetic HOME (demo/fixture.nu) — no real paths shown.
 
 Output demo/previews/tui-overview.gif
 
-Set Shell "bash"
+Set Shell "nu"
 Set FontSize 14
 Set Width 1400
 Set Height 800
@@ -12,7 +12,7 @@ Set Theme "Catppuccin Mocha"
 Set TypingSpeed 45ms
 
 Hide
-Type "source demo/fixture.sh >/dev/null 2>&1 && clear"
+Type "source-env demo/fixture.nu; clear"
 Enter
 Sleep 3s
 Show

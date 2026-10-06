@@ -3,6 +3,7 @@ members = [
     "crates/cleansys-core",
     "crates/cleansys-gui",
     "crates/cleansys-tui",
+    "crates/cleansys-web",
 ]
 resolver = "2"
 
@@ -38,12 +39,16 @@ crossterm     = "0.29"
 tui-checkbox  = "0.4"
 tui-piechart  = "1.0"
 tui-spinner   = "0.4"
-clap          = { version = "4.6", features = ["derive"] }
+clap          = { version = "4.6", features = ["derive", "env"] }
 
 # GUI (Iced)
 iced       = { version = "0.14", features = ["advanced"] }
 iced_fonts = { version = "0.3", features = ["bootstrap"] }
 notify-rust = "4.18"
+
+# Web (Topcoat) — needs Rust 1.98+
+topcoat      = "0.10"
+tokio        = { version = "1", features = ["rt-multi-thread", "macros", "time", "net", "sync"] }
 
 # Dev dependencies
 assert_cmd = "2.2"

@@ -132,6 +132,8 @@ jobs:
         run: cargo build -p cleansys
       - name: Build GUI (dev)
         run: cargo build -p cleansys-gui
+      - name: Build web UI (dev, needs Rust 1.98+)
+        run: cargo build -p cleansys-web
 
   # ── 5. Docs ──────────────────────────────────────────────────────────────────
   doc:

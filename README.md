@@ -10,7 +10,7 @@
 
 **CleanSys** finds and removes what quietly eats your disk — browser and app caches, package-manager and
 build-tool caches, `target/` and `node_modules/` folders in old projects, AI/LLM model caches, logs and crash dumps —
-from a **terminal UI**, a **desktop GUI** or the **command line**. It shows exactly how much each cleaner can free
+from a **terminal UI**, a **desktop GUI**, a **local web UI** or the **command line**. It shows exactly how much each cleaner can free
 *before* you delete anything, never touches system folders, and can run **automatically on a schedule**.
 
 <p align="center">
@@ -27,7 +27,8 @@ from a **terminal UI**, a **desktop GUI** or the **command line**. It shows exac
 - **Risk levels** — `safe`, `moderate` (slow to rebuild, marked `~`) and `caution` (model weights, chat history, marked `!`; never part of bulk/unattended runs).
 - **Automatic cleaning** — daily/weekly/monthly via systemd/cron, launchd or Task Scheduler, configurable from the TUI, GUI or CLI.
 - **Skips apps that are open**, never follows symlinks, refuses to touch `$HOME`, `/usr`, `Documents`, `.ssh`…, honours your exclusion globs.
-- **Responsive** — wide/medium/narrow layouts in both the TUI and the GUI; 43 colour themes in the GUI.
+- **Responsive everywhere** — the TUI, the GUI and the web UI share the same wide / medium / narrow behaviour (sidebar → narrower sidebar → drop-down + icon buttons); 43 colour themes in the GUI and web UI.
+- **Four front-ends, one engine** — TUI, GUI, [web UI (Topcoat)](crates/cleansys-web) and CLI all run the same cleaners, scan, scheduler and safety rules from `cleansys-core`.
 - **Scriptable** — `--json` output, stable cleaner ids, exit codes; extend with your own TOML cleaners.
 
 ## 🎬 Demo
@@ -43,6 +44,22 @@ the sidebar becomes a drop-down on narrow windows.
 
 <p align="center"><img src="demo/previews/gui-schedule.png" alt="GUI schedule dialog" width="560"></p>
 
+### Web UI (Topcoat) — `cleansys-web`
+
+| Wide | Medium | Narrow |
+|:---:|:---:|:---:|
+| <img src="demo/previews/web-wide.png" width="520"> | <img src="demo/previews/web-medium.png" width="320"> | <img src="demo/previews/web-narrow.png" width="190"> |
+
+<table><tr>
+<td><b>Tick → confirm → clean → progress</b><br><img src="demo/previews/web-flow.gif" width="430"></td>
+<td><b>Same page, three widths</b><br><img src="demo/previews/web-responsive.gif" width="430"></td>
+</tr><tr>
+<td><b>Preview (dry run)</b><br><img src="demo/previews/web-preview.png" width="430"></td>
+<td><b>Schedule</b><br><img src="demo/previews/web-schedule.png" width="430"></td>
+</tr></table>
+
+<p align="center"><img src="demo/previews/web-api.gif" alt="cleansys-web JSON API driven from nushell" width="800"></p>
+
 ### Terminal UI
 
 | | |
@@ -50,27 +67,46 @@ the sidebar becomes a drop-down on narrow windows.
 | **Run it for real** — confirm → progress → freed → automatic re-scan<br><img src="demo/previews/tui-clean.gif" width="440"> | **Schedule it** — `S`<br><img src="demo/previews/tui-schedule.gif" width="440"> |
 | **User land vs root** — root cleaners ask for your password only when run<br><img src="demo/previews/tui-system-root.gif" width="440"> | **Narrow terminals** — the sidebar collapses to a category bar<br><img src="demo/previews/tui-narrow.gif" width="440"> |
 
+### Web UI
+
+`cleansys-web` is the same app in a browser tab — **no JavaScript bundle, no Node**: a [Topcoat](https://github.com/tokio-rs/topcoat)
+server renders plain HTML, every action is a normal form post, and pages refresh themselves while a scan or a clean is
+running.
+
+```bash
+cleansys-web                     # http://127.0.0.1:3000, opens your browser
+cleansys-web --port 8080 --no-open --theme "Tokyo Night"
+sudo cleansys-web                # also enables the System · root cleaners
+```
+
+- **Pages**: `/` cleaners (sidebar, search, hide-empty, risk badges, sizes) · `/preview` dry run · `/confirm` → `/progress` real clean · `/schedule` automatic cleaning.
+- **JSON**: `/api/categories` · `/api/status` · `/api/themes` · `/api/health`.
+- **Responsive**: ≥ 980 px sidebar · ≥ 700 px narrower sidebar · below that a category drop-down, icon-only buttons and a full-width *Clean* button.
+- **Safe by construction**: binds to `127.0.0.1` (warns loudly otherwise), rejects unknown `Host` headers (DNS-rebinding), uses Topcoat's built-in cross-origin protection for every state-changing route, only redirects to same-site paths, and applies the same protected-path / `caution` / running-app rules as the other front-ends. Root cleaners are shown but disabled unless the server itself runs as root.
+
 ### Command line
 
 <p align="center"><img src="demo/previews/cli.gif" alt="cleansys auto, scan --json and schedule help" width="900"></p>
 
-> Every demo runs against a synthetic home directory ([`demo/fixture.sh`](demo/fixture.sh)) — no real paths, nothing deleted. See [`demo/previews`](demo/previews/README.md).
+> Every demo runs against a synthetic home directory ([`demo/fixture.nu`](demo/fixture.nu)) — no real paths, nothing deleted. See [`demo/previews`](demo/previews/README.md).
 
 ## 🧱 Project Structure
 
-CleanSys is a Cargo workspace with three crates:
+CleanSys is a Cargo workspace with four crates:
 
 | Crate | Binary | Description |
 |-------|--------|-------------|
 | [`cleansys-core`](crates/cleansys-core) | *(library)* | Framework-free logic shared by both front-ends: cleaner engine, scan board, scheduler, safety rules, sudo auth |
 | [`cleansys-tui`](crates/cleansys-tui) | `cleansys` | Ratatui terminal UI **and** the CLI — published to crates.io as `cleansys` |
 | [`cleansys-gui`](crates/cleansys-gui) | `cleansys-gui` | Iced desktop GUI |
+| [`cleansys-web`](crates/cleansys-web) | `cleansys-web` | Local web UI built with [Topcoat](https://github.com/tokio-rs/topcoat) (needs Rust 1.98+) |
 
 ## 📦 Installation
 
 ```bash
 cargo install cleansys           # terminal UI + CLI
 cargo install cleansys-gui       # desktop GUI
+cargo install cleansys-web       # local web UI (Rust 1.98+)
 ```
 
 From source:
@@ -88,6 +124,7 @@ Pre-built packages (`.deb`, `.rpm`, AppImage, Windows installer, macOS `.dmg`) a
 ```bash
 cleansys                 # interactive TUI — press r, then Enter
 cleansys-gui             # desktop GUI
+cleansys-web             # web UI on http://127.0.0.1:3000 (opens your browser)
 cleansys auto            # no UI: scan the recommended set, show it, ask once, clean
 cleansys auto -n         # …only report (dry run)
 sudo cleansys            # also unlock the system (root) cleaners
@@ -168,6 +205,16 @@ cleansys scan -c "AI & LLM Caches" --include-caution
 cleansys clean -i proj-rust -i dev-gradle-caches -n    # dry run
 cleansys scan --all --json | jq '.[] | select(.bytes>1e9) | .name'
 ```
+
+## 📱 Responsive design
+
+All three UIs use the same three tiers:
+
+| Tier | TUI (columns) | GUI / web (px) | Layout |
+|------|---------------|----------------|--------|
+| **Wide** | ≥ 100 | ≥ 980 | category sidebar (with sizes, tick counts, USER LAND above SYSTEM · ROOT) + list + full action bar |
+| **Medium** | 90 – 99 | 700 – 979 | narrower sidebar, compact action bar / footer |
+| **Narrow** | < 90 | < 700 | no sidebar: a category drop-down / one-line category bar, compact footer, icon-only buttons with tooltips |
 
 ## ⏰ Automatic cleaning
 
@@ -263,18 +310,19 @@ crates/
 │   └── src/
 │       ├── engine/           # declarative cleaners: spec (TOML) · exec · paths · safety · running guard ·
 │       │   │                 #   schedule · headless (scan/clean/auto) · config
-│       │   └── builtin/*.toml    # ~175 built-in cleaners (browsers/apps/games are generated by scripts/gen_content_packs.py)
+│       │   └── builtin/*.toml    # ~175 built-in cleaners (browsers/apps/games are generated by scripts/gen_content_packs.nu)
 │       ├── cleaners/         # the original hard-coded user/system cleaners + platform paths
 │       ├── model.rs          # CleanerItem (id, risk, root), categories, user-land/root layout, recommended preset
 │       ├── scan.rs           # background scan pool + ScanBoard (sizes, visibility, filtering) used by TUI and GUI
 │       ├── auth.rs · utils.rs · settings.rs · theme/
 ├── cleansys-tui/             # Ratatui TUI + CLI (binary `cleansys`)
-└── cleansys-gui/             # Iced GUI (binary `cleansys-gui`): state · update · view (responsive layouts)
+├── cleansys-gui/             # Iced GUI (binary `cleansys-gui`): state · update · view (responsive layouts)
+└── cleansys-web/             # Topcoat web UI (binary `cleansys-web`): state · pages · components · api · style
 ```
 
 Adding a cleaner is usually just a TOML entry in `crates/cleansys-core/src/engine/builtin/` (or, for yourself, in
 `~/.config/cleansys/cleaners.d/`). Repetitive packs (Chromium-family browsers, Electron apps, games) are generated:
-edit `scripts/gen_content_packs.py` and run it. Hard-coded cleaners remain possible via the `cleaner!` macro in
+edit `scripts/gen_content_packs.nu` and run `just gen-packs`. Hard-coded cleaners remain possible via the `cleaner!` macro in
 `cleaners/user_cleaners.rs` / `system_cleaners.rs`; privileged ones should go through `execute_with_sudo`.
 
 ## 🧪 Testing
@@ -288,19 +336,25 @@ cargo test
 # Run with output
 cargo test -- --nocapture
 
-# Run specific test module
-cargo test --test integration_tests
+# One crate
+cargo test -p cleansys-core
+cargo test -p cleansys-web        # end-to-end: real server on an ephemeral port, sandboxed HOME
 ```
+
+`cleansys-web` needs Rust 1.98+ (Topcoat). Debug builds are kept small by `.cargo/config.toml` (line-tables-only debuginfo).
 
 ## 🎥 Demos & screenshots
 
-All GIFs and screenshots are produced from scripts and a **synthetic home directory** (`demo/fixture.sh`) — see
+Everything shown above is generated by **nushell scripts** (no bash/python) against a **synthetic home directory**
+(`demo/fixture.nu`, sparse files — no real paths, nothing of yours is touched). See
 [`demo/previews/README.md`](demo/previews/README.md).
 
 ```bash
-just vhs-all              # re-record every tape in demo/*.tape → demo/previews/*.gif   (vhs, ffmpeg, ttyd)
-just gui-screenshots      # GUI PNGs (macOS)
-just vhs-refresh-previews # both
+just vhs-all              # re-record every terminal tape (demo/*.tape → demo/previews/*.gif)   needs vhs, ttyd
+just gui-screenshots      # nu scripts/gui-screenshots.nu — GUI PNGs (macOS)
+just web-screenshots      # nu scripts/web-screenshots.nu — web PNGs + GIFs (headless Chromium + ffmpeg)
+just vhs-refresh-previews # all of the above
+just gen-packs            # nu scripts/gen_content_packs.nu — regenerate the browser/app/game cleaner TOML
 ```
 
 The preview files are tracked with **git-lfs** (`*.gif`, `demo/previews/*.png`).

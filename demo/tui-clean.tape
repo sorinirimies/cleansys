@@ -2,7 +2,7 @@
 
 Output demo/previews/tui-clean.gif
 
-Set Shell "bash"
+Set Shell "nu"
 Set FontSize 14
 Set Padding 12
 Set Theme "Catppuccin Mocha"
@@ -11,7 +11,7 @@ Set Width 1400
 Set Height 800
 
 Hide
-Type "source demo/fixture.sh >/dev/null 2>&1 && clear"
+Type "source-env demo/fixture.nu; clear"
 Enter
 Sleep 3s
 Show

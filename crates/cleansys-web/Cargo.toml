@@ -1,0 +1,28 @@
+[package]
+name = "cleansys-web"
+version.workspace = true
+edition = "2024"
+authors.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "CleanSys — local web UI for system cleanup (Topcoat): the same cleaners, sizes, scheduler and safety rules as the TUI and GUI"
+rust-version = "1.98"   # required by topcoat 0.10
+readme = "README.md"
+categories = ["web-programming", "filesystem", "os"]
+keywords = ["clean", "system", "cleanup", "cache", "web"]
+
+[lib]
+name = "cleansys_web"
+path = "src/lib.rs"
+
+[[bin]]
+name = "cleansys-web"
+path = "src/main.rs"
+
+[dependencies]
+cleansys-core = { workspace = true }
+topcoat       = { workspace = true }
+tokio         = { workspace = true }
+serde         = { workspace = true }
+serde_json    = { workspace = true }
+clap          = { workspace = true }
