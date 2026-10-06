@@ -35,6 +35,19 @@ impl From<cleansys_core::CleanedItemType> for CleanedItemType {
     }
 }
 
+/// One editable row of the schedule overlay.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ScheduleField {
+    Frequency,
+    Hour,
+    Minute,
+    /// Weekday (weekly) or day of month (monthly).
+    Day,
+    Scope,
+    /// Linux only: systemd timer vs crontab.
+    Backend,
+}
+
 /// Type alias for pending operations: (category_index, item_index, name, function, requires_root)
 pub type PendingOperation = (usize, usize, String, CleanerFn, bool);
 
@@ -126,6 +139,18 @@ pub struct App {
     pub needs_admin_notice: bool,
     /// Selected cleaners staged while `awaiting_run_confirmation` is true.
     pub pending_run_selection: Vec<PendingOperation>,
+    /// Whether the schedule (automatic cleaning) overlay is open.
+    pub schedule_open: bool,
+    /// The schedule being edited in the overlay.
+    pub schedule_draft: cleansys_core::engine::schedule::Schedule,
+    /// Index into [`App::schedule_fields`] of the highlighted row.
+    pub schedule_field: usize,
+    /// Feedback line shown at the bottom of the overlay.
+    pub schedule_message: String,
+    /// Backend name when a job is installed ("launchd", "cron", ...).
+    pub schedule_installed: Option<String>,
+    /// Result of the most recent automatic run, if any.
+    pub schedule_last_run: Option<cleansys_core::engine::schedule::LastRun>,
 }
 
 impl Default for App {
@@ -188,6 +213,12 @@ impl App {
             preview_results: Vec::new(),
             needs_admin_notice: false,
             pending_run_selection: Vec::new(),
+            schedule_open: false,
+            schedule_draft: cleansys_core::engine::schedule::Schedule::default(),
+            schedule_field: 0,
+            schedule_message: String::new(),
+            schedule_installed: None,
+            schedule_last_run: None,
         };
         app.item_list_state.select(Some(0));
 
@@ -428,6 +459,157 @@ impl App {
             }
         }
         self.preview_open = true;
+    }
+
+    /// Tick exactly the recommended cleaners (safe, user-land unless root).
+    /// Returns how many are now selected.
+    pub fn select_recommended(&mut self) -> usize {
+        cleansys_core::select_recommended(&mut self.categories, self.is_root)
+    }
+
+    // ── schedule overlay ───────────────────────────────────────────────
+
+    /// Open the schedule overlay, loading any saved schedule.
+    pub fn open_schedule(&mut self) {
+        use cleansys_core::engine::schedule as sch;
+        self.schedule_draft = sch::Schedule::load().unwrap_or_default();
+        self.schedule_installed = sch::installed().map(|j| j.backend.to_string());
+        self.schedule_last_run = sch::LastRun::load();
+        self.schedule_field = 0;
+        self.schedule_message = if self.schedule_installed.is_some() {
+            "Active. Change values and press Enter to update, d to remove.".into()
+        } else {
+            "Not scheduled yet. Pick values and press Enter to enable.".into()
+        };
+        self.schedule_open = true;
+    }
+
+    pub fn close_schedule(&mut self) {
+        self.schedule_open = false;
+    }
+
+    /// Rows shown for the current draft (day/backend rows are conditional).
+    pub fn schedule_fields(&self) -> Vec<ScheduleField> {
+        use cleansys_core::engine::schedule::Frequency;
+        let mut f = vec![
+            ScheduleField::Frequency,
+            ScheduleField::Hour,
+            ScheduleField::Minute,
+        ];
+        if self.schedule_draft.frequency != Frequency::Daily {
+            f.push(ScheduleField::Day);
+        }
+        f.push(ScheduleField::Scope);
+        if cfg!(all(unix, not(target_os = "macos"))) {
+            f.push(ScheduleField::Backend);
+        }
+        f
+    }
+
+    pub fn schedule_next_field(&mut self) {
+        let n = self.schedule_fields().len();
+        self.schedule_field = (self.schedule_field + 1) % n;
+    }
+
+    pub fn schedule_prev_field(&mut self) {
+        let n = self.schedule_fields().len();
+        self.schedule_field = (self.schedule_field + n - 1) % n;
+    }
+
+    /// Change the highlighted field by `delta` (−1 / +1; wraps).
+    pub fn schedule_adjust(&mut self, delta: i32) {
+        use cleansys_core::engine::schedule::{Backend, Frequency, Scope};
+        let fields = self.schedule_fields();
+        let Some(field) = fields.get(self.schedule_field).copied() else {
+            return;
+        };
+        let d = &mut self.schedule_draft;
+        let wrap = |v: i32, lo: i32, hi: i32| -> i32 {
+            let span = hi - lo + 1;
+            lo + (v - lo).rem_euclid(span)
+        };
+        match field {
+            ScheduleField::Frequency => {
+                let order = [Frequency::Daily, Frequency::Weekly, Frequency::Monthly];
+                let i = order.iter().position(|f| *f == d.frequency).unwrap_or(1) as i32;
+                d.frequency = order[wrap(i + delta, 0, 2) as usize];
+            }
+            ScheduleField::Hour => d.hour = wrap(i32::from(d.hour) + delta, 0, 23) as u8,
+            ScheduleField::Minute => {
+                // 5-minute steps keep the UI quick; CLI allows any minute.
+                d.minute = wrap(i32::from(d.minute) + delta * 5, 0, 59) as u8;
+                if !d.minute.is_multiple_of(5) && delta != 0 {
+                    d.minute -= d.minute % 5;
+                }
+            }
+            ScheduleField::Day => match d.frequency {
+                Frequency::Weekly => d.weekday = wrap(i32::from(d.weekday) + delta, 0, 6) as u8,
+                Frequency::Monthly => {
+                    d.day_of_month = wrap(i32::from(d.day_of_month) + delta, 1, 28) as u8
+                }
+                Frequency::Daily => {}
+            },
+            ScheduleField::Scope => {
+                let order = [Scope::Recommended, Scope::Extended, Scope::Selected];
+                let i = order.iter().position(|s| *s == d.scope).unwrap_or(0) as i32;
+                d.scope = order[wrap(i + delta, 0, 2) as usize];
+            }
+            ScheduleField::Backend => {
+                let order = [Backend::Auto, Backend::Systemd, Backend::Cron];
+                let i = order.iter().position(|b| *b == d.backend).unwrap_or(0) as i32;
+                d.backend = order[wrap(i + delta, 0, 2) as usize];
+            }
+        }
+        // Keep the highlighted row valid if rows appeared/disappeared.
+        let n = self.schedule_fields().len();
+        if self.schedule_field >= n {
+            self.schedule_field = n - 1;
+        }
+    }
+
+    /// Ids of the currently ticked user-land cleaners (for `Scope::Selected`).
+    fn selected_user_ids(&self) -> Vec<String> {
+        self.categories
+            .iter()
+            .flat_map(|c| &c.items)
+            .filter(|i| i.selected && !i.requires_root)
+            .map(|i| i.id.clone())
+            .collect()
+    }
+
+    /// Install/update the OS job from the draft.
+    pub fn schedule_apply(&mut self) {
+        use cleansys_core::engine::schedule as sch;
+        if self.schedule_draft.scope == sch::Scope::Selected {
+            self.schedule_draft.ids = self.selected_user_ids();
+            if self.schedule_draft.ids.is_empty() {
+                self.schedule_message =
+                    "Scope 'selected' needs ticked cleaners — close this, tick some, reopen (or press r for the recommended set).".into();
+                return;
+            }
+        }
+        match sch::install(&self.schedule_draft) {
+            Ok(job) => {
+                self.schedule_installed = Some(job.backend.to_string());
+                self.schedule_message = format!(
+                    "✓ Scheduled: {} via {}",
+                    self.schedule_draft.describe(),
+                    job.backend
+                );
+            }
+            Err(e) => self.schedule_message = format!("✗ {e:#}"),
+        }
+    }
+
+    /// Remove the OS job and saved schedule.
+    pub fn schedule_remove(&mut self) {
+        match cleansys_core::engine::schedule::remove() {
+            Ok(()) => {
+                self.schedule_installed = None;
+                self.schedule_message = "✓ Schedule removed.".into();
+            }
+            Err(e) => self.schedule_message = format!("✗ {e:#}"),
+        }
     }
 
     /// Close the preview results overlay.
@@ -785,6 +967,21 @@ impl App {
             return Ok(false);
         }
 
+        // Schedule overlay
+        if self.schedule_open {
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('S') => self.close_schedule(),
+                KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab => self.schedule_next_field(),
+                KeyCode::Up | KeyCode::Char('k') | KeyCode::BackTab => self.schedule_prev_field(),
+                KeyCode::Left | KeyCode::Char('h') => self.schedule_adjust(-1),
+                KeyCode::Right | KeyCode::Char('l') | KeyCode::Char(' ') => self.schedule_adjust(1),
+                KeyCode::Enter => self.schedule_apply(),
+                KeyCode::Char('d') | KeyCode::Delete => self.schedule_remove(),
+                _ => {}
+            }
+            return Ok(false);
+        }
+
         // Preview results overlay
         if self.preview_open {
             match key.code {
@@ -857,6 +1054,18 @@ impl App {
             (KeyCode::Char('d'), _) => {
                 if !self.show_help && !self.is_running {
                     self.run_preview();
+                }
+            }
+            // Recommended preset: tick only the safe, user-land cleaners
+            (KeyCode::Char('r'), _) => {
+                if !self.show_help && !self.is_running {
+                    self.select_recommended();
+                }
+            }
+            // Schedule automatic cleaning
+            (KeyCode::Char('S'), _) => {
+                if !self.show_help && !self.is_running {
+                    self.open_schedule();
                 }
             }
             // Help dialog

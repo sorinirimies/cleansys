@@ -11,6 +11,8 @@ fn noop(_opts: RunOptions) -> Result<CleaningResult> {
 
 fn sample_item(name: &str, requires_root: bool) -> CleanerItem {
     CleanerItem {
+        id: name.to_string(),
+        risk: cleansys_core::Risk::Safe,
         name: name.to_string(),
         description: format!("{name} description"),
         requires_root,
@@ -546,4 +548,46 @@ fn password_authentication_success_path_resets_all_item_status_and_bytes() {
             Some(cleansys_core::Status::Pending)
         ));
     }
+}
+
+#[test]
+fn schedule_overlay_fields_adjust_and_wrap() {
+    use cleansys_core::engine::schedule::Frequency;
+    let mut app = App::new();
+    // Weekly by default: Frequency, Hour, Minute, Day, Scope (+ Backend on Linux).
+    assert!(app.schedule_fields().len() >= 5);
+
+    // Frequency -> daily hides the Day row.
+    app.schedule_field = 0;
+    app.schedule_adjust(-1);
+    assert_eq!(app.schedule_draft.frequency, Frequency::Daily);
+    assert!(!app
+        .schedule_fields()
+        .contains(&cleansys_tui::app::ScheduleField::Day));
+
+    // Hour wraps 23 -> 0.
+    app.schedule_field = 1;
+    app.schedule_draft.hour = 23;
+    app.schedule_adjust(1);
+    assert_eq!(app.schedule_draft.hour, 0);
+
+    // Minute moves in 5-minute steps and wraps.
+    app.schedule_field = 2;
+    app.schedule_draft.minute = 55;
+    app.schedule_adjust(1);
+    assert_eq!(app.schedule_draft.minute, 0);
+}
+
+#[test]
+fn recommended_selects_only_safe_user_land() {
+    let mut app = App::new();
+    app.categories = cleansys_core::load_categories();
+    let n = app.select_recommended();
+    assert!(n > 0);
+    assert!(app
+        .categories
+        .iter()
+        .flat_map(|c| &c.items)
+        .filter(|i| i.selected)
+        .all(|i| i.risk == cleansys_core::Risk::Safe && !i.requires_root));
 }

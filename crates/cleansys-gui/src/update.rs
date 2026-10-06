@@ -61,6 +61,58 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             Task::none()
         }
 
+        Message::SelectRecommended => {
+            let n = cleansys_core::select_recommended(&mut state.categories, state.is_root);
+            state.push_log(format!("Selected {n} recommended (safe) cleaners"));
+            state.save_selections();
+            Task::none()
+        }
+
+        Message::OpenSchedule => {
+            state.open_schedule();
+            Task::none()
+        }
+        Message::CloseSchedule => {
+            state.schedule_open = false;
+            Task::none()
+        }
+        Message::ScheduleFrequency(f) => {
+            state.schedule_draft.frequency = f;
+            Task::none()
+        }
+        Message::ScheduleHour(h) => {
+            state.schedule_draft.hour = h.min(23);
+            Task::none()
+        }
+        Message::ScheduleMinute(m) => {
+            state.schedule_draft.minute = m.min(59);
+            Task::none()
+        }
+        Message::ScheduleWeekday(d) => {
+            state.schedule_draft.weekday = d.min(6);
+            Task::none()
+        }
+        Message::ScheduleDayOfMonth(d) => {
+            state.schedule_draft.day_of_month = d.clamp(1, 28);
+            Task::none()
+        }
+        Message::ScheduleScope(sc) => {
+            state.schedule_draft.scope = sc;
+            Task::none()
+        }
+        Message::ScheduleBackend(b) => {
+            state.schedule_draft.backend = b;
+            Task::none()
+        }
+        Message::ScheduleApply => {
+            state.schedule_apply();
+            Task::none()
+        }
+        Message::ScheduleRemove => {
+            state.schedule_remove();
+            Task::none()
+        }
+
         Message::SwitchCategoryTab(idx) => {
             if idx < state.categories.len() {
                 state.active_tab = idx;
@@ -728,5 +780,50 @@ mod tests {
         let _ = update(&mut state, Message::ClosePreview);
         assert!(!state.preview_open);
         assert!(state.preview_results.is_empty());
+    }
+
+    #[test]
+    fn select_recommended_ticks_only_safe_user_land() {
+        let mut state = CleanSysGui::new();
+        let _ = update(&mut state, Message::SelectRecommended);
+        assert!(state.selected_count() > 0);
+        assert!(state
+            .categories
+            .iter()
+            .flat_map(|c| &c.items)
+            .filter(|i| i.selected)
+            .all(|i| i.risk == cleansys_core::Risk::Safe && !i.requires_root));
+    }
+
+    #[test]
+    fn schedule_dialog_edits_draft_and_clamps() {
+        use cleansys_core::engine::schedule::{Frequency, Scope};
+        let mut state = CleanSysGui::new();
+        let _ = update(&mut state, Message::OpenSchedule);
+        assert!(state.schedule_open);
+        let _ = update(&mut state, Message::ScheduleFrequency(Frequency::Monthly));
+        let _ = update(&mut state, Message::ScheduleHour(99));
+        let _ = update(&mut state, Message::ScheduleDayOfMonth(40));
+        let _ = update(&mut state, Message::ScheduleScope(Scope::Extended));
+        assert_eq!(state.schedule_draft.frequency, Frequency::Monthly);
+        assert_eq!(state.schedule_draft.hour, 23);
+        assert_eq!(state.schedule_draft.day_of_month, 28);
+        let _ = update(&mut state, Message::CloseSchedule);
+        assert!(!state.schedule_open);
+    }
+
+    #[test]
+    fn selected_scope_without_selection_refuses_to_install() {
+        use cleansys_core::engine::schedule::Scope;
+        let mut state = CleanSysGui::new();
+        for c in &mut state.categories {
+            for i in &mut c.items {
+                i.selected = false;
+            }
+        }
+        state.schedule_draft.scope = Scope::Selected;
+        let _ = update(&mut state, Message::ScheduleApply);
+        assert!(state.schedule_installed.is_none());
+        assert!(state.schedule_message.contains("needs ticked"));
     }
 }

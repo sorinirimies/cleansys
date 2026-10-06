@@ -39,6 +39,14 @@ pub struct CleanerSpec {
     pub requires_root: bool,
     #[serde(default)]
     pub risk: Risk,
+    /// Process names (case-insensitive, `.exe` ignored). If any is running,
+    /// a real (non-preview) run is refused with a "close it first" error.
+    #[serde(default)]
+    pub process: Vec<String>,
+    /// Lock-file globs (e.g. Firefox `~/.mozilla/firefox/*/lock`); if any
+    /// exists the application is considered running.
+    #[serde(default)]
+    pub lock_files: Vec<String>,
     #[serde(default, rename = "action")]
     pub actions: Vec<Action>,
 }
@@ -69,12 +77,28 @@ pub enum Action {
         /// Recreate the (now empty) directory afterwards.
         #[serde(default)]
         recreate: bool,
+        /// Walk each match recursively and remove only *files* (directories
+        /// stay). Combine with the regex filters below.
+        #[serde(default)]
+        files_only: bool,
+        /// Only items whose file name matches this regex.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        name_regex: Option<String>,
+        /// Skip items whose file name matches this regex.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        not_name_regex: Option<String>,
+        /// Only items whose full path matches this regex.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        path_regex: Option<String>,
+        /// Skip items whose full path matches this regex.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        not_path_regex: Option<String>,
         /// Remove via `sudo rm -rf` when not already root. Defaults to the
         /// cleaner's `requires_root`.
         #[serde(default)]
         sudo: Option<bool>,
         /// Label shown next to each removed item.
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
     /// Run an external program (e.g. `docker system prune -f`). Skipped when
@@ -92,7 +116,7 @@ pub enum Action {
         /// report the real bytes freed.
         #[serde(default)]
         measure: Vec<String>,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
     /// Find build output next to marker files inside the configured
@@ -102,7 +126,7 @@ pub enum Action {
         markers: Vec<String>,
         /// Directory names, relative to the marker's directory, to remove.
         artifacts: Vec<String>,
-        #[serde(default)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
 }

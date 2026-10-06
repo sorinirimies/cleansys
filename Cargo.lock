@@ -645,6 +645,7 @@ dependencies = [
  "glob",
  "is_elevated",
  "log",
+ "regex",
  "serde",
  "serde_json",
  "tempfile",

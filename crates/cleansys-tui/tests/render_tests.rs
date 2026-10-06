@@ -19,6 +19,8 @@ fn noop(_opts: RunOptions) -> Result<CleaningResult> {
 
 fn sample_item(name: &str, requires_root: bool) -> CleanerItem {
     CleanerItem {
+        id: name.to_string(),
+        risk: cleansys_core::Risk::Safe,
         name: name.to_string(),
         description: format!("{name} description"),
         requires_root,

@@ -5,23 +5,16 @@ use std::path::PathBuf;
 /// Look up an environment variable with sensible per-platform fallbacks for
 /// the XDG / Windows well-known directories. Empty values count as unset.
 pub fn lookup_env(name: &str) -> Option<String> {
-    if let Ok(v) = std::env::var(name) {
-        if !v.is_empty() {
-            return Some(v);
+    for candidate in [name.to_string(), name.to_ascii_uppercase()] {
+        if let Ok(v) = std::env::var(&candidate) {
+            if !v.is_empty() {
+                return Some(v);
+            }
         }
     }
-    let upper = name.to_ascii_uppercase();
-    let name = if matches!(
-        upper.as_str(),
-        "SYSTEMROOT" | "WINDIR" | "PROGRAMDATA" | "TEMP" | "TMP"
-    ) {
-        upper.as_str()
-    } else {
-        name
-    };
-    let home = || crate::cleaners::platform::home_dir();
+    let home = crate::cleaners::platform::home_dir;
     let under = |rel: &str| home().map(|h| h.join(rel).to_string_lossy().into_owned());
-    match name {
+    match name.to_ascii_uppercase().as_str() {
         "HOME" | "USERPROFILE" => home().map(|h| h.to_string_lossy().into_owned()),
         "XDG_CACHE_HOME" => under(".cache"),
         "XDG_STATE_HOME" => under(".local/state"),
@@ -30,7 +23,10 @@ pub fn lookup_env(name: &str) -> Option<String> {
         "LOCALAPPDATA" => under("AppData/Local"),
         "APPDATA" => under("AppData/Roaming"),
         "SYSTEMROOT" | "WINDIR" => Some("C:\\Windows".to_string()),
-        "PROGRAMDATA" => Some("C:\\ProgramData".to_string()),
+        "SYSTEMDRIVE" => Some("C:".to_string()),
+        "PROGRAMDATA" | "ALLUSERSPROFILE" => Some("C:\\ProgramData".to_string()),
+        "PROGRAMFILES" => Some("C:\\Program Files".to_string()),
+        "PROGRAMFILES(X86)" => Some("C:\\Program Files (x86)".to_string()),
         "TEMP" | "TMP" => Some(std::env::temp_dir().to_string_lossy().into_owned()),
         _ => None,
     }
@@ -81,7 +77,11 @@ pub fn expand(input: &str, env: &dyn Fn(&str) -> Option<String>) -> String {
         } else if c == '%' {
             if let Some(end) = chars[i + 1..].iter().position(|&c| c == '%') {
                 let name: String = chars[i + 1..i + 1 + end].iter().collect();
-                if !name.is_empty() && name.chars().all(is_name_char) {
+                if !name.is_empty()
+                    && name
+                        .chars()
+                        .all(|c| is_name_char(c) || c == '(' || c == ')')
+                {
                     out.push_str(&env(&name).unwrap_or_default());
                     i += end + 2;
                     continue;

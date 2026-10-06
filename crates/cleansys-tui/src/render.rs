@@ -63,6 +63,8 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         render_admin_notice(f, f.area());
     } else if app.awaiting_run_confirmation {
         render_confirm_run(f, app, f.area());
+    } else if app.schedule_open {
+        render_schedule(f, app, f.area());
     } else if app.preview_open {
         render_preview(f, app, f.area());
     }
@@ -1281,6 +1283,20 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             ),
             Span::raw(": Category  "),
             Span::styled(
+                "r",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(": Recommended  "),
+            Span::styled(
+                "S",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(": Schedule  "),
+            Span::styled(
                 "?",
                 Style::default()
                     .fg(Color::Magenta)
@@ -1336,6 +1352,12 @@ fn render_help(f: &mut Frame, area: Rect) {
         Line::from(vec![Span::raw("  n: Deselect all in current category")]),
         Line::from(vec![Span::raw("  A: Select all across every category")]),
         Line::from(vec![Span::raw("  N: Deselect all across every category")]),
+        Line::from(vec![Span::raw(
+            "  r: Select the recommended set (safe, user-land cleaners)",
+        )]),
+        Line::from(vec![Span::raw(
+            "  S: Schedule automatic cleaning (daily/weekly/monthly)",
+        )]),
         Line::from(vec![Span::raw(
             "  c: Cycle chart type (Bar → Count Pie → Size Pie → Bar)",
         )]),
@@ -1493,6 +1515,141 @@ fn render_confirm_run(f: &mut Frame, app: &App, area: Rect) {
 
 /// Overlay shown for a preview (dry-run): lists what *would* be cleaned and
 /// its real measured size, without anything having been deleted.
+/// Overlay for configuring automatic (scheduled) cleaning.
+fn render_schedule(f: &mut Frame, app: &App, area: Rect) {
+    use crate::app::ScheduleField;
+    use cleansys_core::engine::schedule::{Backend, Frequency, Scope, WEEKDAYS};
+
+    let popup = centered_popup(area, 70, 80);
+    let d = &app.schedule_draft;
+
+    let mut lines = vec![
+        Line::from(vec![Span::styled(
+            "⏰ Automatic cleaning",
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from(""),
+        Line::from(match &app.schedule_installed {
+            Some(b) => Span::styled(
+                format!("Status: ACTIVE via {b} — {}", d.describe()),
+                Style::default().fg(Color::Green),
+            ),
+            None => Span::styled(
+                "Status: not scheduled",
+                Style::default().fg(Color::DarkGray),
+            ),
+        }),
+    ];
+    if let Some(l) = &app.schedule_last_run {
+        lines.push(Line::from(Span::styled(
+            format!(
+                "Last run: {} — freed {} ({} cleaners{})",
+                l.ago(),
+                format_size(l.bytes_freed),
+                l.cleaners_run,
+                if l.scheduled { ", scheduled" } else { "" }
+            ),
+            Style::default().fg(Color::DarkGray),
+        )));
+    }
+    lines.push(Line::from(""));
+
+    for (i, field) in app.schedule_fields().iter().enumerate() {
+        let (label, value) = match field {
+            ScheduleField::Frequency => (
+                "Repeat",
+                match d.frequency {
+                    Frequency::Daily => "Daily",
+                    Frequency::Weekly => "Weekly",
+                    Frequency::Monthly => "Monthly",
+                }
+                .to_string(),
+            ),
+            ScheduleField::Hour => ("Hour", format!("{:02}", d.hour)),
+            ScheduleField::Minute => ("Minute", format!("{:02}", d.minute)),
+            ScheduleField::Day => match d.frequency {
+                Frequency::Monthly => ("Day of month", d.day_of_month.to_string()),
+                _ => (
+                    "Weekday",
+                    WEEKDAYS[usize::from(d.weekday.min(6))].to_string(),
+                ),
+            },
+            ScheduleField::Scope => (
+                "Cleans",
+                match d.scope {
+                    Scope::Recommended => "Recommended — safe caches only".to_string(),
+                    Scope::Extended => "Extended — safe + moderate".to_string(),
+                    Scope::Selected => {
+                        "Selected — the cleaners ticked in the main list".to_string()
+                    }
+                },
+            ),
+            ScheduleField::Backend => (
+                "Backend",
+                match d.backend {
+                    Backend::Auto => "Auto (systemd timer, else cron)",
+                    Backend::Systemd => "systemd user timer",
+                    Backend::Cron => "cron (crontab)",
+                }
+                .to_string(),
+            ),
+        };
+        let selected = i == app.schedule_field;
+        let style = if selected {
+            Style::default()
+                .fg(Color::Black)
+                .bg(Color::Cyan)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+        lines.push(Line::from(vec![
+            Span::raw(if selected { "▶ " } else { "  " }),
+            Span::styled(
+                format!("{label:<14}"),
+                Style::default().add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(format!(" ◀ {value} ▶ "), style),
+        ]));
+    }
+
+    lines.push(Line::from(""));
+    lines.push(Line::from(format!("Will run: {}", d.describe())));
+    lines.push(Line::from(Span::styled(
+        "Unattended runs only touch user-land cleaners, skip apps that are open,",
+        Style::default().fg(Color::DarkGray),
+    )));
+    lines.push(Line::from(Span::styled(
+        "and never include caution-risk cleaners unless you ticked them (Selected).",
+        Style::default().fg(Color::DarkGray),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        app.schedule_message.clone(),
+        Style::default().fg(Color::Yellow),
+    )));
+    lines.push(Line::from(""));
+    lines.push(Line::from(Span::styled(
+        "↑/↓ field   ←/→ change   Enter enable/update   d remove   Esc close",
+        Style::default()
+            .fg(Color::Green)
+            .add_modifier(Modifier::BOLD),
+    )));
+
+    let widget = Paragraph::new(lines)
+        .block(
+            Block::default()
+                .title("Schedule")
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Cyan)),
+        )
+        .wrap(Wrap { trim: false });
+    f.render_widget(Clear, popup);
+    f.render_widget(widget, popup);
+}
+
 fn render_preview(f: &mut Frame, app: &App, area: Rect) {
     let popup = centered_popup(area, 80, 75);
 

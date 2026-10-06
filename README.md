@@ -76,7 +76,7 @@ Every cleaner reports **real measured sizes** — no estimates or guesses — an
 
 ## 🧰 Developer, Build & AI/LLM Cleaners (declarative engine)
 
-Beyond the built-in cleaners, CleanSys ships a data-driven engine (TOML, in the spirit of BleachBit's CleanerML).
+Beyond the built-in cleaners, CleanSys ships a data-driven engine (cleaners are plain TOML files).
 Three extra categories appear in the TUI/GUI automatically (cleaners for software you don't have are hidden):
 
 | Category | Examples |
@@ -89,12 +89,29 @@ Each cleaner has a *risk* level: `safe`, `moderate` (re-download takes time) or 
 `caution` cleaners are skipped by `--all`/`--category` unless `--include-caution` is passed or they are named with `--id`.
 
 ```bash
-cleansys list                                   # all cleaners + ids
-cleansys scan --all                             # preview, deletes nothing
-cleansys scan -c "Project Build Artifacts"
-cleansys clean -i proj-rust -i dev-gradle-caches --dry-run
-cleansys clean -c "AI & LLM Caches" --yes
+cleansys auto                      # scan the recommended (safe) set, show it, ask once, clean
+cleansys auto -n                   # same, but only report (dry run)
+cleansys list                      # every cleaner + id (same order as the UIs)
+cleansys scan --all --json         # preview everything, machine-readable
+cleansys scan -c user              # all user-land categories   (-c system = root side)
+cleansys clean -i proj-rust -i dev-gradle-caches -n
+cleansys clean -c "AI & LLM Caches" --include-caution --yes
 ```
+
+### Automatic cleaning (schedule)
+
+```bash
+cleansys schedule install --every weekly --day sun --at 03:30   # recommended scope
+cleansys schedule install --every daily --at 02:00 --scope extended
+cleansys schedule install --scope selected -i proj-rust -i dev-gradle-caches
+cleansys schedule show | remove | run-now
+```
+
+Native OS jobs, no daemon: systemd user timer (or your crontab) on Linux, launchd agent on macOS, Task Scheduler on
+Windows. Also available in the TUI (`S`) and GUI (⏰ Schedule). Unattended runs only touch user-land cleaners, skip
+applications that are currently open, never include `caution` cleaners unless you ticked them, and record a
+"last run" summary shown in the UIs. Project build output is only cleaned when untouched for 14 days
+(`cleansys config min-age N`). Other helpers: `cleansys config show | add-root | exclude`.
 
 Project scanning looks in `~/Projects`, `~/dev`, `~/src`, `~/code`, ... (auto-detected) and only removes a build
 directory when a marker file (e.g. `Cargo.toml`, `build.gradle.kts`, `package.json`) sits next to it.

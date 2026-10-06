@@ -27,6 +27,11 @@ pub fn run_spec_with(
     opts: RunOptions,
     cfg: &EngineConfig,
 ) -> Result<CleaningResult> {
+    if !opts.dry_run {
+        if let Some(app) = super::running::running_app(spec) {
+            return Err(super::running::AppRunning(app).into());
+        }
+    }
     let mut result = CleaningResult::new();
     for action in &spec.actions {
         match action {
@@ -35,31 +40,48 @@ pub fn run_spec_with(
                 recreate,
                 label,
                 sudo,
+                files_only,
+                name_regex,
+                not_name_regex,
+                path_regex,
+                not_path_regex,
                 ..
             } => {
                 let label = label.as_deref().unwrap_or(&spec.name);
                 let elevated = sudo.unwrap_or(spec.requires_root);
+                let Some(filter) = PathFilter::new(
+                    name_regex.as_deref(),
+                    not_name_regex.as_deref(),
+                    path_regex.as_deref(),
+                    not_path_regex.as_deref(),
+                ) else {
+                    warn!("{}: invalid regex in cleaner; skipping action", spec.id);
+                    continue;
+                };
                 for template in action.delete_templates() {
                     for path in paths::resolve(template, &paths::lookup_env) {
-                        if *contents_only {
-                            if let Ok(rd) = fs::read_dir(&path) {
-                                let mut kids: Vec<PathBuf> =
-                                    rd.flatten().map(|e| e.path()).collect();
-                                kids.sort();
-                                for kid in kids {
-                                    remove_path(
-                                        &mut result,
-                                        &kid,
-                                        label,
-                                        opts,
-                                        false,
-                                        elevated,
-                                        cfg,
-                                    )?;
-                                }
-                            }
+                        let targets: Vec<PathBuf> = if *files_only {
+                            files_below(&path)
+                        } else if *contents_only {
+                            let mut kids: Vec<PathBuf> = fs::read_dir(&path)
+                                .map(|rd| rd.flatten().map(|e| e.path()).collect())
+                                .unwrap_or_default();
+                            kids.sort();
+                            kids
                         } else {
-                            remove_path(&mut result, &path, label, opts, *recreate, elevated, cfg)?;
+                            vec![path.clone()]
+                        };
+                        let recreate_here = *recreate && !*contents_only && !*files_only;
+                        for t in targets.into_iter().filter(|t| filter.accepts(t)) {
+                            remove_path(
+                                &mut result,
+                                &t,
+                                label,
+                                opts,
+                                recreate_here,
+                                elevated,
+                                cfg,
+                            )?;
                         }
                     }
                 }
@@ -92,6 +114,69 @@ pub fn run_spec_with(
         }
     }
     Ok(result)
+}
+
+/// Optional regex filters for `delete` actions.
+struct PathFilter {
+    name: Option<regex::Regex>,
+    not_name: Option<regex::Regex>,
+    path: Option<regex::Regex>,
+    not_path: Option<regex::Regex>,
+}
+
+impl PathFilter {
+    fn new(
+        name: Option<&str>,
+        not_name: Option<&str>,
+        path: Option<&str>,
+        not_path: Option<&str>,
+    ) -> Option<Self> {
+        let c = |s: Option<&str>| -> Result<Option<regex::Regex>, ()> {
+            s.map(|r| regex::Regex::new(r).map_err(|_| ())).transpose()
+        };
+        Some(Self {
+            name: c(name).ok()?,
+            not_name: c(not_name).ok()?,
+            path: c(path).ok()?,
+            not_path: c(not_path).ok()?,
+        })
+    }
+
+    fn accepts(&self, p: &Path) -> bool {
+        let full = p.to_string_lossy();
+        let name = p
+            .file_name()
+            .map(|n| n.to_string_lossy().into_owned())
+            .unwrap_or_default();
+        self.name.as_ref().is_none_or(|r| r.is_match(&name))
+            && self.not_name.as_ref().is_none_or(|r| !r.is_match(&name))
+            && self.path.as_ref().is_none_or(|r| r.is_match(&full))
+            && self.not_path.as_ref().is_none_or(|r| !r.is_match(&full))
+    }
+}
+
+/// All regular files below `root` (symlinks are never followed; a plain file
+/// yields itself). Deterministic order.
+fn files_below(root: &Path) -> Vec<PathBuf> {
+    let mut out = Vec::new();
+    let mut stack = vec![root.to_path_buf()];
+    while let Some(p) = stack.pop() {
+        let Ok(meta) = fs::symlink_metadata(&p) else {
+            continue;
+        };
+        if meta.file_type().is_symlink() {
+            continue;
+        }
+        if meta.is_file() {
+            out.push(p);
+        } else if meta.is_dir() {
+            if let Ok(rd) = fs::read_dir(&p) {
+                stack.extend(rd.flatten().map(|e| e.path()));
+            }
+        }
+    }
+    out.sort();
+    out
 }
 
 /// Whether anything this spec targets exists on disk right now. Used to hide
@@ -235,6 +320,10 @@ fn index_cache() -> &'static std::sync::Mutex<Option<(String, std::time::Instant
 /// Walk the configured roots once (non-hidden, non-symlink dirs, bounded
 /// depth) and record the files in every directory.
 fn project_index(cfg: &EngineConfig) -> Index {
+    // Serialise builds so parallel scans share one walk instead of each
+    // starting their own.
+    static BUILD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _build = BUILD.lock().unwrap_or_else(|e| e.into_inner());
     let roots = cfg.effective_roots();
     let key = format!("{roots:?}|{}", cfg.max_depth);
     if let Ok(guard) = index_cache().lock() {
@@ -431,6 +520,7 @@ mod tests {
     fn cfg_for(root: &Path) -> EngineConfig {
         EngineConfig {
             scan_roots: vec![root.to_string_lossy().into_owned()],
+            min_age_days: 0,
             ..EngineConfig::default()
         }
     }
@@ -494,6 +584,8 @@ mod tests {
             os: vec![],
             requires_root: false,
             risk: Risk::Safe,
+            process: vec![],
+            lock_files: vec![],
             actions: vec![Action::ProjectArtifacts {
                 markers: vec!["Cargo.toml".into()],
                 artifacts: vec!["target".into()],

@@ -43,7 +43,7 @@ pub use cleaners::cleaned_item::{
     cleaner_fn, CleanedItem, CleanedItemType, CleanerFn, CleaningResult, RunOptions,
 };
 pub use cleaners::{system_cleaners, user_cleaners};
-pub use model::{load_categories, CleanerCategory, CleanerItem, Status};
+pub use model::{load_categories, select_recommended, CleanerCategory, CleanerItem, Risk, Status};
 pub use settings::{load_settings, save_settings, Settings};
 pub use theme::{theme_by_index, theme_index_by_name, AppTheme, Rgb, THEME_COUNT, THEME_NAMES};
 pub use utils::{check_root, confirm, format_size, get_size, print_error, print_header};

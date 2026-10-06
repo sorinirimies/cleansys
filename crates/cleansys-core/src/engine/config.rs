@@ -42,7 +42,8 @@ pub struct EngineConfig {
     /// Maximum directory depth below a root to search.
     pub max_depth: usize,
     /// Only clean build output whose project was untouched this many days
-    /// (0 = clean regardless of age).
+    /// (0 = clean regardless of age). Default 14: never nukes a project you are
+    /// actively building.
     pub min_age_days: u64,
     /// Glob patterns (`~`, `$VAR` allowed) never to delete.
     pub exclude: Vec<String>,
@@ -53,7 +54,7 @@ impl Default for EngineConfig {
         Self {
             scan_roots: Vec::new(),
             max_depth: 6,
-            min_age_days: 0,
+            min_age_days: 14,
             exclude: Vec::new(),
         }
     }

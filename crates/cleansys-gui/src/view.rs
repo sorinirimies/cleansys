@@ -25,6 +25,9 @@ pub fn view(state: &CleanSysGui) -> Element<'_, Message> {
     if state.confirm_run_pending {
         return confirm_run_dialog(state, &c);
     }
+    if state.schedule_open {
+        return schedule_dialog(state, &c);
+    }
     if state.preview_open {
         return preview_dialog(state, &c);
     }
@@ -145,6 +148,15 @@ fn controls_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Mess
             Some(Message::RequestPreview)
         });
 
+    let recommended_button = button(text("✨ Recommended").size(12))
+        .padding([6, 12])
+        .style(button::secondary)
+        .on_press_maybe((!busy).then_some(Message::SelectRecommended));
+    let schedule_button = button(text("⏰ Schedule").size(14))
+        .padding([10, 16])
+        .style(button::secondary)
+        .on_press_maybe((!busy).then_some(Message::OpenSchedule));
+
     let select_all_button = button(text("Select all").size(12))
         .padding([6, 12])
         .style(button::secondary)
@@ -173,7 +185,9 @@ fn controls_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Mess
     let mut rows = column![row![
         run_button,
         preview_button,
+        schedule_button,
         Space::new().width(Length::Fixed(12.0)),
+        recommended_button,
         select_all_button,
         select_none_button,
         Space::new().width(Length::Fill),
@@ -684,6 +698,254 @@ fn admin_notice_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'
     modal_backdrop(card.into(), c)
 }
 
+/// A pick-list entry pairing a value with its label.
+#[derive(Clone, PartialEq, Eq)]
+struct Choice<T: Clone + PartialEq + Eq> {
+    value: T,
+    label: String,
+}
+
+impl<T: Clone + PartialEq + Eq> std::fmt::Display for Choice<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.label)
+    }
+}
+
+fn choice<T: Clone + PartialEq + Eq>(value: T, label: impl Into<String>) -> Choice<T> {
+    Choice {
+        value,
+        label: label.into(),
+    }
+}
+
+/// Dialog for configuring automatic (scheduled) cleaning.
+fn schedule_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> {
+    use cleansys_core::engine::schedule::{Backend, Frequency, Scope, WEEKDAYS};
+    use iced::widget::pick_list;
+
+    let c = *c;
+    let d = &state.schedule_draft;
+
+    let freq_opts = vec![
+        choice(Frequency::Daily, "Daily"),
+        choice(Frequency::Weekly, "Weekly"),
+        choice(Frequency::Monthly, "Monthly"),
+    ];
+    let freq_sel = freq_opts.iter().find(|o| o.value == d.frequency).cloned();
+
+    let hour_opts: Vec<_> = (0u8..24).map(|h| choice(h, format!("{h:02}"))).collect();
+    let hour_sel = Some(choice(d.hour, format!("{:02}", d.hour)));
+
+    let mut minute_opts: Vec<_> = (0u8..60)
+        .step_by(5)
+        .map(|m| choice(m, format!("{m:02}")))
+        .collect();
+    if !minute_opts.iter().any(|o| o.value == d.minute) {
+        minute_opts.push(choice(d.minute, format!("{:02}", d.minute)));
+        minute_opts.sort_by_key(|o| o.value);
+    }
+    let minute_sel = Some(choice(d.minute, format!("{:02}", d.minute)));
+
+    let scope_opts = vec![
+        choice(Scope::Recommended, "Recommended — safe caches only"),
+        choice(Scope::Extended, "Extended — safe + moderate"),
+        choice(
+            Scope::Selected,
+            "Selected — the cleaners ticked in the list",
+        ),
+    ];
+    let scope_sel = scope_opts.iter().find(|o| o.value == d.scope).cloned();
+
+    let mut form = column![row![
+        text("Repeat")
+            .size(13)
+            .color(c.text_secondary)
+            .width(Length::Fixed(110.0)),
+        pick_list(freq_opts, freq_sel, |o: Choice<Frequency>| {
+            Message::ScheduleFrequency(o.value)
+        })
+        .text_size(13.0)
+        .width(Length::Fixed(160.0)),
+    ]
+    .spacing(10)
+    .align_y(Alignment::Center),]
+    .spacing(10);
+
+    match d.frequency {
+        Frequency::Weekly => {
+            let opts: Vec<_> = WEEKDAYS
+                .iter()
+                .enumerate()
+                .map(|(i, n)| choice(i as u8, *n))
+                .collect();
+            let sel = opts.iter().find(|o| o.value == d.weekday).cloned();
+            form = form.push(
+                row![
+                    text("Weekday")
+                        .size(13)
+                        .color(c.text_secondary)
+                        .width(Length::Fixed(110.0)),
+                    pick_list(opts, sel, |o: Choice<u8>| Message::ScheduleWeekday(o.value))
+                        .text_size(13.0)
+                        .width(Length::Fixed(160.0)),
+                ]
+                .spacing(10)
+                .align_y(Alignment::Center),
+            );
+        }
+        Frequency::Monthly => {
+            let opts: Vec<_> = (1u8..=28).map(|n| choice(n, n.to_string())).collect();
+            let sel = Some(choice(d.day_of_month, d.day_of_month.to_string()));
+            form = form.push(
+                row![
+                    text("Day of month")
+                        .size(13)
+                        .color(c.text_secondary)
+                        .width(Length::Fixed(110.0)),
+                    pick_list(opts, sel, |o: Choice<u8>| Message::ScheduleDayOfMonth(
+                        o.value
+                    ))
+                    .text_size(13.0)
+                    .width(Length::Fixed(160.0)),
+                ]
+                .spacing(10)
+                .align_y(Alignment::Center),
+            );
+        }
+        Frequency::Daily => {}
+    }
+
+    form = form
+        .push(
+            row![
+                text("Time")
+                    .size(13)
+                    .color(c.text_secondary)
+                    .width(Length::Fixed(110.0)),
+                pick_list(hour_opts, hour_sel, |o: Choice<u8>| Message::ScheduleHour(
+                    o.value
+                ))
+                .text_size(13.0)
+                .width(Length::Fixed(80.0)),
+                text(":").size(14).color(c.text_primary),
+                pick_list(minute_opts, minute_sel, |o: Choice<u8>| {
+                    Message::ScheduleMinute(o.value)
+                })
+                .text_size(13.0)
+                .width(Length::Fixed(80.0)),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
+        )
+        .push(
+            row![
+                text("Cleans")
+                    .size(13)
+                    .color(c.text_secondary)
+                    .width(Length::Fixed(110.0)),
+                pick_list(scope_opts, scope_sel, |o: Choice<Scope>| {
+                    Message::ScheduleScope(o.value)
+                })
+                .text_size(13.0)
+                .width(Length::Fixed(320.0)),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
+        );
+
+    if cfg!(all(unix, not(target_os = "macos"))) {
+        let opts = vec![
+            choice(Backend::Auto, "Auto (systemd timer, else cron)"),
+            choice(Backend::Systemd, "systemd user timer"),
+            choice(Backend::Cron, "cron (crontab)"),
+        ];
+        let sel = opts.iter().find(|o| o.value == d.backend).cloned();
+        form = form.push(
+            row![
+                text("Backend")
+                    .size(13)
+                    .color(c.text_secondary)
+                    .width(Length::Fixed(110.0)),
+                pick_list(opts, sel, |o: Choice<Backend>| Message::ScheduleBackend(
+                    o.value
+                ))
+                .text_size(13.0)
+                .width(Length::Fixed(260.0)),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
+        );
+    }
+
+    let status_line = match &state.schedule_installed {
+        Some(b) => text(format!("Status: ACTIVE via {b} \u{2014} {}", d.describe()))
+            .size(13)
+            .color(c.green),
+        None => text("Status: not scheduled").size(13).color(c.muted),
+    };
+    let last_run: Element<'a, Message> = match &state.schedule_last_run {
+        Some(l) => text(format!(
+            "Last run: {} \u{2014} freed {} ({} cleaners{})",
+            l.ago(),
+            format_size(l.bytes_freed),
+            l.cleaners_run,
+            if l.scheduled { ", scheduled" } else { "" }
+        ))
+        .size(12)
+        .color(c.text_secondary)
+        .into(),
+        None => Space::new().height(Length::Fixed(0.0)).into(),
+    };
+
+    let enable_label = if state.schedule_installed.is_some() {
+        "Update"
+    } else {
+        "Enable"
+    };
+    let buttons = row![
+        button(text(enable_label))
+            .padding([8, 16])
+            .style(button::primary)
+            .on_press(Message::ScheduleApply),
+        button(text("Remove"))
+            .padding([8, 16])
+            .style(button::secondary)
+            .on_press_maybe(
+                state
+                    .schedule_installed
+                    .is_some()
+                    .then_some(Message::ScheduleRemove)
+            ),
+        Space::new().width(Length::Fill),
+        button(text("Close"))
+            .padding([8, 16])
+            .style(button::secondary)
+            .on_press(Message::CloseSchedule),
+    ]
+    .spacing(10);
+
+    let content = column![
+        text("\u{23F0} Automatic cleaning").size(22).color(c.text_primary),
+        status_line,
+        last_run,
+        rule::horizontal(1),
+        form,
+        rule::horizontal(1),
+        text(format!("Will run: {}", d.describe())).size(13).color(c.text_primary),
+        text("Unattended runs only touch user-land cleaners, skip apps that are open, and never include caution-risk cleaners unless you picked them.")
+            .size(11)
+            .color(c.muted),
+        text(state.schedule_message.clone()).size(12).color(c.accent),
+        buttons,
+    ]
+    .spacing(12)
+    .padding(28)
+    .max_width(560);
+
+    let card = container(content).padding(8).style(surface_style(c));
+    modal_backdrop(card.into(), c)
+}
+
 fn preview_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> {
     let c = *c;
 
@@ -881,5 +1143,17 @@ mod tests {
         }
         state.categories[0].items[0].last_result = Some(result);
         let _ = view(&state);
+    }
+
+    #[test]
+    fn view_does_not_panic_for_schedule_dialog_in_every_frequency() {
+        use cleansys_core::engine::schedule::Frequency;
+        for f in [Frequency::Daily, Frequency::Weekly, Frequency::Monthly] {
+            let mut state = CleanSysGui::new();
+            state.schedule_open = true;
+            state.schedule_draft.frequency = f;
+            state.schedule_draft.minute = 7; // not a 5-minute step
+            let _ = view(&state);
+        }
     }
 }

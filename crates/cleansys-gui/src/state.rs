@@ -44,6 +44,16 @@ pub struct CleanSysGui {
     /// Windows has no interactive sudo-password flow, so this replaces the
     /// password dialog when elevation is required there).
     pub needs_admin_notice: bool,
+    /// Whether the automatic-cleaning (schedule) dialog is visible.
+    pub schedule_open: bool,
+    /// Schedule being edited in the dialog.
+    pub schedule_draft: cleansys_core::engine::schedule::Schedule,
+    /// Backend name when an OS job is installed ("launchd", "cron", ...).
+    pub schedule_installed: Option<String>,
+    /// Feedback line shown in the schedule dialog.
+    pub schedule_message: String,
+    /// Result of the most recent automatic run, if any.
+    pub schedule_last_run: Option<cleansys_core::engine::schedule::LastRun>,
 }
 
 impl Default for CleanSysGui {
@@ -90,6 +100,74 @@ impl CleanSysGui {
             operations_total: 0,
             operations_completed: 0,
             needs_admin_notice: false,
+            schedule_open: false,
+            schedule_draft: cleansys_core::engine::schedule::Schedule::default(),
+            schedule_installed: None,
+            schedule_message: String::new(),
+            schedule_last_run: None,
+        }
+    }
+
+    /// Open the schedule dialog, loading the saved schedule and job state
+    /// (skipped under `cfg!(test)` so tests never touch the real config or
+    /// OS scheduler).
+    pub fn open_schedule(&mut self) {
+        use cleansys_core::engine::schedule as sch;
+        if !cfg!(test) {
+            self.schedule_draft = sch::Schedule::load().unwrap_or_default();
+            self.schedule_installed = sch::installed().map(|j| j.backend.to_string());
+            self.schedule_last_run = sch::LastRun::load();
+        }
+        self.schedule_message = if self.schedule_installed.is_some() {
+            "Active — change values and press Update, or Remove to stop.".into()
+        } else {
+            "Not scheduled yet — pick values and press Enable.".into()
+        };
+        self.schedule_open = true;
+    }
+
+    /// Ids of ticked user-land cleaners (for the "Selected" scope).
+    pub fn selected_user_ids(&self) -> Vec<String> {
+        self.categories
+            .iter()
+            .flat_map(|c| &c.items)
+            .filter(|i| i.selected && !i.requires_root)
+            .map(|i| i.id.clone())
+            .collect()
+    }
+
+    /// Install/update the OS job from the draft.
+    pub fn schedule_apply(&mut self) {
+        use cleansys_core::engine::schedule as sch;
+        if self.schedule_draft.scope == sch::Scope::Selected {
+            self.schedule_draft.ids = self.selected_user_ids();
+            if self.schedule_draft.ids.is_empty() {
+                self.schedule_message =
+                    "Scope \"Selected\" needs ticked cleaners — close this dialog, tick some (or press Recommended) and reopen.".into();
+                return;
+            }
+        }
+        match sch::install(&self.schedule_draft) {
+            Ok(job) => {
+                self.schedule_installed = Some(job.backend.to_string());
+                self.schedule_message = format!(
+                    "\u{2713} Scheduled: {} via {}",
+                    self.schedule_draft.describe(),
+                    job.backend
+                );
+            }
+            Err(e) => self.schedule_message = format!("\u{2717} {e:#}"),
+        }
+    }
+
+    /// Remove the OS job and saved schedule.
+    pub fn schedule_remove(&mut self) {
+        match cleansys_core::engine::schedule::remove() {
+            Ok(()) => {
+                self.schedule_installed = None;
+                self.schedule_message = "\u{2713} Schedule removed.".into();
+            }
+            Err(e) => self.schedule_message = format!("\u{2717} {e:#}"),
         }
     }
 

@@ -48,4 +48,23 @@ pub enum Message {
     OperationFinished(usize, usize, Result<cleansys_core::CleaningResult, String>),
     /// Clear the operation log and reset counters for a fresh run.
     ClearLog,
+    /// Tick exactly the recommended cleaners (safe, user-land unless root).
+    SelectRecommended,
+    /// Open the automatic-cleaning (schedule) dialog.
+    OpenSchedule,
+    /// Close the schedule dialog.
+    CloseSchedule,
+    ScheduleFrequency(cleansys_core::engine::schedule::Frequency),
+    ScheduleHour(u8),
+    ScheduleMinute(u8),
+    /// Weekday (0 = Sunday) for weekly schedules.
+    ScheduleWeekday(u8),
+    /// Day of month (1–28) for monthly schedules.
+    ScheduleDayOfMonth(u8),
+    ScheduleScope(cleansys_core::engine::schedule::Scope),
+    ScheduleBackend(cleansys_core::engine::schedule::Backend),
+    /// Install / update the OS job from the dialog's values.
+    ScheduleApply,
+    /// Remove the OS job and saved schedule.
+    ScheduleRemove,
 }
