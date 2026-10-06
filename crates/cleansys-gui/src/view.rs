@@ -913,7 +913,7 @@ fn password_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, M
     ]
     .spacing(14)
     .padding(28)
-    .max_width(420);
+    .width(Length::Fill);
 
     if let Some(err) = &state.password_error {
         content = content.push(text(format!("❌ {}", err)).size(13).color(c.red));
@@ -951,7 +951,10 @@ fn password_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, M
 /// A generic centered modal wrapper: card content on top of a full-window
 /// backdrop tinted with the theme's background colour.
 fn modal_backdrop<'a>(card: Element<'a, Message>, c: ThemeColors) -> Element<'a, Message> {
-    container(card)
+    // The card fills the window up to a comfortable maximum and is centred,
+    // so dialogs adapt to narrow windows instead of overflowing.
+    container(container(card).width(Length::Fill).max_width(620))
+        .padding(16)
         .width(Length::Fill)
         .height(Length::Fill)
         .center_x(Length::Fill)
@@ -1013,7 +1016,7 @@ fn confirm_run_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a
     ]
     .spacing(12)
     .padding(28)
-    .max_width(480);
+    .width(Length::Fill);
 
     if needs_root {
         content = content.push(
@@ -1073,7 +1076,7 @@ fn admin_notice_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'
     ]
     .spacing(14)
     .padding(28)
-    .max_width(440);
+    .width(Length::Fill);
 
     content = content.push(
         row![
@@ -1334,7 +1337,7 @@ fn schedule_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, M
     ]
     .spacing(12)
     .padding(28)
-    .max_width(560);
+    .width(Length::Fill);
 
     let card = container(content).padding(8).style(surface_style(c));
     modal_backdrop(card.into(), c)
@@ -1419,7 +1422,7 @@ fn preview_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Me
     ]
     .spacing(12)
     .padding(28)
-    .max_width(520);
+    .width(Length::Fill);
 
     let card = container(content).padding(8).style(surface_style(c));
     modal_backdrop(card.into(), c)

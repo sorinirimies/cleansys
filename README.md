@@ -8,7 +8,53 @@
 [![Release](https://github.com/sorinirimies/cleansys/actions/workflows/release.yml/badge.svg)](https://github.com/sorinirimies/cleansys/actions/workflows/release.yml)
 [![CI](https://github.com/sorinirimies/cleansys/actions/workflows/ci.yml/badge.svg)](https://github.com/sorinirimies/cleansys/actions/workflows/ci.yml)
 
-**CleanSys** is a modern Linux system-cleanup utility available as both a terminal UI (Ratatui) and a desktop GUI (Iced). It helps you safely remove unnecessary files, clean caches, and free up disk space with real-time progress tracking.
+**CleanSys** finds and removes what quietly eats your disk — browser and app caches, package-manager and
+build-tool caches, `target/` and `node_modules/` folders in old projects, AI/LLM model caches, logs and crash dumps —
+from a **terminal UI**, a **desktop GUI** or the **command line**. It shows exactly how much each cleaner can free
+*before* you delete anything, never touches system folders, and can run **automatically on a schedule**.
+
+<p align="center">
+  <img src="demo/previews/tui-overview.gif" alt="CleanSys terminal UI: live sizes, recommended preset, preview and search" width="900">
+</p>
+
+## ✨ Highlights
+
+- **See before you delete** — every cleaner is measured in the background on start-up; sizes appear per cleaner and per category, biggest first. Preview (`d` / 🔍) lists the exact paths.
+- **One-key smart selection** — `r` / ✨ *Recommended* ticks only the safe, user-land cleaners that actually have something to free.
+- **~190 cleaners** — browsers, chat/media apps, IDEs, Gradle/Android, Cargo, npm, Docker, Hugging Face/Ollama, Claude/Codex session data, OS logs and more. See [What it cleans](#-what-it-cleans).
+- **Project build output** — finds `target/`, `build/`, `node_modules/`, `.venv/`… next to a marker file (`Cargo.toml`, `build.gradle.kts`, `package.json`…) and, by default, only in projects you haven't touched for 14 days.
+- **User land vs. root, kept separate** — everything that needs your password lives in its own *System · root* section; nothing asks for sudo until you run it.
+- **Risk levels** — `safe`, `moderate` (slow to rebuild, marked `~`) and `caution` (model weights, chat history, marked `!`; never part of bulk/unattended runs).
+- **Automatic cleaning** — daily/weekly/monthly via systemd/cron, launchd or Task Scheduler, configurable from the TUI, GUI or CLI.
+- **Skips apps that are open**, never follows symlinks, refuses to touch `$HOME`, `/usr`, `Documents`, `.ssh`…, honours your exclusion globs.
+- **Responsive** — wide/medium/narrow layouts in both the TUI and the GUI; 43 colour themes in the GUI.
+- **Scriptable** — `--json` output, stable cleaner ids, exit codes; extend with your own TOML cleaners.
+
+## 🎬 Demo
+
+### Desktop GUI — responsive layouts
+
+| Wide | Medium | Narrow |
+|:---:|:---:|:---:|
+| <img src="demo/previews/gui-wide.png" width="520"> | <img src="demo/previews/gui-medium.png" width="320"> | <img src="demo/previews/gui-narrow.png" width="190"> |
+
+Sidebar with live sizes · search across every cleaner · risk badges · always-visible action bar ·
+the sidebar becomes a drop-down on narrow windows.
+
+<p align="center"><img src="demo/previews/gui-schedule.png" alt="GUI schedule dialog" width="560"></p>
+
+### Terminal UI
+
+| | |
+|---|---|
+| **Run it for real** — confirm → progress → freed → automatic re-scan<br><img src="demo/previews/tui-clean.gif" width="440"> | **Schedule it** — `S`<br><img src="demo/previews/tui-schedule.gif" width="440"> |
+| **User land vs root** — root cleaners ask for your password only when run<br><img src="demo/previews/tui-system-root.gif" width="440"> | **Narrow terminals** — the sidebar collapses to a category bar<br><img src="demo/previews/tui-narrow.gif" width="440"> |
+
+### Command line
+
+<p align="center"><img src="demo/previews/cli.gif" alt="cleansys auto, scan --json and schedule help" width="900"></p>
+
+> Every demo runs against a synthetic home directory ([`demo/fixture.sh`](demo/fixture.sh)) — no real paths, nothing deleted. See [`demo/previews`](demo/previews/README.md).
 
 ## 🧱 Project Structure
 
@@ -16,112 +62,148 @@ CleanSys is a Cargo workspace with three crates:
 
 | Crate | Binary | Description |
 |-------|--------|-------------|
-| [`cleansys-core`](crates/cleansys-core) | *(library)* | Framework-free domain logic: cleaners, permission checks, formatting, sudo auth — shared by both front-ends |
-| [`cleansys-tui`](crates/cleansys-tui) | `cleansys` | Ratatui terminal UI + CLI (the original CleanSys experience) — published to crates.io as `cleansys` |
+| [`cleansys-core`](crates/cleansys-core) | *(library)* | Framework-free logic shared by both front-ends: cleaner engine, scan board, scheduler, safety rules, sudo auth |
+| [`cleansys-tui`](crates/cleansys-tui) | `cleansys` | Ratatui terminal UI **and** the CLI — published to crates.io as `cleansys` |
 | [`cleansys-gui`](crates/cleansys-gui) | `cleansys-gui` | Iced desktop GUI |
 
-## 🎬 Demo
+## 📦 Installation
 
-### Terminal UI
-![CleanSys TUI Demo](demo/previews/demo.gif)
+```bash
+cargo install cleansys           # terminal UI + CLI
+cargo install cleansys-gui       # desktop GUI
+```
 
-### User-Land Cleaners (no root required)
-![CleanSys User Cleaners Demo](demo/previews/userland-cleaners.gif)
+From source:
 
-### System Cleaners (requires authentication)
-![CleanSys System Cleaners Demo](demo/previews/system-cleaners.gif)
+```bash
+git clone https://github.com/sorinirimies/cleansys && cd cleansys
+cargo build --workspace --release          # binaries in target/release/
+cargo install --path crates/cleansys-tui   # or crates/cleansys-gui
+```
 
-### Desktop GUI
-![CleanSys GUI Preview](demo/previews/gui.png)
+Pre-built packages (`.deb`, `.rpm`, AppImage, Windows installer, macOS `.dmg`) are on the [Releases](https://github.com/sorinirimies/cleansys/releases) page. `just --list` shows all development tasks.
 
-## ✨ Features
+## 🚀 Quick start
 
-### 🛡️ Safety
-- **Confirmation dialog** before any destructive run (TUI and GUI) — lists exactly what's selected, with an option to disable prompts (`y` in the TUI)
-- **Preview / dry-run mode** — measure real sizes and paths that *would* be cleaned without deleting anything (`d` in the TUI, "Preview" button in the GUI)
-- **Progress tracking** — live per-item status plus an overall progress bar/percentage while a run is in flight
-- **Desktop notifications** on completion (Linux/macOS/Windows)
+```bash
+cleansys                 # interactive TUI — press r, then Enter
+cleansys-gui             # desktop GUI
+cleansys auto            # no UI: scan the recommended set, show it, ask once, clean
+cleansys auto -n         # …only report (dry run)
+sudo cleansys            # also unlock the system (root) cleaners
+```
 
-### 🎨 Modern Terminal UI
-- **Beautiful Interface**: Built with [Ratatui](https://github.com/ratatui-org/ratatui) for a smooth, modern experience
-- **Interactive Checkboxes**: Easy selection using [tui-checkbox](https://crates.io/crates/tui-checkbox) library
-- **Animated loading spinner**: [tui-spinner](https://crates.io/crates/tui-spinner) renders a live braille spinner in the title bar while a cleaning run is in progress
-- **Multiple Chart Types**: Toggle between Bar Chart, Pie Chart (by count), and Pie Chart (by size) — rendered directly by [tui-piechart](https://crates.io/crates/tui-piechart), with no local pie-drawing code of our own
-- **Split-View Progress**: Detailed status information with real-time updates
-- **Animated Indicators**: Loading spinners, progress bars, and status icons
-- **Responsive Design**: Automatically adapts to any terminal size
-- **Real-time Resize**: Handles terminal resizing without losing state
+## 🧹 What it cleans
 
-### 🧹 User-Level Cleaning (Linux, macOS, Windows)
-- Browser caches — Firefox, Chrome/Chromium, Edge, Safari (real per-platform paths, not guesses)
-- Application caches
-- Thumbnail/preview caches
-- Temporary files owned by the current user
-- Package manager caches (pip, npm, cargo)
-- Trash / Recycle Bin (Linux XDG trash, macOS `~/.Trash`, Windows Recycle Bin via Shell32)
-
-### 🔧 System-Level Cleaning (platform-appropriate, some require root/admin)
-- **Linux**: apt/pacman/dnf caches, rotated logs + journald vacuum, `/var/cache`, old kernels, crash reports
-- **macOS**: Homebrew cache (never run as root!), Xcode DerivedData, unavailable iOS/watchOS/tvOS Simulator caches, rotated system logs, diagnostic/crash reports
-- **Windows**: Windows Update download cache, `C:\Windows\Temp`, Recycle Bin (via the same Shell32 API Explorer's "Empty Recycle Bin" uses — no Administrator required for the current user's own bin)
-
-Every cleaner reports **real measured sizes** — no estimates or guesses — and the detailed view/GUI activity log lists exactly which files/directories were removed and how many bytes each one freed.
-
-### 🛡️ Safe by Default
-- Never removes system-critical files
-- Confirms before running operations
-- Detailed logs of all actions
-- Shows exactly what will be cleaned
-- Individual cleaner selection
-
-## 🧰 Developer, Build & AI/LLM Cleaners (declarative engine)
-
-Beyond the built-in cleaners, CleanSys ships a data-driven engine (cleaners are plain TOML files).
-Three extra categories appear in the TUI/GUI automatically (cleaners for software you don't have are hidden):
+Cleaners are grouped into categories; the UIs list **user-land categories first, then a separate System · root section**.
 
 | Category | Examples |
 |----------|----------|
-| **Developer Caches** | Gradle caches/wrapper, Android SDK & Android Studio/JetBrains, Maven, Cargo git/src, sccache, npm/yarn/pnpm/bun, Go, uv/Poetry, Bazel, Playwright/Cypress, VS Code/Cursor/Windsurf |
-| **Project Build Artifacts** | Rust `target/`, Gradle/Android `build/` + `.gradle/`, `.cxx`, Maven, `node_modules`, Next/Nuxt caches, Python caches & venvs, SwiftPM, Pods, .NET `bin/obj`, Flutter, Zig, CMake, Terraform |
-| **AI & LLM Caches** | Hugging Face, PyTorch/Keras, Ollama, LM Studio/GPT4All/Jan, Claude Code, Codex/Gemini CLI, agent session histories, code indexes |
+| **User Land Cleaners** | Browser/app/thumbnail caches, temp files, package-manager caches, Trash |
+| **Developer Caches** | Gradle (caches, wrapper), Android SDK & Studio, Maven, Cargo git/src, sccache, npm/yarn/pnpm/bun, Go, uv/Poetry, Bazel, Playwright/Cypress, VS Code/Cursor/Windsurf, Xcode, Ruby, NuGet, ccache… |
+| **Project Build Artifacts** | Rust `target/`, Gradle/Android `build/` + `.gradle/` + `.cxx`, Maven, `node_modules`, Next/Nuxt/Vite caches, Python caches & venvs, SwiftPM, CocoaPods, .NET `bin/obj`, Flutter, Zig, CMake, Terraform |
+| **AI & LLM Caches** | Hugging Face, PyTorch/Keras, Ollama, LM Studio/GPT4All/Jan, Claude Code, Codex/Gemini CLI, agent session histories, code-index caches |
+| **Web Browsers** | Cache, cookies & site data, history, sessions — Chrome, Chromium, Brave, Edge, Vivaldi, Opera, Arc, Firefox, LibreWolf, Zen, Safari |
+| **Applications / Games** | Slack, Discord, Teams, Signal, Spotify, Zoom, Telegram, Office, Adobe, JetBrains logs · Steam shader cache, Epic, Lutris/Heroic, Wine, GPU shader caches |
+| **System Maintenance** | Linux: APT lists/autoremove, rotated logs, journal vacuum, core dumps, snap/flatpak · macOS: DNS flush, Quick Look, update leftovers, Time Machine snapshots, iOS backups · Windows: Prefetch, WER, CBS logs, thumbnail cache, DISM cleanup |
+| **Containers & Virtualization** | Docker/Podman prune, Flatpak unused runtimes, Nix GC, Conda, Kubernetes/Helm caches, Vagrant boxes |
+| **Privacy Traces** | Recent-file lists, shell/REPL/editor histories |
+| **System Cleaners** *(root)* | Package-manager caches, logs, old kernels, crash reports, Homebrew/Xcode/Simulator (macOS), Windows Update cache, Recycle Bin |
 
-Each cleaner has a *risk* level: `safe`, `moderate` (re-download takes time) or `caution` (models / session history).
-`caution` cleaners are skipped by `--all`/`--category` unless `--include-caution` is passed or they are named with `--id`.
+Run `cleansys list` for every cleaner and its id. Cleaners for software you don't have are hidden automatically.
+
+## 🖥️ The interfaces
+
+### Terminal UI
+
+A sidebar of categories (with sizes and tick counts) next to the cleaner list, a details box for the highlighted
+cleaner, and a footer with what's selected and how much it would free. On terminals narrower than 90 columns the
+sidebar collapses into a one-line category bar (Tab / Shift+Tab).
+
+| Key | Action |
+|-----|--------|
+| `↑/↓`, `Tab` / `Shift+Tab` | Move through cleaners / categories (empty categories are skipped) |
+| `Space` | Tick / untick |
+| `r` | **Recommended** — tick the safe, user-land cleaners that have something to free |
+| `a` / `n`, `A` / `N` | Tick / untick everything listed, in this category / everywhere |
+| `/` | **Filter** across all categories (Enter keeps it, Esc clears) |
+| `e` | Hide / show cleaners with nothing to clean |
+| `d` | Preview — exact paths and sizes, deletes nothing |
+| `Enter` | Run (asks for confirmation; `y` toggles the prompt) |
+| `R` | Re-scan sizes |
+| `S` | **Schedule** automatic cleaning |
+| `c` `m` `v` `p` `s` | Chart type · compact · view mode · performance stats · auto-scroll log |
+| `?`, `Esc`, `q` | Help · back/cancel · quit |
+
+Marks next to names: `~` moderate, `!` caution, `(root)` needs your password.
+
+### Desktop GUI
+
+- **Sidebar** (wide) / drop-down (narrow) of categories with live sizes; **USER LAND** above **SYSTEM · ROOT**.
+- **Search box** filters every cleaner; **Hide empty cleaners** keeps the list short once the scan is done.
+- **Action bar** is always visible: selection summary + progress, *Recommended*, *Preview*, *Rescan*, *Activity* log, and the big **Clean N · X GB** button.
+- ⏰ **Schedule** opens the automatic-cleaning dialog. 43 themes (Catppuccin, Dracula, Nord, Tokyo Night…), remembered across restarts.
+- Scans and runs happen on background threads — the window never freezes.
+
+### Command line
 
 ```bash
-cleansys auto                      # scan the recommended (safe) set, show it, ask once, clean
-cleansys auto -n                   # same, but only report (dry run)
-cleansys list                      # every cleaner + id (same order as the UIs)
-cleansys scan --all --json         # preview everything, machine-readable
-cleansys scan -c user              # all user-land categories   (-c system = root side)
-cleansys clean -i proj-rust -i dev-gradle-caches -n
-cleansys clean -c "AI & LLM Caches" --include-caution --yes
+cleansys auto [-n] [-y] [--json]        # recommended set: scan → show → confirm once → clean
+cleansys list                           # all cleaners, grouped like the UIs, with ids
+cleansys scan   [selection] [--json]    # preview only
+cleansys clean  [selection] [-n] [-y]   # run (prompts per item unless -y)
+cleansys schedule install|show|remove|run-now
+cleansys config show|add-root|remove-root|exclude|min-age
+cleansys user|system [-y]               # the classic one-shot runners
+cleansys menu                           # plain-text menu
 ```
 
-### Automatic cleaning (schedule)
+*Selection* flags: `-i <id>` (repeatable) · `-c <category>` (repeatable; also `user` / `system`) · `-a/--all` ·
+`-r/--recommended` · `--moderate` · `--include-caution`. `caution` cleaners are only included when you name them with
+`-i` or pass `--include-caution`.
 
 ```bash
-cleansys schedule install --every weekly --day sun --at 03:30   # recommended scope
+cleansys scan -c user                                  # all user-land categories
+cleansys scan -c "AI & LLM Caches" --include-caution
+cleansys clean -i proj-rust -i dev-gradle-caches -n    # dry run
+cleansys scan --all --json | jq '.[] | select(.bytes>1e9) | .name'
+```
+
+## ⏰ Automatic cleaning
+
+```bash
+cleansys schedule install --every weekly --day sun --at 03:30     # recommended (safe) scope
 cleansys schedule install --every daily --at 02:00 --scope extended
 cleansys schedule install --scope selected -i proj-rust -i dev-gradle-caches
-cleansys schedule show | remove | run-now
+cleansys schedule show        # when, what, active?, last run
+cleansys schedule remove
 ```
 
-Native OS jobs, no daemon: systemd user timer (or your crontab) on Linux, launchd agent on macOS, Task Scheduler on
-Windows. Also available in the TUI (`S`) and GUI (⏰ Schedule). Unattended runs only touch user-land cleaners, skip
-applications that are currently open, never include `caution` cleaners unless you ticked them, and record a
-"last run" summary shown in the UIs. Project build output is only cleaned when untouched for 14 days
-(`cleansys config min-age N`). Other helpers: `cleansys config show | add-root | exclude`.
+| OS | Mechanism |
+|----|-----------|
+| Linux | systemd **user timer** (preferred) or your **crontab** (managed block, other lines untouched) |
+| macOS | launchd agent in `~/Library/LaunchAgents` |
+| Windows | Task Scheduler (`schtasks`) |
 
-Project scanning looks in `~/Projects`, `~/dev`, `~/src`, `~/code`, ... (auto-detected) and only removes a build
-directory when a marker file (e.g. `Cargo.toml`, `build.gradle.kts`, `package.json`) sits next to it.
-Configure in `~/.config/cleansys/engine.json` (or `CLEANSYS_SCAN_ROOTS`):
+The job runs `cleansys auto --scheduled`, which reads `~/.config/cleansys/schedule.json` — so changing the *scope*
+needs no reinstall. Unattended runs **only touch user-land cleaners, skip applications that are running, and never
+include `caution` cleaners** unless you explicitly ticked them (scope *selected*). The result ("freed 3.2 GB,
+12 cleaners, 1 skipped") is recorded and shown in the TUI/GUI schedule screen; the log is
+`~/.config/cleansys/scheduled.log` (`~/Library/Logs/cleansys-scheduled.log` on macOS).
+
+## 🧰 Configuration & custom cleaners
+
+**Project scanning** looks in `~/Projects`, `~/dev`, `~/src`, `~/code`, … (auto-detected). Adjust with
+`cleansys config` or `~/.config/cleansys/engine.json`:
 
 ```json
 { "scan_roots": ["~/work"], "max_depth": 6, "min_age_days": 14, "exclude": ["~/work/keep-me/**"] }
 ```
 
-Add your own cleaners in `~/.config/cleansys/cleaners.d/*.toml` (same `id` overrides a built-in):
+`min_age_days` (default **14**) means build output is only removed when nothing in the project changed for that
+long — set `0` to disable. `CLEANSYS_SCAN_ROOTS` overrides `scan_roots` (path-list).
+
+**Your own cleaners** are plain TOML in `~/.config/cleansys/cleaners.d/*.toml` (same `id` overrides a built-in):
 
 ```toml
 [[cleaner]]
@@ -129,268 +211,27 @@ id = "my-app-cache"
 name = "My App Cache"
 description = "Cache of my app"
 category = "My Cleaners"
+risk = "safe"                      # safe | moderate | caution
+process = ["myapp"]                # refuse to run while this process is open
 [[cleaner.action]]
-type = "delete"                      # or: project_artifacts
-paths = ["~/.myapp/cache"]           # supports ~, $VAR, ${VAR:-default}, %VAR%, globs
-linux = ["$XDG_CACHE_HOME/myapp"]    # per-OS lists: linux / macos / windows
+type = "delete"                    # delete | command | project_artifacts
+paths = ["~/.myapp/cache"]         # ~, $VAR, ${VAR:-default}, %VAR%, globs
+linux = ["$XDG_CACHE_HOME/myapp"]  # per-OS lists: linux / macos / windows
 ```
 
-Safety: system dirs, `$HOME` and its personal folders are never deletable, symlinks are never followed, and
-exclusion globs always win.
+Other actions: `command` (`program`, `args`, `sudo`, `measure = [paths]` to report freed bytes) and
+`project_artifacts` (`markers`, `artifacts`). `delete` also supports `contents_only`, `files_only`, and regex filters
+(`name_regex`, `not_name_regex`, `path_regex`, `not_path_regex`). Set `requires_root = true` for anything that
+needs elevation — it will appear in the System · root section.
 
-## 📦 Installation
+## 🛡️ Safety
 
-### From crates.io
-
-```bash
-# Terminal UI + CLI
-cargo install cleansys
-
-# Desktop GUI
-cargo install cleansys-gui
-```
-
-### From source
-
-```bash
-git clone https://github.com/sorinirimies/cleansys
-cd cleansys
-
-# Build everything
-cargo build --workspace --release
-
-# Or install just one front-end
-cargo install --path crates/cleansys-tui
-cargo install --path crates/cleansys-gui
-```
-
-See [`justfile`](justfile) for the full list of development tasks (`just --list`).
-
-## 🚀 Usage
-
-### Interactive TUI (Default)
-
-Simply run CleanSys to launch the interactive terminal interface:
-
-```bash
-# User-level cleaning
-cleansys
-
-# System-level cleaning (requires root)
-sudo cleansys
-```
-
-### Desktop GUI
-
-Prefer a graphical interface? Launch the Iced-based desktop app instead:
-
-```bash
-cleansys-gui
-```
-
-It presents the exact same cleaners as the TUI (shared via `cleansys-core`) with checkboxes per category, a "Run selected" button, and a live activity log. Selections are remembered across restarts. System cleaners will prompt for your sudo password (Unix) or an "Administrator required" notice with a one-click relaunch (Windows) the first time they're needed.
-
-- **Confirm before cleaning**: clicking "Run selected" shows exactly what's about to be deleted before anything happens.
-- **Preview**: click "Preview" to see real sizes/paths that would be cleaned without deleting anything.
-- **Progress bar**: a live progress bar and "N/M" counter while a run (or preview) is in flight.
-- **Global selection**: "Select all" / "Select none" buttons work across every category, not just the active tab.
-- **Desktop notification** when a run finishes.
-
-The top bar includes a **theme selector** with 43 built-in themes (Dracula, Nord, Solarized, Gruvbox, Catppuccin, Tokyo Night, Kanagawa, Rose Pine, and more) — pick one from the dropdown and it's applied instantly and remembered across restarts (saved to `~/.config/cleansys/settings.json`).
-
-### Command-Line Interface
-
-```bash
-# Run terminal UI explicitly
-cleansys tui
-
-# Run text-based interactive menu
-cleansys menu
-
-# Run user-level cleaners with confirmation
-cleansys user
-
-# Run user-level cleaners without prompts
-cleansys user --yes
-
-# Run system-level cleaners (requires root)
-sudo cleansys system
-
-# Run system cleaners without prompts
-sudo cleansys system --yes
-
-# List all available cleaners
-cleansys list
-
-# Show verbose output
-cleansys --verbose
-```
-
-## ⌨️ Terminal UI Controls
-
-### Navigation
-- `↑/↓` or `j/k`: Navigate items
-- `Tab/Shift+Tab`: Switch between categories
-- `j/k`: Scroll detailed items list (vi-style)
-- `PgUp/PgDn`: Scroll operation log
-- `Home/End`: Jump to first/last item
-
-### Actions
-- `Space`: Toggle selection
-- `Enter`: Run selected cleaners (shows a confirmation overlay first, unless disabled)
-- `d`: Preview selected cleaners (dry-run — measures real sizes/paths, deletes nothing)
-- `a`: Select all in current category
-- `n`: Deselect all in current category
-- `A`: Select all across every category
-- `N`: Deselect all across every category
-- `y`: Toggle confirmation prompts on/off
-- `ESC`: Cancel operation, close overlay, or return to menu
-- `q`: Exit application
-
-### View Controls
-- `c`: Cycle chart types (Bar → Pie Count → Pie Size)
-- `m`: Toggle compact mode
-- `v`: Cycle view modes (Standard/Compact/Detailed/Performance)
-- `p`: Toggle performance statistics
-- `s`: Toggle auto-scroll log
-- `/`: Toggle search in detailed view
-- `?`: Show/hide help
-
-## 📱 Responsive Design
-
-CleanSys features a fully responsive terminal interface with multiple breakpoints:
-
-| Terminal Width | Layout Features |
-|---------------|----------------|
-| < 60 columns | Minimal UI, chart hidden, essential information only |
-| 60-79 columns | Compact layout with reduced chart |
-| 80-119 columns | Balanced layout with full chart |
-| 120+ columns | Spacious layout with maximum information density |
-
-## 🎯 View Modes
-
-- **Standard Mode**: Balanced layout with full feature visibility (default)
-- **Compact Mode**: Condensed layout for smaller terminals (<25 rows)
-- **Detailed Mode**: Maximum information density with extended statistics
-- **Performance Mode**: Focus on operation metrics and real-time monitoring
-
-## 📊 Chart Visualization
-
-Press `c` to cycle through different chart types:
-
-1. **Bar Chart**: Traditional vertical bar chart showing cleaned items
-2. **Pie Chart (Count)**: Distribution by number of items cleaned
-3. **Pie Chart (Size)**: Distribution by bytes cleaned
-
-All charts automatically adapt to terminal size and include:
-- Percentages
-- Legends
-- Color coding
-- Smart label positioning
-
-## 🔍 Detailed View
-
-After cleaning operations, view comprehensive details:
-- Complete list of cleaned files and directories
-- Full file paths
-- Individual file sizes
-- Timestamps
-- Scrollable with `j/k` or `PgUp/PgDn`
-- Search functionality with `/`
-
-## 📝 Examples
-
-### Interactive TUI
-
-```bash
-# Launch TUI (default behavior)
-cleansys
-
-# Navigate with arrow keys
-# Select cleaners with Space
-# Press Enter to run
-```
-
-### Quick Clean
-
-```bash
-# Clean user caches without prompts
-cleansys user --yes
-
-# Clean system caches with verbose output
-sudo cleansys system --verbose --yes
-```
-
-### List Available Cleaners
-
-```bash
-cleansys list
-```
-
-Output:
-```
-AVAILABLE CLEANERS
-
-User cleaners (no root required):
-  • Browser Caches
-  • Application Caches
-  • Thumbnail Caches
-  ...
-
-System cleaners (root required):
-  • Package Manager Caches
-  • System Logs
-  • System Caches
-  ...
-```
-
-## 🏗️ Architecture
-
-CleanSys is a Cargo workspace of three crates — see [Project Structure](#-project-structure) above. Rough internal layout:
-
-```
-crates/
-├── cleansys-core/           # Shared, framework-free logic
-│   └── src/
-│       ├── cleaners/        # user_cleaners.rs, system_cleaners.rs, cleaned_item.rs
-│       ├── model.rs         # CleanerItem, CleanerCategory, Status, load_categories()
-│       ├── auth.rs          # Sudo authentication helper
-│       └── utils.rs         # Permissions, formatting, confirmation prompts
-├── cleansys-tui/            # Ratatui TUI + CLI (binary: cleansys)
-│   └── src/
-│       ├── app.rs           # Application state and key-handling logic
-│       ├── events.rs        # Terminal input/resize event handling
-│       ├── render.rs        # UI rendering logic
-│       ├── pie_chart.rs     # Thin adapter: our data -> tui-piechart::PieChart (no local drawing logic)
-│       ├── menu.rs          # Text-based interactive menu
-│       └── components/      # Reusable widgets (password prompt)
-└── cleansys-gui/            # Iced desktop GUI (binary: cleansys-gui)
-    └── src/
-        ├── state.rs          # Application state
-        ├── update.rs         # Elm-style update logic
-        ├── view.rs           # Rendering (tabs, cards, activity log)
-        └── icons.rs          # Bootstrap icon glyph constants
-```
-
-Adding a new cleaner is a one-line addition to the platform-appropriate
-`get_cleaners()`/`linux_cleaners()`/`macos_cleaners()`/`windows_cleaners()`
-list in `cleaners/user_cleaners.rs` or `cleaners/system_cleaners.rs`, via the
-local `cleaner!` macro rather than a full `CleanerInfo { .. }` struct literal:
-
-```rust
-cleaner!(
-    "My New Cleaner",
-    "Short description shown in the TUI/GUI",
-    clean_my_new_thing,
-    requires_root: false   // omit this argument in user_cleaners.rs
-),
-```
-
-Every privileged (`requires_root: true`) cleaner should perform its actual
-removal via the shared `execute_with_sudo`/`run_sudo_step` helpers in
-`system_cleaners.rs` rather than shelling out directly — `run_sudo_step`
-turns a failed command into a real `Err` (visible in the TUI/GUI as ❌)
-instead of a silently-swallowed "nothing was cleaned".
+- Nothing is deleted without a **confirmation** (TUI/GUI/CLI) except in explicit `--yes` / scheduled runs; every action has a **dry-run** (`-n`, `d`, 🔍 Preview).
+- **Protected paths** can never be removed: filesystem roots, system directories, `$HOME` and its ancestors, `Documents`, `Desktop`, `.ssh`, `.gnupg`, `.config`… Paths are absolute, `..` is rejected, **symlinks are never followed**.
+- Your **exclusion globs** (`cleansys config exclude '<glob>'`) always win.
+- **Running apps** (browsers, Slack, …) make a cleaner refuse instead of corrupting a live profile.
+- Project build output needs a **marker file** next to it and (by default) **14 days of inactivity**.
+- Every byte reported is **measured**, not estimated; failures surface as real errors, not silent zeros.
 
 ## 🖥️ Platform Support
 
@@ -414,6 +255,28 @@ The terminal UI (`cleansys`, via [Ratatui](https://github.com/ratatui-org/ratatu
 
 See [Releases](https://github.com/sorinirimies/cleansys/releases) for pre-built binaries: Linux `.deb`/`.rpm`/AppImage, Windows NSIS installer, and a universal macOS `.dmg`.
 
+## 🏗️ Architecture
+
+```
+crates/
+├── cleansys-core/            # shared, UI-free
+│   └── src/
+│       ├── engine/           # declarative cleaners: spec (TOML) · exec · paths · safety · running guard ·
+│       │   │                 #   schedule · headless (scan/clean/auto) · config
+│       │   └── builtin/*.toml    # ~175 built-in cleaners (browsers/apps/games are generated by scripts/gen_content_packs.py)
+│       ├── cleaners/         # the original hard-coded user/system cleaners + platform paths
+│       ├── model.rs          # CleanerItem (id, risk, root), categories, user-land/root layout, recommended preset
+│       ├── scan.rs           # background scan pool + ScanBoard (sizes, visibility, filtering) used by TUI and GUI
+│       ├── auth.rs · utils.rs · settings.rs · theme/
+├── cleansys-tui/             # Ratatui TUI + CLI (binary `cleansys`)
+└── cleansys-gui/             # Iced GUI (binary `cleansys-gui`): state · update · view (responsive layouts)
+```
+
+Adding a cleaner is usually just a TOML entry in `crates/cleansys-core/src/engine/builtin/` (or, for yourself, in
+`~/.config/cleansys/cleaners.d/`). Repetitive packs (Chromium-family browsers, Electron apps, games) are generated:
+edit `scripts/gen_content_packs.py` and run it. Hard-coded cleaners remain possible via the `cleaner!` macro in
+`cleaners/user_cleaners.rs` / `system_cleaners.rs`; privileged ones should go through `execute_with_sudo`.
+
 ## 🧪 Testing
 
 Run the test suite:
@@ -429,6 +292,19 @@ cargo test -- --nocapture
 cargo test --test integration_tests
 ```
 
+## 🎥 Demos & screenshots
+
+All GIFs and screenshots are produced from scripts and a **synthetic home directory** (`demo/fixture.sh`) — see
+[`demo/previews/README.md`](demo/previews/README.md).
+
+```bash
+just vhs-all              # re-record every tape in demo/*.tape → demo/previews/*.gif   (vhs, ffmpeg, ttyd)
+just gui-screenshots      # GUI PNGs (macOS)
+just vhs-refresh-previews # both
+```
+
+The preview files are tracked with **git-lfs** (`*.gif`, `demo/previews/*.png`).
+
 ## 🤖 Automated Maintenance
 
 A nightly Gitea Actions job (`.gitea/workflows/deps-update.yml`) upgrades every
@@ -441,6 +317,12 @@ workflow (build, package, crates.io publish, AUR update). If the quality gate
 fails at any point the job simply stops; nothing broken is ever released.
 
 Run the same flow locally with `just auto-patch-release`.
+
+## 🗺️ Roadmap
+
+- Secure shredder / free-space wipe, duplicate and large-file finder, undo via a quarantine folder.
+- `sqlite_vacuum` / JSON actions (e.g. browser databases), an exclusion editor in the UIs, run-history chart.
+- Windows registry cleaning and more app definitions — contributions welcome (cleaners are just TOML).
 
 ## 🤝 Contributing
 
@@ -461,80 +343,3 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 - [Repository](https://github.com/sorinirimies/cleansys)
 - [Crates.io](https://crates.io/crates/cleansys)
 - [Documentation](https://docs.rs/cleansys)
-
-## 🎥 Demo Creation
-
-CleanSys uses [VHS](https://github.com/charmbracelet/vhs) to create terminal session recordings. The demo tapes showcase:
-
-- **`demo.tape`**: Main demo showing both user and system cleaners
-- **`userland-cleaners.tape`**: Detailed walkthrough of user-level cleaning (no root required)
-- **`system-cleaners.tape`**: Detailed walkthrough of system-level cleaning (requires authentication)
-
-### Generating Demos
-
-```bash
-# Install VHS (requires Go)
-# See: https://github.com/charmbracelet/vhs#installation
-
-# Generate main demo
-just vhs
-
-# Generate userland cleaners demo
-just vhs-userland
-
-# Generate system cleaners demo
-just vhs-system
-
-# Generate all demos
-just vhs-all
-
-# Clean generated demos
-just vhs-clean
-```
-
-All generated GIF files are output to `demo/target/` and are git-ignored
-(they're build artifacts, regenerated on demand — not tracked so the repo
-history doesn't accumulate binary diffs every time a tape is re-recorded).
-
-The actual images embedded in this README's [Demo](#-demo) section above
-live in [`demo/previews/`](demo/previews/), which **is** committed. After
-changing a `.tape` file (or the TUI/GUI's look), refresh them with:
-
-```bash
-just vhs-refresh-previews   # regenerates every tape + copies into demo/previews/
-git status                  # review the diff
-git add demo/previews && git commit -m "docs: refresh demo previews"
-```
-
-See [`demo/previews/README.md`](demo/previews/README.md) for details,
-including the GUI screenshot (`gui.png`), which is captured manually since
-VHS only records terminal sessions, not native GUI windows.
-
-## 🗺️ Roadmap / Ideas
-
-Things that would be natural next steps for the project (contributions welcome!):
-
-- **Scheduled/background cleaning** — a small daemon or OS-native scheduler (systemd timer / launchd / Task Scheduler) integration to auto-clean on a cadence.
-- **Pluggable/custom cleaners** — user-defined cleaner rules via a TOML config (glob patterns + safety checks), loaded by `cleansys-core` and shared by both front-ends.
-- **GUI disk-usage chart** — port the TUI's pie/bar chart (`tui-piechart`) to an Iced `Canvas` widget in `cleansys-gui` for visual parity.
-- **Light/dark auto-detection** for the GUI theme (follow OS preference by default, falling back to the manual picker).
-- **Localization (i18n)** for both UIs.
-- **JSON output** for `cleansys list` / `cleansys user --yes` etc., to make the CLI scriptable.
-- **AUR / winget / Homebrew formulae** for easier installation (AUR `PKGBUILD` scaffold already included under `packaging/aur/`).
-- **TUI selection persistence** — the GUI already remembers checked cleaners across restarts (`~/.config/cleansys/settings.json`); the TUI could opt into the same `tui-settings.json` file.
-- **Branded icon/artwork** — `packaging/windows/cleansys.ico` and `packaging/macos/cleansys.icns` currently fall back to a placeholder/no icon; real artwork would polish the installers/DMG.
-
-## 🙏 Acknowledgments
-
-- [Ratatui](https://github.com/ratatui-org/ratatui) - Terminal UI framework
-- [tui-checkbox](https://crates.io/crates/tui-checkbox) - Checkbox widget library
-- [tui-spinner](https://crates.io/crates/tui-spinner) - Animated loading spinner widget
-- [tui-piechart](https://crates.io/crates/tui-piechart) - Pie chart visualization widget
-- [Crossterm](https://github.com/crossterm-rs/crossterm) - Cross-platform terminal manipulation
-- [Iced](https://iced.rs) - Cross-platform Rust GUI framework powering `cleansys-gui`
-- [iced_fonts](https://crates.io/crates/iced_fonts) - Bootstrap icon font for the GUI
-- [VHS](https://github.com/charmbracelet/vhs) - Terminal session recorder for creating demos
-
----
-
-**Note**: Always review what will be cleaned before running system-level operations. While CleanSys is designed to be safe, it's good practice to understand what's being removed from your system.

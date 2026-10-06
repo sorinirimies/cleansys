@@ -15,6 +15,10 @@ use crate::pie_chart::create_pie_chart_from_distribution;
 use cleansys_core::{format_size, Status};
 
 pub fn ui(f: &mut Frame, app: &mut App) {
+    // Start every frame from a clean slate so nothing from the previous view
+    // (title text, progress panels) bleeds through when views switch.
+    f.render_widget(Clear, f.area());
+
     // Update animation frame if needed
     app.update_animation();
 
@@ -111,7 +115,7 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
                         .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD),
                 ),
-                Span::raw(" - Modern System Cleaner for Linux"),
+                Span::raw(" - Modern System Cleaner for Linux, macOS & Windows"),
             ]),
             Line::from(vec![
                 Span::raw("Press "),
@@ -595,7 +599,7 @@ fn render_vertical_bar_chart(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_operations_summary(f: &mut Frame, app: &App, area: Rect) {
-    // Split into user and system operations columns
+    // Two columns — the real queue of this run, split by user land / root.
     let columns = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
@@ -605,93 +609,72 @@ fn render_operations_summary(f: &mut Frame, app: &App, area: Rect) {
         ])
         .split(area);
 
-    // User operations
-    let user_operations = vec![
-        ListItem::new(Line::from(vec![Span::styled(
-            "👤 USER OPERATIONS",
-            Style::default()
-                .fg(Color::Green)
-                .add_modifier(Modifier::BOLD),
-        )])),
-        ListItem::new(Line::from(vec![])),
-        ListItem::new(Line::from(vec![
-            Span::styled("📦 ", Style::default().fg(Color::Green)),
-            Span::styled("Package Caches", Style::default().fg(Color::White)),
-        ])),
-        ListItem::new(Line::from(vec![
-            Span::styled("🗑️ ", Style::default().fg(Color::Green)),
-            Span::styled("Trash & Temp Files", Style::default().fg(Color::White)),
-        ])),
-        ListItem::new(Line::from(vec![
-            Span::styled("🌐 ", Style::default().fg(Color::Green)),
-            Span::styled("Browser Caches", Style::default().fg(Color::White)),
-        ])),
-    ];
+    let column = |root: bool, title: &'static str, color: Color| -> Vec<ListItem<'static>> {
+        let mut rows = vec![
+            ListItem::new(Line::from(Span::styled(
+                title,
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
+            ))),
+            ListItem::new(Line::from("")),
+        ];
+        let capacity = (area.height as usize).saturating_sub(2);
+        let queue: Vec<&cleansys_core::CleanerItem> = app
+            .categories
+            .iter()
+            .flat_map(|c| &c.items)
+            .filter(|i| i.requires_root == root && (i.selected || i.status.is_some()))
+            .collect();
+        for item in queue.iter().take(capacity.saturating_sub(1).max(1)) {
+            let (glyph, style) = match &item.status {
+                Some(Status::Running) => (
+                    Status::Running.get_animation_frame(app.animation_frame),
+                    Style::default().fg(Color::Yellow),
+                ),
+                Some(Status::Success(_)) => ("✓", Style::default().fg(Color::Green)),
+                Some(Status::Error(_)) => ("✗", Style::default().fg(Color::Red)),
+                Some(Status::Pending) | None => ("•", Style::default().fg(Color::DarkGray)),
+            };
+            let mut spans = vec![
+                Span::styled(format!("{glyph} "), style),
+                Span::styled(item.name.clone(), Style::default().fg(Color::White)),
+            ];
+            if item.bytes_cleaned > 0 {
+                spans.push(Span::styled(
+                    format!("  {}", format_size(item.bytes_cleaned)),
+                    Style::default().fg(Color::Green),
+                ));
+            }
+            if root && !app.is_root {
+                spans.push(Span::styled(" (sudo)", Style::default().fg(Color::Yellow)));
+            }
+            rows.push(ListItem::new(Line::from(spans)));
+        }
+        let hidden = queue
+            .len()
+            .saturating_sub(capacity.saturating_sub(1).max(1));
+        if hidden > 0 {
+            rows.push(ListItem::new(Line::from(Span::styled(
+                format!("… and {hidden} more"),
+                Style::default().fg(Color::DarkGray),
+            ))));
+        }
+        if queue.is_empty() {
+            rows.push(ListItem::new(Line::from(Span::styled(
+                "(none)",
+                Style::default().fg(Color::DarkGray),
+            ))));
+        }
+        rows
+    };
 
-    // System operations
-    let system_operations = vec![
-        ListItem::new(Line::from(vec![Span::styled(
-            "🔒 SYSTEM OPERATIONS",
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )])),
-        ListItem::new(Line::from(vec![])),
-        ListItem::new(Line::from(vec![
-            Span::styled(
-                "📦 ",
-                if app.is_root {
-                    Style::default().fg(Color::Green)
-                } else {
-                    Style::default().fg(Color::Yellow)
-                },
-            ),
-            Span::styled("Package Caches", Style::default().fg(Color::White)),
-            if !app.is_root {
-                Span::styled(" (sudo)", Style::default().fg(Color::Yellow))
-            } else {
-                Span::raw("")
-            },
-        ])),
-        ListItem::new(Line::from(vec![
-            Span::styled(
-                "📝 ",
-                if app.is_root {
-                    Style::default().fg(Color::Green)
-                } else {
-                    Style::default().fg(Color::Yellow)
-                },
-            ),
-            Span::styled("System Logs", Style::default().fg(Color::White)),
-            if !app.is_root {
-                Span::styled(" (sudo)", Style::default().fg(Color::Yellow))
-            } else {
-                Span::raw("")
-            },
-        ])),
-        ListItem::new(Line::from(vec![
-            Span::styled(
-                "🗄️ ",
-                if app.is_root {
-                    Style::default().fg(Color::Green)
-                } else {
-                    Style::default().fg(Color::Yellow)
-                },
-            ),
-            Span::styled("System Temp Files", Style::default().fg(Color::White)),
-            if !app.is_root {
-                Span::styled(" (sudo)", Style::default().fg(Color::Yellow))
-            } else {
-                Span::raw("")
-            },
-        ])),
-    ];
-
-    let user_list = List::new(user_operations);
-    let system_list = List::new(system_operations);
-
-    f.render_widget(user_list, columns[0]);
-    f.render_widget(system_list, columns[2]);
+    f.render_widget(
+        List::new(column(false, "👤 USER OPERATIONS", Color::Green)),
+        columns[0],
+    );
+    f.render_widget(
+        List::new(column(true, "🔒 SYSTEM OPERATIONS", Color::Yellow)),
+        columns[2],
+    );
 }
 
 fn render_pie_chart_distribution(f: &mut Frame, app: &App, area: Rect) {
@@ -968,13 +951,11 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
             .name
             .trim_end_matches(cleansys_core::model::ROOT_SUFFIX)
             .to_string();
-        let mut left = vec![Span::raw(if active { "▶ " } else { "  " }), Span::raw(name)];
-        if ticked > 0 {
-            left.push(Span::styled(
-                format!(" ({ticked}✓)"),
-                Style::default().fg(Color::Green),
-            ));
-        }
+        let tick_text = if ticked > 0 {
+            format!(" ({ticked}✓)")
+        } else {
+            String::new()
+        };
         let right = match app.board.category_bytes(i) {
             Some(b) if b > 0 => Span::styled(format_size(b), size_style(b)),
             Some(_) => Span::styled("—", Style::default().fg(Color::DarkGray)),
@@ -983,6 +964,18 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
             }
             None => Span::raw(""),
         };
+        // Truncate the name so the size column never gets pushed out.
+        let budget = inner_w
+            .saturating_sub(2 + tick_text.chars().count() + right.content.chars().count() + 1);
+        let name = if name.chars().count() > budget && budget > 1 {
+            format!("{}…", name.chars().take(budget - 1).collect::<String>())
+        } else {
+            name
+        };
+        let mut left = vec![Span::raw(if active { "▶ " } else { "  " }), Span::raw(name)];
+        if ticked > 0 {
+            left.push(Span::styled(tick_text, Style::default().fg(Color::Green)));
+        }
         let style = if active {
             Style::default()
                 .fg(Color::Yellow)
@@ -1089,8 +1082,9 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
 
             let dimmed = (item.requires_root && !app.is_root)
                 || info.is_some_and(|s| s.bytes == 0 && s.error.is_none());
+            // DIM (not a dark colour): stays readable on the highlighted row.
             let name_style = if dimmed {
-                Style::default().fg(Color::DarkGray)
+                Style::default().fg(Color::Gray).add_modifier(Modifier::DIM)
             } else {
                 Style::default().fg(Color::White)
             };
@@ -1451,6 +1445,52 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
 
         f.render_widget(status_para, footer_chunks[0]);
         f.render_widget(controls_para, footer_chunks[1]);
+    } else if inner_area.width < 100 {
+        // Narrow terminals: selection summary on one line, compact key hints below.
+        let n = app
+            .categories
+            .iter()
+            .flat_map(|c| &c.items)
+            .filter(|i| i.selected)
+            .count();
+        let bytes = app.board.selected_bytes(&app.categories);
+        let key = |k: &'static str, label: &'static str, color: Color| {
+            vec![
+                Span::styled(k, Style::default().fg(color).add_modifier(Modifier::BOLD)),
+                Span::raw(format!(" {label}  ")),
+            ]
+        };
+        let mut hints: Vec<Span> = Vec::new();
+        hints.extend(key("Space", "Sel", Color::Yellow));
+        hints.extend(key("Enter", "Run", Color::Green));
+        hints.extend(key("Tab", "Cat", Color::Blue));
+        hints.extend(key("r", "Rec", Color::Cyan));
+        hints.extend(key("S", "Sched", Color::Cyan));
+        hints.extend(key("?", "Help", Color::Magenta));
+        hints.extend(key("q", "Quit", Color::Red));
+        let status = Line::from(vec![
+            Span::styled("Selected: ", Style::default().fg(Color::White)),
+            Span::styled(
+                n.to_string(),
+                Style::default()
+                    .fg(Color::Blue)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                if bytes > 0 {
+                    format!(" ({} to free)", format_size(bytes))
+                } else {
+                    String::new()
+                },
+                Style::default().fg(Color::Green),
+            ),
+        ]);
+        let lines = if inner_area.height >= 2 {
+            vec![status, Line::from(hints)]
+        } else {
+            vec![Line::from(hints)]
+        };
+        f.render_widget(Paragraph::new(lines), inner_area);
     } else {
         // Main menu footer - organized and clean
         let footer_chunks = Layout::default()
@@ -1485,10 +1525,29 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             Span::raw("  •  "),
             Span::styled("Selected: ", Style::default().fg(Color::White)),
             Span::styled(
-                format!("{}", app.selected_cleaners_count),
+                // Live count (the cached counter only refreshes on the progress screen).
+                format!(
+                    "{}",
+                    app.categories
+                        .iter()
+                        .flat_map(|c| &c.items)
+                        .filter(|i| i.selected)
+                        .count()
+                ),
                 Style::default()
                     .fg(Color::Blue)
                     .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                {
+                    let b = app.board.selected_bytes(&app.categories);
+                    if b > 0 {
+                        format!(" ({} to free)", format_size(b))
+                    } else {
+                        String::new()
+                    }
+                },
+                Style::default().fg(Color::Green),
             ),
         ])];
 
@@ -1920,7 +1979,11 @@ fn render_preview(f: &mut Frame, app: &App, area: Rect) {
         )]));
     }
 
-    for (name, result) in &app.preview_results {
+    for (name, result) in app
+        .preview_results
+        .iter()
+        .filter(|(_, r)| r.total_bytes > 0)
+    {
         lines.push(Line::from(vec![Span::styled(
             format!(
                 "{name} — {} across {} item(s)",

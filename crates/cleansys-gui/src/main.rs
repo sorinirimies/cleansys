@@ -2,7 +2,13 @@ use cleansys_gui::{update, view, CleanSysGui, Message};
 
 fn boot() -> (CleanSysGui, iced::Task<Message>) {
     // Measure what every cleaner can free as soon as the window opens.
-    (CleanSysGui::new(), iced::Task::done(Message::ScanAll))
+    let mut tasks = vec![iced::Task::done(Message::ScanAll)];
+    // `CLEANSYS_GUI_OPEN=schedule` opens the schedule dialog at start-up
+    // (used to produce documentation screenshots).
+    if std::env::var("CLEANSYS_GUI_OPEN").as_deref() == Ok("schedule") {
+        tasks.push(iced::Task::done(Message::OpenSchedule));
+    }
+    (CleanSysGui::new(), iced::Task::batch(tasks))
 }
 
 /// Initial window size; `CLEANSYS_GUI_SIZE=WxH` overrides (handy for testing
@@ -29,6 +35,12 @@ fn main() -> iced::Result {
         })
         .window(iced::window::Settings {
             size: initial_size(),
+            // `CLEANSYS_GUI_TOP=1` keeps the window above others (documentation screenshots).
+            level: if std::env::var_os("CLEANSYS_GUI_TOP").is_some() {
+                iced::window::Level::AlwaysOnTop
+            } else {
+                iced::window::Level::Normal
+            },
             min_size: Some(iced::Size::new(420.0, 520.0)),
             ..Default::default()
         })

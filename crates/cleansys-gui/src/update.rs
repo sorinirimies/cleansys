@@ -93,7 +93,9 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
         }
 
         Message::SelectRecommended => {
-            let n = cleansys_core::select_recommended(&mut state.categories, state.is_root);
+            let n = state
+                .board
+                .select_recommended(&mut state.categories, state.is_root);
             state.push_log(format!("Selected {n} recommended (safe) cleaners"));
             state.save_selections();
             Task::none()

@@ -582,7 +582,8 @@ impl App {
     /// Tick exactly the recommended cleaners (safe, user-land unless root).
     /// Returns how many are now selected.
     pub fn select_recommended(&mut self) -> usize {
-        cleansys_core::select_recommended(&mut self.categories, self.is_root)
+        self.board
+            .select_recommended(&mut self.categories, self.is_root)
     }
 
     // ── schedule overlay ───────────────────────────────────────────────

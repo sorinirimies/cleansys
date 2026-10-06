@@ -130,43 +130,40 @@ check-all: fmt clippy test test-nu
 check-release: check-all build-release
     @echo "✅ Release quality gate passed (fmt + clippy + test + nu + release build)!"
 
-# ── VHS Demo GIFs ─────────────────────────────────────────────────────────────
+# ── Demos (GIFs + screenshots) ────────────────────────────────────────────────
+# All demos run against a synthetic HOME built by demo/fixture.sh (sparse files,
+# no real paths, nothing of yours is touched). They use the release binaries.
 
-vhs: _check-vhs
-    @echo "Running VHS tape to generate demo…"
-    vhs demo/demo.tape
-    @echo "✅ Demo generated at demo/target/demo.gif"
+TAPES := "tui-overview tui-system-root tui-schedule tui-narrow tui-clean cli"
 
-vhs-userland: _check-vhs
-    @echo "Running VHS userland cleaners demo tape…"
-    vhs demo/userland-cleaners.tape
-    @echo "✅ Userland cleaners demo generated at demo/target/userland-cleaners.gif"
+# Build the release binaries the tapes run.
+_demo-build:
+    cargo build --release -p cleansys -p cleansys-gui
 
-vhs-system: _check-vhs
-    @echo "Running VHS system cleaners demo tape…"
-    vhs demo/system-cleaners.tape
-    @echo "✅ System cleaners demo generated at demo/target/system-cleaners.gif"
+# Record one tape: `just vhs tui-overview`  (writes demo/previews/<name>.gif)
+vhs name: _check-vhs _demo-build
+    @mkdir -p demo/previews demo/target
+    vhs demo/{{name}}.tape
+    @echo "✅ demo/previews/{{name}}.gif"
 
-vhs-all: vhs vhs-userland vhs-system
-    @echo "✅ All demos generated!"
+# Record every tape.
+vhs-all: _check-vhs _demo-build
+    @mkdir -p demo/previews demo/target
+    @for t in {{TAPES}}; do echo "▶ $t"; vhs demo/$t.tape || exit 1; done
+    @echo "✅ All GIFs refreshed in demo/previews/"
 
-# Copy the freshly-generated demo GIFs from demo/target/ (git-ignored) into
-# demo/previews/ (committed, referenced by README.md's Demo section).
-# Run `just vhs-all` first.
-vhs-update-previews:
-    @mkdir -p demo/previews
-    @cp demo/target/demo.gif demo/previews/demo.gif
-    @cp demo/target/userland-cleaners.gif demo/previews/userland-cleaners.gif
-    @cp demo/target/system-cleaners.gif demo/previews/system-cleaners.gif
-    @echo "✅ demo/previews/*.gif updated — review with 'git status'/'git diff --stat' and commit."
+# GUI screenshots (macOS only; needs osascript/screencapture): wide, medium, narrow, schedule.
+gui-screenshots: _demo-build
+    scripts/gui-screenshots.sh
 
-# Regenerate every demo GIF and update the committed previews in one step.
-vhs-refresh-previews: vhs-all vhs-update-previews
+# Regenerate everything shown in the README.
+vhs-refresh-previews: vhs-all gui-screenshots
+    @echo "✅ demo/previews updated — review with 'git status' and commit (GIFs/PNGs are tracked with git-lfs)."
 
 vhs-clean:
-    @echo "Cleaning VHS output files…"
-    @rm -f demo/target/*.gif
-    @echo "✅ VHS outputs cleaned!"
+    @echo "Cleaning VHS scratch files…"
+    @rm -f demo/target/*.png
+    @echo "✅ done"
 
 # ── Packaging ────────────────────────────────────────────────────────
 

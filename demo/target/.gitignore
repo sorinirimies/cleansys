@@ -1,5 +1,6 @@
-# Ignore all generated GIF files
+# Scratch output of the VHS tapes (screenshots / local GIFs). The committed assets live in demo/previews/.
 *.gif
+*.png
 
 # But track this .gitignore file
 !.gitignore

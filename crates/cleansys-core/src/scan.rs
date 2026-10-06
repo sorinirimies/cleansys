@@ -183,6 +183,32 @@ impl ScanBoard {
         out
     }
 
+    /// The "recommended" preset (safe, user-land cleaners) minus anything a
+    /// finished scan found empty — nothing to gain from ticking those.
+    /// Returns how many cleaners are now ticked.
+    pub fn select_recommended(
+        &self,
+        categories: &mut [CleanerCategory],
+        include_root: bool,
+    ) -> usize {
+        crate::model::select_recommended(categories, include_root);
+        let mut n = 0;
+        for (ci, cat) in categories.iter_mut().enumerate() {
+            for (ii, item) in cat.items.iter_mut().enumerate() {
+                if item.selected
+                    && self.complete()
+                    && self
+                        .get(ci, ii)
+                        .is_some_and(|s| s.bytes == 0 && s.error.is_none())
+                {
+                    item.selected = false;
+                }
+                n += usize::from(item.selected);
+            }
+        }
+        n
+    }
+
     /// First visible category at or after `active`'s position, if `active`
     /// itself got hidden.
     pub fn first_visible_category(
@@ -306,6 +332,21 @@ mod tests {
         assert_eq!(board.visible_items(&c, 0, "b1", true), vec![(1, 0)]);
         assert_eq!(board.visible_items(&c, 0, "NAME", true).len(), 3);
         assert!(board.visible_items(&c, 0, "zzz", true).is_empty());
+    }
+
+    #[test]
+    fn recommended_skips_cleaners_found_empty() {
+        let mut c = cats();
+        let (rx, total) = spawn_scan(&c);
+        let mut board = ScanBoard::new(&c);
+        board.start(total);
+        while board.is_scanning() {
+            let (ci, ii, info) = rx.recv().unwrap();
+            board.record(ci, ii, info);
+        }
+        // a1 has data, a2/b1 are empty -> only a1 stays ticked
+        assert_eq!(board.select_recommended(&mut c, false), 1);
+        assert!(c[0].items[0].selected && !c[0].items[1].selected && !c[1].items[0].selected);
     }
 
     #[test]
