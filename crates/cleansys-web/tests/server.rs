@@ -297,13 +297,14 @@ async fn header_badge_switches_to_root_when_a_root_category_is_open() {
         serde_json::from_str(&get(addr, "/api/categories").await.body).unwrap();
     let list = cats["categories"].as_array().unwrap();
     let user_idx = list.iter().position(|c| c["root"] == false).unwrap();
+    // `hide=0`: on a CI box the root categories can be empty, and empty ones are hidden by default.
     let root_idx = list.iter().position(|c| c["root"] == true).unwrap();
 
-    let user = get(addr, &format!("/?cat={user_idx}")).await;
+    let user = get(addr, &format!("/?cat={user_idx}&hide=0")).await;
     assert!(user.body.contains("badge user"), "user land shows USER");
     assert!(!user.body.contains("System (root) section"));
 
-    let root = get(addr, &format!("/?cat={root_idx}")).await;
+    let root = get(addr, &format!("/?cat={root_idx}&hide=0")).await;
     assert!(
         root.body.contains("System (root) section"),
         "root category shows ROOT"
