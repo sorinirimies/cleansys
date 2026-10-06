@@ -362,7 +362,7 @@ impl App {
             for (item_idx, item) in category.items.iter().enumerate() {
                 if item.selected {
                     let name = item.name.clone();
-                    let function = item.function;
+                    let function = item.function.clone();
                     selected_cleaners.push((cat_idx, item_idx, name, function, item.requires_root));
                 }
             }
@@ -409,7 +409,7 @@ impl App {
             .iter()
             .flat_map(|c| c.items.iter())
             .filter(|i| i.selected)
-            .map(|i| (i.name.clone(), i.function))
+            .map(|i| (i.name.clone(), i.function.clone()))
             .collect();
 
         if selected.is_empty() {
@@ -543,7 +543,7 @@ impl App {
                             cat_idx,
                             item_idx,
                             item.name.to_string(),
-                            item.function,
+                            item.function.clone(),
                             item.requires_root,
                         ));
                     }
@@ -575,7 +575,7 @@ impl App {
                             cat_idx,
                             item_idx,
                             item.name.to_string(),
-                            item.function,
+                            item.function.clone(),
                             item.requires_root,
                         ));
                     }

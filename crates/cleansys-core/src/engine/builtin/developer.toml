@@ -1,0 +1,219 @@
+# Global developer-tool caches. Every path may be overridden by the tool's
+# own environment variable (e.g. CARGO_HOME, GRADLE_USER_HOME).
+
+[[cleaner]]
+id = "dev-cargo"
+name = "Cargo Git & Source Caches"
+description = "Extracted crate sources and git checkouts in CARGO_HOME (registry/cache is covered by Package Manager Caches)"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["${CARGO_HOME:-~/.cargo}/registry/src", "${CARGO_HOME:-~/.cargo}/git/checkouts", "${CARGO_HOME:-~/.cargo}/git/db"]
+label = "Cargo cache"
+
+[[cleaner]]
+id = "dev-sccache"
+name = "sccache"
+description = "Compiler cache of sccache"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+linux = ["${SCCACHE_DIR:-$XDG_CACHE_HOME/sccache}"]
+macos = ["${SCCACHE_DIR:-~/Library/Caches/Mozilla.sccache}"]
+windows = ["${SCCACHE_DIR:-$LOCALAPPDATA/Mozilla/sccache}"]
+label = "sccache"
+
+[[cleaner]]
+id = "dev-gradle-caches"
+name = "Gradle Caches"
+description = "Downloaded dependencies, transforms and build caches in GRADLE_USER_HOME"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["${GRADLE_USER_HOME:-~/.gradle}/caches", "${GRADLE_USER_HOME:-~/.gradle}/daemon", "${GRADLE_USER_HOME:-~/.gradle}/build-scan-data", "${GRADLE_USER_HOME:-~/.gradle}/native"]
+label = "Gradle cache"
+
+[[cleaner]]
+id = "dev-gradle-wrapper"
+name = "Gradle Wrapper Distributions"
+description = "Downloaded Gradle versions (~/.gradle/wrapper/dists), re-downloaded per project on demand"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["${GRADLE_USER_HOME:-~/.gradle}/wrapper/dists"]
+label = "Gradle wrapper dists"
+
+[[cleaner]]
+id = "dev-kotlin"
+name = "Kotlin Daemon & Compiler Data"
+description = "~/.kotlin session and compiler data"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.kotlin"]
+label = "Kotlin data"
+
+[[cleaner]]
+id = "dev-android"
+name = "Android SDK Caches"
+description = "Android build cache and SDK download cache (~/.android/cache, build-cache)"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.android/cache", "~/.android/build-cache"]
+label = "Android cache"
+
+[[cleaner]]
+id = "dev-android-studio"
+name = "Android Studio / JetBrains IDE Caches"
+description = "Index, log and system caches of Android Studio and JetBrains IDEs"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/Google/AndroidStudio*", "$XDG_CACHE_HOME/JetBrains/*"]
+macos = ["~/Library/Caches/Google/AndroidStudio*", "~/Library/Caches/JetBrains/*"]
+windows = ["$LOCALAPPDATA/Google/AndroidStudio*", "$LOCALAPPDATA/JetBrains/*"]
+label = "IDE cache"
+
+[[cleaner]]
+id = "dev-maven"
+name = "Maven Local Repository"
+description = "Downloaded Maven artifacts (~/.m2/repository)"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.m2/repository"]
+label = "Maven repository"
+
+[[cleaner]]
+id = "dev-npm-yarn-pnpm-bun"
+name = "JS Package Caches"
+description = "npm (_cacache), Yarn, pnpm store and Bun install caches"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.npm/_cacache", "~/.bun/install/cache"]
+linux = ["$XDG_CACHE_HOME/yarn", "$XDG_DATA_HOME/pnpm/store"]
+macos = ["~/Library/Caches/Yarn", "~/Library/pnpm/store"]
+windows = ["$LOCALAPPDATA/Yarn/Cache", "$LOCALAPPDATA/pnpm/store"]
+label = "JS package cache"
+
+[[cleaner]]
+id = "dev-go"
+name = "Go Build & Module Caches"
+description = "go-build cache and module download cache"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["${GOPATH:-~/go}/pkg/mod/cache"]
+linux = ["$XDG_CACHE_HOME/go-build"]
+macos = ["~/Library/Caches/go-build"]
+windows = ["$LOCALAPPDATA/go-build"]
+label = "Go cache"
+
+[[cleaner]]
+id = "dev-python-tools"
+name = "Python Tool Caches"
+description = "uv, Poetry, pre-commit, pipenv and ruff user-level caches"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/uv", "$XDG_CACHE_HOME/pypoetry", "$XDG_CACHE_HOME/pre-commit", "$XDG_CACHE_HOME/pipenv", "$XDG_CACHE_HOME/ruff"]
+macos = ["~/Library/Caches/uv", "~/Library/Caches/pypoetry", "~/.cache/pre-commit", "~/Library/Caches/pipenv", "~/.cache/ruff"]
+windows = ["$LOCALAPPDATA/uv/cache", "$LOCALAPPDATA/pypoetry/Cache", "$LOCALAPPDATA/pre-commit"]
+label = "Python tool cache"
+
+[[cleaner]]
+id = "dev-bazel"
+name = "Bazel Caches"
+description = "Bazel output base and disk cache"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/bazel", "$XDG_CACHE_HOME/bazelisk"]
+macos = ["/private/var/tmp/_bazel_*", "~/Library/Caches/bazelisk"]
+windows = ["$LOCALAPPDATA/bazel"]
+label = "Bazel cache"
+
+[[cleaner]]
+id = "dev-browser-test-binaries"
+name = "Playwright / Cypress / Puppeteer Browsers"
+description = "Downloaded test browsers and Electron binaries"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/ms-playwright", "$XDG_CACHE_HOME/Cypress", "$XDG_CACHE_HOME/puppeteer", "$XDG_CACHE_HOME/electron"]
+macos = ["~/Library/Caches/ms-playwright", "~/Library/Caches/Cypress", "~/.cache/puppeteer", "~/Library/Caches/electron"]
+windows = ["$LOCALAPPDATA/ms-playwright", "$LOCALAPPDATA/Cypress/Cache", "$LOCALAPPDATA/electron/Cache"]
+label = "Test browser"
+
+[[cleaner]]
+id = "dev-editors"
+name = "VS Code & Fork Caches"
+description = "Chromium/Electron caches of VS Code, Cursor, Windsurf, VSCodium"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+linux = [
+  "$XDG_CONFIG_HOME/Code/CachedData", "$XDG_CONFIG_HOME/Code/Cache", "$XDG_CONFIG_HOME/Code/GPUCache", "$XDG_CONFIG_HOME/Code/CachedExtensionVSIXs", "$XDG_CONFIG_HOME/Code/logs",
+  "$XDG_CONFIG_HOME/Cursor/CachedData", "$XDG_CONFIG_HOME/Cursor/Cache", "$XDG_CONFIG_HOME/Cursor/GPUCache", "$XDG_CONFIG_HOME/Cursor/logs",
+  "$XDG_CONFIG_HOME/Windsurf/CachedData", "$XDG_CONFIG_HOME/Windsurf/Cache", "$XDG_CONFIG_HOME/Windsurf/GPUCache",
+  "$XDG_CONFIG_HOME/VSCodium/CachedData", "$XDG_CONFIG_HOME/VSCodium/Cache", "$XDG_CONFIG_HOME/VSCodium/GPUCache",
+]
+macos = [
+  "~/Library/Application Support/Code/CachedData", "~/Library/Application Support/Code/Cache", "~/Library/Application Support/Code/GPUCache", "~/Library/Application Support/Code/CachedExtensionVSIXs", "~/Library/Application Support/Code/logs",
+  "~/Library/Application Support/Cursor/CachedData", "~/Library/Application Support/Cursor/Cache", "~/Library/Application Support/Cursor/GPUCache", "~/Library/Application Support/Cursor/logs",
+  "~/Library/Application Support/Windsurf/CachedData", "~/Library/Application Support/Windsurf/Cache", "~/Library/Application Support/Windsurf/GPUCache",
+  "~/Library/Application Support/VSCodium/CachedData", "~/Library/Application Support/VSCodium/Cache", "~/Library/Application Support/VSCodium/GPUCache",
+]
+windows = [
+  "$APPDATA/Code/CachedData", "$APPDATA/Code/Cache", "$APPDATA/Code/GPUCache", "$APPDATA/Code/CachedExtensionVSIXs", "$APPDATA/Code/logs",
+  "$APPDATA/Cursor/CachedData", "$APPDATA/Cursor/Cache", "$APPDATA/Cursor/GPUCache", "$APPDATA/Cursor/logs",
+  "$APPDATA/Windsurf/CachedData", "$APPDATA/Windsurf/Cache", "$APPDATA/Windsurf/GPUCache",
+]
+label = "Editor cache"
+
+[[cleaner]]
+id = "dev-cocoapods-swiftpm"
+name = "CocoaPods & SwiftPM Caches"
+description = "CocoaPods spec/download cache and SwiftPM repository cache"
+category = "Developer Caches"
+os = ["macos"]
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/Library/Caches/CocoaPods", "~/Library/Caches/org.swift.swiftpm", "~/Library/org.swift.swiftpm"]
+label = "Apple dev cache"
+
+[[cleaner]]
+id = "dev-flutter-pub"
+name = "Dart / Flutter Pub Cache"
+description = "Downloaded pub packages (PUB_CACHE)"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["${PUB_CACHE:-~/.pub-cache}"]
+windows = ["$LOCALAPPDATA/Pub/Cache"]
+label = "Pub cache"
+
+[[cleaner]]
+id = "dev-terraform"
+name = "Terraform Plugin Cache"
+description = "~/.terraform.d/plugin-cache"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.terraform.d/plugin-cache"]
+label = "Terraform plugins"

@@ -20,6 +20,9 @@ pub mod auth;
 /// Cleaner implementations for system and user-level cleanup operations.
 pub mod cleaners;
 
+/// Declarative (TOML) cleaner engine: global caches, project build output, AI/LLM caches.
+pub mod engine;
+
 /// Framework-agnostic domain model (cleaner items, categories, run status).
 pub mod model;
 
@@ -37,7 +40,7 @@ pub use auth::{
     authenticate_sudo, cache_sudo_password, cached_sudo_password, clear_cached_sudo_password,
 };
 pub use cleaners::cleaned_item::{
-    CleanedItem, CleanedItemType, CleanerFn, CleaningResult, RunOptions,
+    cleaner_fn, CleanedItem, CleanedItemType, CleanerFn, CleaningResult, RunOptions,
 };
 pub use cleaners::{system_cleaners, user_cleaners};
 pub use model::{load_categories, CleanerCategory, CleanerItem, Status};

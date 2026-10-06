@@ -41,7 +41,7 @@ impl Menu {
                 name: cleaner.name.to_string(),
                 description: cleaner.description.to_string(),
                 requires_root: false,
-                function: cleaner.function,
+                function: cleansys_core::cleaner_fn(cleaner.function),
             });
             id += 1;
         }
@@ -53,7 +53,7 @@ impl Menu {
                 name: cleaner.name.to_string(),
                 description: cleaner.description.to_string(),
                 requires_root: true,
-                function: cleaner.function,
+                function: cleansys_core::cleaner_fn(cleaner.function),
             });
             id += 1;
         }

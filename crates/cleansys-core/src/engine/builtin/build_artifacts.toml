@@ -1,0 +1,184 @@
+# Project build output, discovered by scanning your project roots
+# (see engine.json: scan_roots / min_age_days / exclude).
+# Each artifact directory is only removed when a marker file sits next to it.
+
+[[cleaner]]
+id = "proj-rust"
+name = "Rust target/ Directories"
+description = "cargo build output (target/) of every Cargo project"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["Cargo.toml"]
+artifacts = ["target"]
+label = "Rust build"
+
+[[cleaner]]
+id = "proj-gradle"
+name = "Gradle / Android build/ Directories"
+description = "build/, .gradle/ and .kotlin/ of Gradle, Android and Kotlin projects"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["build.gradle", "build.gradle.kts", "settings.gradle", "settings.gradle.kts"]
+artifacts = ["build", ".gradle", ".kotlin"]
+label = "Gradle build"
+
+[[cleaner]]
+id = "proj-android-native"
+name = "Android Native Build (.cxx)"
+description = "CMake/NDK intermediates (.cxx/, externalNativeBuild/) of Android modules"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["build.gradle", "build.gradle.kts"]
+artifacts = [".cxx", "externalNativeBuild"]
+label = "Android NDK build"
+
+[[cleaner]]
+id = "proj-maven"
+name = "Maven target/ Directories"
+description = "Maven build output (target/) next to pom.xml"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["pom.xml"]
+artifacts = ["target"]
+label = "Maven build"
+
+[[cleaner]]
+id = "proj-node-modules"
+name = "Node node_modules"
+description = "node_modules/ of npm/yarn/pnpm/bun projects (restore with npm install)"
+category = "Project Build Artifacts"
+risk = "moderate"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["package.json"]
+artifacts = ["node_modules"]
+label = "node_modules"
+
+[[cleaner]]
+id = "proj-js-build-caches"
+name = "JS Framework Build Caches"
+description = ".next, .nuxt, .svelte-kit, .turbo, .parcel-cache, .angular and .vite caches"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["package.json"]
+artifacts = [".next", ".nuxt", ".svelte-kit", ".turbo", ".parcel-cache", ".angular", ".vite", ".expo"]
+label = "JS build cache"
+
+[[cleaner]]
+id = "proj-python"
+name = "Python Project Caches"
+description = "__pycache__, .pytest_cache, .mypy_cache, .ruff_cache, .tox, .ipynb_checkpoints"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["pyproject.toml", "setup.py", "setup.cfg", "requirements.txt", "tox.ini", "Pipfile"]
+artifacts = ["__pycache__", ".pytest_cache", ".mypy_cache", ".ruff_cache", ".tox", ".nox", ".ipynb_checkpoints", ".hypothesis"]
+label = "Python cache"
+
+[[cleaner]]
+id = "proj-python-venv"
+name = "Python Virtualenvs"
+description = ".venv/ and venv/ next to Python projects (recreate with pip/uv)"
+category = "Project Build Artifacts"
+risk = "moderate"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["pyproject.toml", "setup.py", "requirements.txt", "Pipfile"]
+artifacts = [".venv", "venv"]
+label = "virtualenv"
+
+[[cleaner]]
+id = "proj-swift"
+name = "SwiftPM .build Directories"
+description = ".build/ next to Package.swift"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["Package.swift"]
+artifacts = [".build"]
+label = "SwiftPM build"
+
+[[cleaner]]
+id = "proj-cocoapods"
+name = "CocoaPods Pods/ Directories"
+description = "Pods/ next to a Podfile (restore with pod install)"
+category = "Project Build Artifacts"
+risk = "moderate"
+os = ["macos"]
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["Podfile"]
+artifacts = ["Pods"]
+label = "CocoaPods"
+
+[[cleaner]]
+id = "proj-dotnet"
+name = ".NET bin/ and obj/"
+description = "bin/ and obj/ next to .csproj/.fsproj/.vbproj files"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["*.csproj", "*.fsproj", "*.vbproj"]
+artifacts = ["bin", "obj"]
+label = ".NET build"
+
+[[cleaner]]
+id = "proj-flutter"
+name = "Flutter / Dart Build Output"
+description = "build/ and .dart_tool/ next to pubspec.yaml"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["pubspec.yaml"]
+artifacts = ["build", ".dart_tool"]
+label = "Flutter build"
+
+[[cleaner]]
+id = "proj-zig"
+name = "Zig Build Cache"
+description = "zig-cache/, .zig-cache/ and zig-out/ next to build.zig"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["build.zig"]
+artifacts = ["zig-cache", ".zig-cache", "zig-out"]
+label = "Zig build"
+
+[[cleaner]]
+id = "proj-cmake"
+name = "CMake Build Directories"
+description = "build/ and cmake-build-*/ next to CMakeLists.txt"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["CMakeLists.txt"]
+artifacts = ["build", "cmake-build-debug", "cmake-build-release", "cmake-build-relwithdebinfo"]
+label = "CMake build"
+
+[[cleaner]]
+id = "proj-elixir"
+name = "Elixir _build"
+description = "_build/ next to mix.exs"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["mix.exs"]
+artifacts = ["_build"]
+label = "Elixir build"
+
+[[cleaner]]
+id = "proj-terraform"
+name = "Terraform .terraform Directories"
+description = "provider/module cache (.terraform/) next to *.tf files"
+category = "Project Build Artifacts"
+risk = "moderate"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["*.tf"]
+artifacts = [".terraform"]
+label = "Terraform"

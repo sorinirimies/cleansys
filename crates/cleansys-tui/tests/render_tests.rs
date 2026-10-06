@@ -23,7 +23,7 @@ fn sample_item(name: &str, requires_root: bool) -> CleanerItem {
         description: format!("{name} description"),
         requires_root,
         selected: false,
-        function: noop,
+        function: std::sync::Arc::new(noop),
         bytes_cleaned: 0,
         last_result: None,
         status: None,

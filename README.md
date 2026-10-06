@@ -74,6 +74,53 @@ Every cleaner reports **real measured sizes** — no estimates or guesses — an
 - Shows exactly what will be cleaned
 - Individual cleaner selection
 
+## 🧰 Developer, Build & AI/LLM Cleaners (declarative engine)
+
+Beyond the built-in cleaners, CleanSys ships a data-driven engine (TOML, in the spirit of BleachBit's CleanerML).
+Three extra categories appear in the TUI/GUI automatically (cleaners for software you don't have are hidden):
+
+| Category | Examples |
+|----------|----------|
+| **Developer Caches** | Gradle caches/wrapper, Android SDK & Android Studio/JetBrains, Maven, Cargo git/src, sccache, npm/yarn/pnpm/bun, Go, uv/Poetry, Bazel, Playwright/Cypress, VS Code/Cursor/Windsurf |
+| **Project Build Artifacts** | Rust `target/`, Gradle/Android `build/` + `.gradle/`, `.cxx`, Maven, `node_modules`, Next/Nuxt caches, Python caches & venvs, SwiftPM, Pods, .NET `bin/obj`, Flutter, Zig, CMake, Terraform |
+| **AI & LLM Caches** | Hugging Face, PyTorch/Keras, Ollama, LM Studio/GPT4All/Jan, Claude Code, Codex/Gemini CLI, agent session histories, code indexes |
+
+Each cleaner has a *risk* level: `safe`, `moderate` (re-download takes time) or `caution` (models / session history).
+`caution` cleaners are skipped by `--all`/`--category` unless `--include-caution` is passed or they are named with `--id`.
+
+```bash
+cleansys list                                   # all cleaners + ids
+cleansys scan --all                             # preview, deletes nothing
+cleansys scan -c "Project Build Artifacts"
+cleansys clean -i proj-rust -i dev-gradle-caches --dry-run
+cleansys clean -c "AI & LLM Caches" --yes
+```
+
+Project scanning looks in `~/Projects`, `~/dev`, `~/src`, `~/code`, ... (auto-detected) and only removes a build
+directory when a marker file (e.g. `Cargo.toml`, `build.gradle.kts`, `package.json`) sits next to it.
+Configure in `~/.config/cleansys/engine.json` (or `CLEANSYS_SCAN_ROOTS`):
+
+```json
+{ "scan_roots": ["~/work"], "max_depth": 6, "min_age_days": 14, "exclude": ["~/work/keep-me/**"] }
+```
+
+Add your own cleaners in `~/.config/cleansys/cleaners.d/*.toml` (same `id` overrides a built-in):
+
+```toml
+[[cleaner]]
+id = "my-app-cache"
+name = "My App Cache"
+description = "Cache of my app"
+category = "My Cleaners"
+[[cleaner.action]]
+type = "delete"                      # or: project_artifacts
+paths = ["~/.myapp/cache"]           # supports ~, $VAR, ${VAR:-default}, %VAR%, globs
+linux = ["$XDG_CACHE_HOME/myapp"]    # per-OS lists: linux / macos / windows
+```
+
+Safety: system dirs, `$HOME` and its personal folders are never deletable, symlinks are never followed, and
+exclusion globs always win.
+
 ## 📦 Installation
 
 ### From crates.io

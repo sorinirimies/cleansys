@@ -3,8 +3,9 @@
 //! Nothing in this module depends on `ratatui`, `crossterm`, or `iced` — it is
 //! pure application state that both front-ends render in their own way.
 
-use crate::cleaners::cleaned_item::{CleanerFn, CleaningResult};
+use crate::cleaners::cleaned_item::{cleaner_fn, CleanerFn, CleaningResult};
 use crate::cleaners::{system_cleaners, user_cleaners};
+use crate::engine;
 
 /// The outcome of running (or attempting to run) a single cleaner.
 #[derive(Debug, Clone)]
@@ -83,7 +84,7 @@ pub fn load_categories() -> Vec<CleanerCategory> {
             description: cleaner.description.to_string(),
             requires_root: false,
             selected: false,
-            function: cleaner.function,
+            function: cleaner_fn(cleaner.function),
             bytes_cleaned: 0,
             last_result: None,
             status: None,
@@ -97,14 +98,14 @@ pub fn load_categories() -> Vec<CleanerCategory> {
             description: cleaner.description.to_string(),
             requires_root: cleaner.requires_root,
             selected: false,
-            function: cleaner.function,
+            function: cleaner_fn(cleaner.function),
             bytes_cleaned: 0,
             last_result: None,
             status: None,
         });
     }
 
-    vec![
+    let mut categories = vec![
         CleanerCategory {
             name: "User Land Cleaners".to_string(),
             description: "Clean user-specific files and caches".to_string(),
@@ -115,7 +116,53 @@ pub fn load_categories() -> Vec<CleanerCategory> {
             description: "Clean system files and caches (requires root)".to_string(),
             items: system_items,
         },
-    ]
+    ];
+    categories.extend(spec_categories(engine::load_specs()));
+    categories
+}
+
+/// Group declarative [`engine::CleanerSpec`]s into UI categories (first-seen
+/// order preserved).
+pub fn spec_categories(specs: Vec<engine::CleanerSpec>) -> Vec<CleanerCategory> {
+    let mut categories: Vec<CleanerCategory> = Vec::new();
+    for spec in specs {
+        let idx = match categories.iter().position(|c| c.name == spec.category) {
+            Some(i) => i,
+            None => {
+                categories.push(CleanerCategory {
+                    name: spec.category.clone(),
+                    description: category_description(&spec.category).to_string(),
+                    items: Vec::new(),
+                });
+                categories.len() - 1
+            }
+        };
+        let description = spec.display_description();
+        let requires_root = spec.requires_root;
+        let name = spec.name.clone();
+        categories[idx].items.push(CleanerItem {
+            name,
+            description,
+            requires_root,
+            selected: false,
+            function: cleaner_fn(move |opts| engine::run_spec(&spec, opts)),
+            bytes_cleaned: 0,
+            last_result: None,
+            status: None,
+        });
+    }
+    categories
+}
+
+fn category_description(name: &str) -> &'static str {
+    match name {
+        "Developer Caches" => "Global caches of build tools, package managers and IDEs",
+        "Project Build Artifacts" => {
+            "Build output inside your projects (target/, build/, node_modules/, ...)"
+        }
+        "AI & LLM Caches" => "Model weights, agent caches and session histories",
+        _ => "Additional cleaners",
+    }
 }
 
 #[cfg(test)]
@@ -125,7 +172,7 @@ mod tests {
     #[test]
     fn load_categories_has_user_and_system() {
         let categories = load_categories();
-        assert_eq!(categories.len(), 2);
+        assert!(categories.len() >= 2);
         assert_eq!(categories[0].name, "User Land Cleaners");
         assert_eq!(categories[1].name, "System Cleaners");
         assert!(!categories[0].items.is_empty());

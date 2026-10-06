@@ -5,7 +5,7 @@ use log::{debug, warn};
 use std::path::Path;
 use std::process::Command;
 
-use crate::cleaners::cleaned_item::{CleanedItem, CleanerFn, CleaningResult, RunOptions};
+use crate::cleaners::cleaned_item::{CleanedItem, CleanerFnPtr, CleaningResult, RunOptions};
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 use crate::cleaners::platform;
 #[cfg(target_os = "linux")]
@@ -19,7 +19,7 @@ pub struct CleanerInfo {
     /// A description of what the cleaner does.
     pub description: &'static str,
     /// The function that performs the cleaning operation.
-    pub function: CleanerFn,
+    pub function: CleanerFnPtr,
     /// Whether this specific cleaner needs root/Administrator privileges.
     ///
     /// Unlike Linux (where every system-level path needs root), not every

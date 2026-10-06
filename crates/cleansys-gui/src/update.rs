@@ -318,7 +318,7 @@ fn start_pending_operations(state: &mut CleanSysGui) -> Task<Message> {
             continue;
         };
         item.status = Some(Status::Running);
-        let function = item.function;
+        let function = item.function.clone();
         let name = item.name.clone();
         state.push_log(format!("\u{1f504} Running: {}", name));
 
@@ -364,7 +364,7 @@ fn request_preview(state: &mut CleanSysGui) -> Task<Message> {
         else {
             continue;
         };
-        let function = item.function;
+        let function = item.function.clone();
 
         tasks.push(Task::perform(
             async move { function(RunOptions::preview()) },

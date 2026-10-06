@@ -158,7 +158,23 @@ impl RunOptions {
 /// Signature shared by every cleaner function: takes [`RunOptions`] and
 /// returns the structured set of items actually removed (or, in preview
 /// mode, that *would be* removed), with real per-item sizes.
-pub type CleanerFn = fn(RunOptions) -> anyhow::Result<CleaningResult>;
+///
+/// Reference-counted trait object (not a bare `fn` pointer) so declarative
+/// cleaners from [`crate::engine`] can capture their spec. Cloning is cheap.
+pub type CleanerFn =
+    std::sync::Arc<dyn Fn(RunOptions) -> anyhow::Result<CleaningResult> + Send + Sync>;
+
+/// Plain function-pointer form of a cleaner, used by the hard-coded
+/// built-in cleaners (convert with [`cleaner_fn`]).
+pub type CleanerFnPtr = fn(RunOptions) -> anyhow::Result<CleaningResult>;
+
+/// Wrap any compatible function or closure as a [`CleanerFn`].
+pub fn cleaner_fn<F>(f: F) -> CleanerFn
+where
+    F: Fn(RunOptions) -> anyhow::Result<CleaningResult> + Send + Sync + 'static,
+{
+    std::sync::Arc::new(f)
+}
 
 #[cfg(test)]
 mod tests {

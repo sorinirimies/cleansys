@@ -1,0 +1,118 @@
+# AI / LLM tooling: model weights, agent caches and session transcripts.
+# Anything holding large downloads or conversation history is `caution`.
+
+[[cleaner]]
+id = "ai-huggingface"
+name = "Hugging Face Hub Cache"
+description = "Downloaded models/datasets (HF_HOME, ~/.cache/huggingface)"
+category = "AI & LLM Caches"
+risk = "caution"
+[[cleaner.action]]
+type = "delete"
+paths = ["${HF_HOME:-$XDG_CACHE_HOME/huggingface}/hub", "${HF_HOME:-$XDG_CACHE_HOME/huggingface}/datasets", "${HF_HOME:-$XDG_CACHE_HOME/huggingface}/xet", "${HF_HOME:-$XDG_CACHE_HOME/huggingface}/assets"]
+label = "Hugging Face"
+
+[[cleaner]]
+id = "ai-torch"
+name = "PyTorch / TensorFlow / Keras Caches"
+description = "torch hub checkpoints, Keras datasets/models, TF datasets"
+category = "AI & LLM Caches"
+risk = "caution"
+[[cleaner.action]]
+type = "delete"
+paths = ["${TORCH_HOME:-$XDG_CACHE_HOME/torch}", "~/.keras", "~/tensorflow_datasets", "$XDG_CACHE_HOME/whisper", "$XDG_CACHE_HOME/lm-studio"]
+label = "ML cache"
+
+[[cleaner]]
+id = "ai-ollama"
+name = "Ollama Models"
+description = "Models pulled with ollama (re-download with `ollama pull`)"
+category = "AI & LLM Caches"
+risk = "caution"
+[[cleaner.action]]
+type = "delete"
+paths = ["${OLLAMA_MODELS:-~/.ollama/models}"]
+label = "Ollama models"
+
+[[cleaner]]
+id = "ai-lmstudio-gpt4all-jan"
+name = "LM Studio / GPT4All / Jan Models"
+description = "Local model stores of LM Studio, GPT4All and Jan"
+category = "AI & LLM Caches"
+risk = "caution"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.lmstudio/models", "~/.cache/lm-studio/models", "~/jan/models"]
+linux = ["$XDG_DATA_HOME/nomic.ai/GPT4All"]
+macos = ["~/Library/Application Support/nomic.ai/GPT4All"]
+windows = ["$LOCALAPPDATA/nomic.ai/GPT4All"]
+label = "Local model store"
+
+[[cleaner]]
+id = "ai-claude-code"
+name = "Claude Code Caches"
+description = "Shell snapshots, telemetry, debug logs and CLI cache of Claude Code"
+category = "AI & LLM Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.claude/shell-snapshots", "~/.claude/statsig", "~/.claude/debug", "~/.claude/todos", "~/.claude/ide"]
+linux = ["$XDG_CACHE_HOME/claude-cli-nodejs", "$XDG_CACHE_HOME/claude"]
+macos = ["~/Library/Caches/claude-cli-nodejs", "~/Library/Caches/com.anthropic.claudefordesktop"]
+windows = ["$LOCALAPPDATA/claude-cli-nodejs"]
+label = "Claude Code"
+
+[[cleaner]]
+id = "ai-claude-sessions"
+name = "Claude Code Session Transcripts"
+description = "Conversation history under ~/.claude/projects (cannot be resumed afterwards)"
+category = "AI & LLM Caches"
+risk = "caution"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.claude/projects"]
+label = "Claude sessions"
+
+[[cleaner]]
+id = "ai-codex-gemini"
+name = "Codex & Gemini CLI Caches"
+description = "Logs and temp data of OpenAI Codex CLI and Gemini CLI"
+category = "AI & LLM Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.codex/log", "~/.codex/tmp", "~/.gemini/tmp", "~/.gemini/antigravity/brain"]
+label = "Agent CLI cache"
+
+[[cleaner]]
+id = "ai-agent-sessions"
+name = "Agent Session Histories"
+description = "Saved sessions of Codex, Gemini CLI, pi, OpenCode and Aider tag caches"
+category = "AI & LLM Caches"
+risk = "caution"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.codex/sessions", "~/.codex/history.jsonl", "~/.gemini/history", "~/.pi/agent/sessions", "~/.aider.tags.cache.v*"]
+linux = ["$XDG_DATA_HOME/opencode/storage"]
+macos = ["~/.local/share/opencode/storage"]
+label = "Agent sessions"
+
+[[cleaner]]
+id = "ai-agent-package-caches"
+name = "Agent Tool Package Caches"
+description = "npm/MCP package caches used by agent CLIs (~/.pi/agent/npm, ~/.cache/opencode, MCP/uvx caches)"
+category = "AI & LLM Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.pi/agent/npm", "~/.cache/opencode", "~/.cache/mcp", "~/.continue/index"]
+label = "Agent package cache"
+
+[[cleaner]]
+id = "ai-codegraph-indexes"
+name = "Code Index Caches (CodeGraph)"
+description = "Per-project .codegraph indexes found in project roots"
+category = "AI & LLM Caches"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["Cargo.toml", "package.json", "pyproject.toml", "go.mod", "build.gradle", "build.gradle.kts", "pom.xml"]
+artifacts = [".codegraph"]
+label = "Code index"

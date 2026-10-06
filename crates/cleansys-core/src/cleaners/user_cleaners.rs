@@ -5,14 +5,14 @@ use std::fs::{self, remove_dir_all, remove_file};
 use std::os::unix::fs::MetadataExt;
 use std::path::Path;
 
-use crate::cleaners::cleaned_item::{CleanedItem, CleanerFn, CleaningResult, RunOptions};
+use crate::cleaners::cleaned_item::{CleanedItem, CleanerFnPtr, CleaningResult, RunOptions};
 use crate::cleaners::platform;
 use crate::utils::{confirm, format_size, get_size, print_success};
 
 pub struct CleanerInfo {
     pub name: &'static str,
     pub description: &'static str,
-    pub function: CleanerFn,
+    pub function: CleanerFnPtr,
 }
 
 /// Shorthand for a [`CleanerInfo`] entry. Collapses the repeated

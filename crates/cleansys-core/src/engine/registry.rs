@@ -1,0 +1,144 @@
+//! Loading of built-in and user-supplied cleaner specs.
+
+use anyhow::{Context, Result};
+use log::warn;
+use std::path::{Path, PathBuf};
+
+use super::exec::spec_has_targets;
+use super::spec::{CleanerSpec, SpecFile};
+
+/// Embedded built-in definitions (file name, TOML source).
+const BUILTIN: &[(&str, &str)] = &[
+    ("developer.toml", include_str!("builtin/developer.toml")),
+    (
+        "build_artifacts.toml",
+        include_str!("builtin/build_artifacts.toml"),
+    ),
+    ("ai_llm.toml", include_str!("builtin/ai_llm.toml")),
+];
+
+/// Parse one TOML document into specs.
+pub fn parse_spec_file(src: &str) -> Result<Vec<CleanerSpec>> {
+    let file: SpecFile = toml::from_str(src).context("invalid cleaner TOML")?;
+    Ok(file.cleaners)
+}
+
+/// Directory scanned for user cleaner definitions.
+pub fn user_spec_dir() -> Option<PathBuf> {
+    crate::settings::settings_dir()
+        .ok()
+        .map(|d| d.join("cleaners.d"))
+}
+
+/// All specs applicable on this OS whose targets exist on this machine:
+/// built-ins first, then user files (same `id` replaces the built-in).
+pub fn load_specs() -> Vec<CleanerSpec> {
+    let mut specs = load_all_unfiltered(user_spec_dir().as_deref());
+    specs.retain(|s| s.applies_to_current_os() && spec_has_targets(s));
+    specs
+}
+
+/// Built-in + user specs, no OS / existence filtering. Order preserved;
+/// user specs override built-ins by `id`.
+pub fn load_all_unfiltered(user_dir: Option<&Path>) -> Vec<CleanerSpec> {
+    let mut specs: Vec<CleanerSpec> = Vec::new();
+    for (file, src) in BUILTIN {
+        match parse_spec_file(src) {
+            Ok(v) => merge(&mut specs, v),
+            Err(e) => warn!("built-in cleaner file {file}: {e:#}"),
+        }
+    }
+    if let Some(dir) = user_dir {
+        if let Ok(rd) = std::fs::read_dir(dir) {
+            let mut files: Vec<PathBuf> = rd
+                .flatten()
+                .map(|e| e.path())
+                .filter(|p| p.extension().is_some_and(|x| x == "toml"))
+                .collect();
+            files.sort();
+            for f in files {
+                match std::fs::read_to_string(&f)
+                    .map_err(anyhow::Error::from)
+                    .and_then(|s| parse_spec_file(&s))
+                {
+                    Ok(v) => merge(&mut specs, v),
+                    Err(e) => warn!("user cleaner file {f:?}: {e:#}"),
+                }
+            }
+        }
+    }
+    specs
+}
+
+fn merge(into: &mut Vec<CleanerSpec>, new: Vec<CleanerSpec>) {
+    for s in new {
+        match into.iter_mut().find(|e| e.id == s.id) {
+            Some(slot) => *slot = s,
+            None => into.push(s),
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::collections::HashSet;
+
+    #[test]
+    fn builtin_specs_parse_and_are_well_formed() {
+        for (file, src) in BUILTIN {
+            let specs = parse_spec_file(src).unwrap_or_else(|e| panic!("{file}: {e:#}"));
+            assert!(!specs.is_empty(), "{file} empty");
+        }
+        let all = load_all_unfiltered(None);
+        let mut ids = HashSet::new();
+        for s in &all {
+            assert!(ids.insert(s.id.clone()), "duplicate id {}", s.id);
+            assert!(!s.name.is_empty() && !s.description.is_empty(), "{}", s.id);
+            assert!(!s.actions.is_empty(), "{} has no actions", s.id);
+        }
+    }
+
+    #[test]
+    fn builtin_delete_paths_are_never_protected_or_relative() {
+        use crate::engine::{paths, safety};
+        for s in load_all_unfiltered(None) {
+            for a in &s.actions {
+                for t in a.delete_templates() {
+                    let expanded = paths::expand(t, &paths::lookup_env);
+                    let p = std::path::PathBuf::from(
+                        expanded.split(['*', '?', '[']).next().unwrap_or(""),
+                    );
+                    assert!(p.is_absolute(), "{}: {t} not absolute", s.id);
+                    assert!(!safety::is_protected(&p), "{}: {t} protected", s.id);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn user_spec_overrides_builtin_by_id() {
+        let dir = tempfile::tempdir().unwrap();
+        let first = load_all_unfiltered(None)[0].clone();
+        std::fs::write(
+            dir.path().join("o.toml"),
+            format!(
+                "[[cleaner]]\nid=\"{}\"\nname=\"Custom\"\ndescription=\"d\"\n[[cleaner.action]]\ntype=\"delete\"\npaths=[\"/nonexistent/x\"]\n",
+                first.id
+            ),
+        )
+        .unwrap();
+        let all = load_all_unfiltered(Some(dir.path()));
+        assert_eq!(
+            all.iter().find(|s| s.id == first.id).unwrap().name,
+            "Custom"
+        );
+    }
+
+    #[test]
+    fn broken_user_file_is_ignored() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("bad.toml"), "not [valid").unwrap();
+        assert!(!load_all_unfiltered(Some(dir.path())).is_empty());
+    }
+}

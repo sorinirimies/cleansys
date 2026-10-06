@@ -51,10 +51,50 @@ enum Commands {
     },
     /// List all available cleaners
     List,
+    /// Preview what dev/AI/build cleaners would free (deletes nothing)
+    Scan(SelectArgs),
+    /// Run dev/AI/build cleaners non-interactively (BleachBit-style)
+    Clean {
+        #[command(flatten)]
+        select: SelectArgs,
+        /// Skip confirmation prompts
+        #[arg(short, long)]
+        yes: bool,
+        /// Only report what would be removed
+        #[arg(short = 'n', long)]
+        dry_run: bool,
+    },
     /// Interactive menu to select specific cleaners (text-based)
     Menu,
     /// Interactive terminal UI (default)
     Tui,
+}
+
+#[derive(clap::Args, Clone)]
+struct SelectArgs {
+    /// Cleaner ids (see `cleansys list`), e.g. proj-rust dev-gradle-caches
+    #[arg(short, long = "id", value_name = "ID")]
+    ids: Vec<String>,
+    /// Whole category, e.g. "Project Build Artifacts" or "AI & LLM Caches"
+    #[arg(short, long = "category", value_name = "NAME")]
+    categories: Vec<String>,
+    /// Every cleaner (caution-risk ones only with --include-caution)
+    #[arg(short, long)]
+    all: bool,
+    /// Also include caution-risk cleaners (models, session histories)
+    #[arg(long)]
+    include_caution: bool,
+}
+
+impl From<SelectArgs> for cleansys_core::engine::headless::Selection {
+    fn from(a: SelectArgs) -> Self {
+        Self {
+            ids: a.ids,
+            categories: a.categories,
+            include_caution: a.include_caution,
+            all: a.all,
+        }
+    }
 }
 
 fn setup_logger(verbose: bool) {
@@ -178,6 +218,31 @@ fn main() -> Result<()> {
             for cleaner in system_cleaners::list_cleaners() {
                 println!("  • {}", cleaner);
             }
+
+            println!("\nDeveloper / build / AI cleaners (use with `scan` / `clean --id`):");
+            cleansys_core::engine::headless::print_list();
+        }
+        Some(Commands::Scan(args)) => {
+            print_header("SCAN (preview)");
+            cleansys_core::engine::headless::run_selection(
+                &args.into(),
+                cleansys_core::RunOptions::preview(),
+            )?;
+        }
+        Some(Commands::Clean {
+            select,
+            yes,
+            dry_run,
+        }) => {
+            print_header(if dry_run { "CLEAN (dry run)" } else { "CLEAN" });
+            let opts = if dry_run {
+                cleansys_core::RunOptions::preview()
+            } else if yes {
+                cleansys_core::RunOptions::execute()
+            } else {
+                cleansys_core::RunOptions::execute_with_confirmation()
+            };
+            cleansys_core::engine::headless::run_selection(&select.into(), opts)?;
         }
         Some(Commands::Menu) => {
             let menu = Menu::new();
