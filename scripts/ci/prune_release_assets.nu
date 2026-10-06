@@ -21,11 +21,40 @@
 #   kept release   <keep-tag> if given, plus the newest --keep releases by date
 
 # `git@github.com:owner/repo.git` / `https://host/owner/repo` -> {host, repo}
-def parse-remote [remote: string] {
-    let raw = (^git remote get-url $remote | str trim)
-    let m = ($raw | parse --regex '^(?:[a-z+]+://)?(?:[^@/]+@)?(?<host>[^/:]+)(?::\d+)?[:/](?<repo>[^/]+/[^/]+?)(?:\.git)?/?$')
+export def parse_remote_url [raw: string]: nothing -> record {
+    let m = ($raw | str trim | parse --regex '^(?:[a-z+]+://)?(?:[^@/]+@)?(?<host>[^/:]+)(?::\d+)?[:/](?<repo>[^/]+/[^/]+?)(?:\.git)?/?$')
     if ($m | is-empty) { error make {msg: $"cannot parse remote url: ($raw)"} }
     $m | first
+}
+
+# Tags of the `n` newest releases (input is already newest-first).
+export def newest_tags [releases: list, n: int]: nothing -> list {
+    $releases | first $n | get tag_name
+}
+
+# Which assets to delete: those of every release whose tag is not in `keepers`.
+# Fails when `keepers` is empty, so a mistake can never wipe everything.
+export def assets_to_prune [releases: list, keepers: list]: nothing -> list {
+    if ($keepers | is-empty) {
+        error make --unspanned { msg: "no release to keep; refusing to prune" }
+    }
+    $releases
+    | where { |r| $r.tag_name not-in $keepers }
+    | each { |r|
+        $r.assets? | default [] | each { |a|
+            { release: $r.id, tag: $r.tag_name, id: $a.id, name: $a.name, size: ($a.size? | default 0) }
+        }
+    }
+    | flatten
+}
+
+# Total bytes of a list of assets (0 for an empty list).
+export def total_size [assets: list]: nothing -> int {
+    $assets | each { |a| $a.size } | append 0 | math sum
+}
+
+def parse-remote [remote: string] {
+    parse_remote_url (^git remote get-url $remote)
 }
 
 def find-token [platform: string] {
@@ -74,11 +103,12 @@ def main [
     --dry-run                # only print what would be deleted
 ] {
     let det = if ($platform | is-empty) or ($repo | is-empty) { parse-remote $remote } else { null }
-    let platform = ($platform | default (if $det.host == "github.com" { "github" } else { "gitea" }))
-    let repo = ($repo | default $det.repo)
+    let det_host = ($det | get -o host | default "")
+    let platform = ($platform | default (if $det_host == "github.com" { "github" } else { "gitea" }))
+    let repo = ($repo | default ($det | get -o repo | default ""))
     if $platform not-in [github gitea] { error make {msg: "platform must be github or gitea"} }
     let base = if $platform == "gitea" {
-        let b = (if ($url | is-not-empty) { $url } else if $det != null { $"https://($det.host)" } else { "" })
+        let b = (if ($url | is-not-empty) { $url } else if ($det_host | is-not-empty) { $"https://($det_host)" } else { "" })
         if ($b | is-empty) { error make {msg: "--url is required for gitea"} }
         $b | str trim --right --char "/"
     } else { "" }
@@ -92,28 +122,25 @@ def main [
     let releases = (list-releases $platform $repo $base $headers)
     if ($releases | is-empty) { print "no releases found"; return }
 
-    let newest = ($releases | first $keep | get tag_name)
-    let keepers = ([$keep_tag] | append $newest | where { |t| $t != null } | uniq)
+    # An explicit keep-tag must exist: a typo must never turn into "delete everything".
+    if ($keep_tag | is-not-empty) and ($releases | where tag_name == $keep_tag | is-empty) {
+        error make {msg: $"release ($keep_tag) not found; refusing to prune"}
+    }
+    let keepers = ([$keep_tag] | append (newest_tags $releases $keep) | where { |t| $t != null } | uniq)
     print $"($platform):($repo)  keeping assets of: ($keepers | str join ', ')"
 
-    mut freed = 0
-    mut count = 0
-    for r in ($releases | where { |r| $r.tag_name not-in $keepers }) {
-        for a in ($r.assets? | default []) {
-            let size = ($a.size? | default 0)
-            print $"  ($r.tag_name)  ($a.name)  ($size | into filesize)"
-            if not $dry_run {
-                let del = if $platform == "github" {
-                    $"https://api.github.com/repos/($repo)/releases/assets/($a.id)"
-                } else {
-                    $"($base)/api/v1/repos/($repo)/releases/($r.id)/assets/($a.id)"
-                }
-                http delete --headers $headers $del | ignore
+    let doomed = (assets_to_prune $releases $keepers)
+    for a in $doomed {
+        print $"  ($a.tag)  ($a.name)  ($a.size | into filesize)"
+        if not $dry_run {
+            let del = if $platform == "github" {
+                $"https://api.github.com/repos/($repo)/releases/assets/($a.id)"
+            } else {
+                $"($base)/api/v1/repos/($repo)/releases/($a.release)/assets/($a.id)"
             }
-            $freed += $size
-            $count += 1
+            http delete --headers $headers $del | ignore
         }
     }
     let verb = if $dry_run { "would delete" } else { "deleted" }
-    print $"($verb) ($count) asset\(s\), ($freed | into filesize)"
+    print $"($verb) ($doomed | length) asset\(s\), (total_size $doomed | into filesize)"
 }
