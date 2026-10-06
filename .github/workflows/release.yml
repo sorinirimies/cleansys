@@ -285,6 +285,24 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+  # ── 4b. Keep only the latest release's uploads ───────────────────────────────
+  prune-old-assets:
+    name: Prune old release assets
+    needs: [validate, release]
+    runs-on: ubuntu-latest
+    continue-on-error: true   # housekeeping must never fail a release
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+      - name: Install Nushell
+        run: cargo install nu --locked
+      - name: Delete assets of every older release (notes and tags stay)
+        env:
+          TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: nu scripts/ci/prune_release_assets.nu github "${{ github.repository }}" "${{ needs.validate.outputs.tag }}"
+
   # ── 5. Publish to crates.io ───────────────────────────────────────────────────
   publish:
     name: Publish to crates.io
