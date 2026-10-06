@@ -246,6 +246,11 @@ pub fn get_size(path: &str) -> Result<u64> {
     Ok(dir_size(std::path::Path::new(path), 0, MAX_DEPTH))
 }
 
+/// Directory levels (from the root) that fan out across threads. Deeper levels are
+/// walked sequentially: by then there is plenty of parallelism and the overhead of
+/// splitting tiny directories would only cost time.
+const PARALLEL_DEPTH: u32 = 4;
+
 fn dir_size(path: &std::path::Path, depth: u32, max_depth: u32) -> u64 {
     let metadata = match std::fs::symlink_metadata(path) {
         Ok(m) => m,
@@ -255,32 +260,56 @@ fn dir_size(path: &std::path::Path, depth: u32, max_depth: u32) -> u64 {
     if metadata.file_type().is_symlink() {
         return 0;
     }
-
     if metadata.is_file() {
         return metadata.len();
     }
-
     if metadata.is_dir() {
-        // Guard against pathological/cyclic directory structures: give up on
-        // descending further rather than risk a stack overflow. In practice
-        // no real cache/temp/trash directory this tool targets comes close
-        // to this depth.
-        if depth >= max_depth {
-            log::warn!(
-                "get_size: max recursion depth ({max_depth}) reached at {:?}; size may be underestimated",
-                path
-            );
-            return 0;
-        }
-
-        let mut total = 0u64;
-        if let Ok(entries) = std::fs::read_dir(path) {
-            for entry in entries.flatten() {
-                total = total.saturating_add(dir_size(&entry.path(), depth + 1, max_depth));
-            }
-        }
-        return total;
+        return dir_total(path, depth, max_depth);
     }
-
     0
+}
+
+/// Sum of everything below the directory `path`.
+///
+/// Uses `DirEntry::file_type` (no extra syscall) to skip symlinks and recurse into
+/// directories, and `DirEntry::metadata` only for regular files. The first
+/// [`PARALLEL_DEPTH`] levels are spread over the rayon pool, which is what makes
+/// multi-gigabyte trees (Gradle/Cargo caches, `target/`, `node_modules/`) fast.
+fn dir_total(path: &std::path::Path, depth: u32, max_depth: u32) -> u64 {
+    // Guard against pathological/cyclic directory structures: give up on
+    // descending further rather than risk a stack overflow. In practice no real
+    // cache/temp/trash directory this tool targets comes close to this depth.
+    if depth >= max_depth {
+        log::warn!(
+            "get_size: max recursion depth ({max_depth}) reached at {path:?}; size may be underestimated"
+        );
+        return 0;
+    }
+    let Ok(read) = std::fs::read_dir(path) else {
+        return 0;
+    };
+    let entries: Vec<std::fs::DirEntry> = read.flatten().collect();
+
+    let one = |entry: &std::fs::DirEntry| -> u64 {
+        let Ok(ft) = entry.file_type() else { return 0 };
+        if ft.is_symlink() {
+            0
+        } else if ft.is_file() {
+            entry.metadata().map(|m| m.len()).unwrap_or(0)
+        } else if ft.is_dir() {
+            dir_total(&entry.path(), depth + 1, max_depth)
+        } else {
+            0
+        }
+    };
+
+    if depth < PARALLEL_DEPTH && entries.len() > 1 {
+        use rayon::prelude::*;
+        entries
+            .par_iter()
+            .map(one)
+            .reduce(|| 0, u64::saturating_add)
+    } else {
+        entries.iter().map(one).fold(0, u64::saturating_add)
+    }
 }

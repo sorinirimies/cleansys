@@ -32,6 +32,7 @@ users       = "0.11"
 serde_json  = "1.0"
 toml        = "0.9"
 glob        = "0.3"
+rayon       = "1.10"
 
 # TUI (Ratatui)
 ratatui       = "0.30"

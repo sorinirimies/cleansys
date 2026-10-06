@@ -194,3 +194,43 @@ fn test_mixed_size_formatting() {
         assert_eq!(format_size(bytes), expected);
     }
 }
+
+#[test]
+fn get_size_sums_a_deep_tree_in_parallel_and_ignores_symlinks() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    // 6 levels deep (past the parallel cut-off), several siblings per level.
+    let mut expected = 0u64;
+    for a in 0..3 {
+        for b in 0..3 {
+            let leaf = root.join(format!("a{a}/b{b}/c/d/e/f"));
+            std::fs::create_dir_all(&leaf).unwrap();
+            for n in 0..4u64 {
+                let bytes = 100 + n;
+                std::fs::write(leaf.join(format!("file{n}")), vec![b'x'; bytes as usize]).unwrap();
+                expected += bytes;
+            }
+        }
+    }
+    // A symlink (to a big file elsewhere) must count as 0 and never be followed.
+    #[cfg(unix)]
+    {
+        let big = dir
+            .path()
+            .join("..")
+            .join(format!("cleansys-big-{}", std::process::id()));
+        std::fs::write(&big, vec![b'y'; 50_000]).unwrap();
+        std::os::unix::fs::symlink(&big, root.join("link")).unwrap();
+        let size = cleansys_core::get_size(&root.to_string_lossy()).unwrap();
+        std::fs::remove_file(&big).ok();
+        assert_eq!(size, expected);
+        return;
+    }
+    #[allow(unreachable_code)]
+    {
+        assert_eq!(
+            cleansys_core::get_size(&root.to_string_lossy()).unwrap(),
+            expected
+        );
+    }
+}
