@@ -183,6 +183,17 @@ run-web:
 test-web:
     cargo test -p cleansys-web
 
+# ── Release housekeeping ───────────────────────────────────────────────────────
+
+# Preview which old release uploads would be deleted (keeps only the latest version's files).
+prune-releases-preview *ARGS: _check-nu
+    nu scripts/ci/prune_release_assets.nu --dry-run {{ARGS}}
+
+# Delete the uploads of every release except the latest (notes and tags stay).
+# Token: $TOKEN / $GITHUB_TOKEN / `gh auth login`. Gitea: --remote <name> --url <base-url>.
+prune-releases *ARGS: _check-nu
+    nu scripts/ci/prune_release_assets.nu {{ARGS}}
+
 # ── Packaging ────────────────────────────────────────────────────────
 
 # Build Linux .deb and .rpm packages (requires dpkg-deb + alien; run locally on Linux)
