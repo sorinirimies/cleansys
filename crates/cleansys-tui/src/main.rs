@@ -196,6 +196,8 @@ fn setup_logger(verbose: bool) {
 
 fn load_cleaners(app: &mut App) {
     app.categories = cleansys_core::load_categories();
+    // Measure what every cleaner can free, in the background.
+    app.start_scan();
 }
 
 fn run_tui() -> Result<()> {
@@ -238,6 +240,8 @@ fn run_tui() -> Result<()> {
                 if app.is_running {
                     app.update_animation();
                 }
+                // Pull in finished background scan results.
+                app.poll_scan();
             }
             Ok(Event::Resize(width, height)) => {
                 // Handle terminal resize

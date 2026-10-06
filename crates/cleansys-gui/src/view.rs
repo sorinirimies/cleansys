@@ -267,7 +267,7 @@ fn category_button<'a>(
             .color(size_color(&c, b))
             .into(),
         Some(_) => text("—").size(12).color(c.muted).into(),
-        None if state.scan_pending > 0 => text("…").size(12).color(c.muted).into(),
+        None if state.board.is_scanning() => text("…").size(12).color(c.muted).into(),
         None => Space::new().into(),
     };
     let tick: Element<'a, Message> = if ticked > 0 {
@@ -435,7 +435,7 @@ fn item_list<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> Ele
     let body: Element<'a, Message> = if visible.is_empty() {
         let msg = if !state.search.trim().is_empty() {
             "No cleaner matches your search."
-        } else if state.scan_pending > 0 {
+        } else if state.board.is_scanning() {
             "Scanning your system…"
         } else {
             "Nothing to clean here — this category is already tidy ✨"
@@ -533,7 +533,7 @@ fn item_row<'a>(
             .align_x(Alignment::End)
             .into(),
             Some(_) => text("nothing to clean").size(12).color(c.muted).into(),
-            None => text(if state.scan_pending > 0 {
+            None => text(if state.board.is_scanning() {
                 "scanning…"
             } else {
                 ""
@@ -619,7 +619,7 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
     let c = *c;
     let selected = state.selected_count();
     let busy = state.is_running || state.previewing;
-    let scanning = state.scan_pending > 0;
+    let scanning = state.board.is_scanning();
     let reclaim = state.selected_reclaimable();
     let compact = layout != Layout::Wide;
 
@@ -644,17 +644,20 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
         .width(Length::Fill)
         .into()
     } else if scanning {
-        let done = state.scan_total - state.scan_pending;
+        let done = state.board.total - state.board.pending;
         column![
-            text(format!("Scanning your system… {done}/{}", state.scan_total))
-                .size(13)
-                .color(c.text_primary),
+            text(format!(
+                "Scanning your system… {done}/{}",
+                state.board.total
+            ))
+            .size(13)
+            .color(c.text_primary),
             iced::widget::progress_bar(
                 0.0..=1.0,
-                if state.scan_total == 0 {
+                if state.board.total == 0 {
                     0.0
                 } else {
-                    done as f32 / state.scan_total as f32
+                    done as f32 / state.board.total as f32
                 }
             )
             .girth(Length::Fixed(6.0)),
@@ -1562,22 +1565,29 @@ mod tests {
 
     #[test]
     fn every_layout_renders_with_scan_results_search_and_log() {
-        use crate::state::ScanInfo;
+        use cleansys_core::ScanInfo;
         let mut state = CleanSysGui::new();
         state.show_log = true;
         state.push_log("hello");
-        state.scan_total = 3;
-        state.scan_pending = 1;
-        state.scan[0][0] = Some(ScanInfo {
-            bytes: 6 << 30,
-            items: 3,
-            top_path: Some("/tmp/x".into()),
-            error: None,
-        });
-        state.scan[0][1] = Some(ScanInfo {
-            error: Some("boom".into()),
-            ..Default::default()
-        });
+        state.board.start(3);
+        state.board.record(
+            0,
+            0,
+            ScanInfo {
+                bytes: 6 << 30,
+                items: 3,
+                top_path: Some("/tmp/x".into()),
+                error: None,
+            },
+        );
+        state.board.record(
+            0,
+            1,
+            ScanInfo {
+                error: Some("boom".into()),
+                ..Default::default()
+            },
+        );
         state.categories[0].items[0].selected = true;
         let c = state.colors();
         for w in [360.0, 640.0, 760.0, 1100.0] {

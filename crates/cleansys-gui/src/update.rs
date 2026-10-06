@@ -80,30 +80,8 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
         }
         Message::ScanAll => start_scan(state),
         Message::ScanItemFinished(cat_idx, item_idx, result) => {
-            let info = match result {
-                Ok(r) => {
-                    let top = r.items.iter().max_by_key(|i| i.size).map(|i| i.path_str());
-                    crate::state::ScanInfo {
-                        bytes: r.total_bytes,
-                        items: r.item_count(),
-                        top_path: top,
-                        error: None,
-                    }
-                }
-                Err(e) => crate::state::ScanInfo {
-                    error: Some(e),
-                    ..Default::default()
-                },
-            };
-            if let Some(slot) = state
-                .scan
-                .get_mut(cat_idx)
-                .and_then(|row| row.get_mut(item_idx))
-            {
-                *slot = Some(info);
-            }
-            state.scan_pending = state.scan_pending.saturating_sub(1);
-            if state.scan_pending == 0 {
+            let info = cleansys_core::ScanInfo::from_result(result);
+            if state.board.record(cat_idx, item_idx, info) {
                 state.ensure_active_visible();
                 let total = state.total_reclaimable();
                 state.push_log(format!(
@@ -446,7 +424,7 @@ fn spawn_scan_pool(
 
 /// Measure every cleaner in the background (read-only previews).
 fn start_scan(state: &mut CleanSysGui) -> Task<Message> {
-    if state.scan_pending > 0 || state.is_running {
+    if state.board.is_scanning() || state.is_running {
         return Task::none();
     }
     let mut tasks = Vec::new();
@@ -465,11 +443,7 @@ fn start_scan(state: &mut CleanSysGui) -> Task<Message> {
         }
     }
     spawn_scan_pool(jobs);
-    for row in &mut state.scan {
-        row.iter_mut().for_each(|s| *s = None);
-    }
-    state.scan_total = tasks.len();
-    state.scan_pending = tasks.len();
+    state.board.start(tasks.len());
     Task::batch(tasks)
 }
 

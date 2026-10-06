@@ -139,6 +139,16 @@ pub struct App {
     pub needs_admin_notice: bool,
     /// Selected cleaners staged while `awaiting_run_confirmation` is true.
     pub pending_run_selection: Vec<PendingOperation>,
+    /// Background scan results (sizes per cleaner/category).
+    pub board: cleansys_core::ScanBoard,
+    /// Channel delivering background scan results (drained by [`App::poll_scan`]).
+    pub scan_rx: Option<std::sync::mpsc::Receiver<(usize, usize, cleansys_core::ScanInfo)>>,
+    /// Hide cleaners that were scanned and have nothing to clean.
+    pub hide_empty: bool,
+    /// Live filter text for the cleaner list ("" = none).
+    pub filter: String,
+    /// Whether keystrokes currently go to the filter box.
+    pub filter_active: bool,
     /// Whether the schedule (automatic cleaning) overlay is open.
     pub schedule_open: bool,
     /// The schedule being edited in the overlay.
@@ -213,6 +223,11 @@ impl App {
             preview_results: Vec::new(),
             needs_admin_notice: false,
             pending_run_selection: Vec::new(),
+            board: cleansys_core::ScanBoard::default(),
+            scan_rx: None,
+            hide_empty: true,
+            filter: String::new(),
+            filter_active: false,
             schedule_open: false,
             schedule_draft: cleansys_core::engine::schedule::Schedule::default(),
             schedule_field: 0,
@@ -277,61 +292,162 @@ impl App {
         categories
     }
 
-    pub fn next_item(&mut self) {
-        let items = &self.categories[self.category_index].items;
-        let i = match self.item_list_state.selected() {
-            Some(i) => {
-                if i >= items.len() - 1 {
-                    0
-                } else {
-                    i + 1
-                }
+    // ── scanning, filtering, list navigation ──────────────────────────
+
+    /// Start measuring every cleaner in the background (read-only).
+    pub fn start_scan(&mut self) {
+        if self.board.is_scanning() {
+            return;
+        }
+        self.board = cleansys_core::ScanBoard::new(&self.categories);
+        let (rx, total) = cleansys_core::spawn_scan(&self.categories);
+        self.board.start(total);
+        self.scan_rx = Some(rx);
+    }
+
+    /// Drain finished scan results (call every tick). Returns `true` if
+    /// anything changed.
+    pub fn poll_scan(&mut self) -> bool {
+        let mut changed = false;
+        let mut finished = false;
+        if let Some(rx) = &self.scan_rx {
+            while let Ok((ci, ii, info)) = rx.try_recv() {
+                finished |= self.board.record(ci, ii, info);
+                changed = true;
             }
-            None => 0,
+        }
+        if finished {
+            self.scan_rx = None;
+            self.ensure_category_visible();
+        }
+        changed
+    }
+
+    /// `(category, item)` pairs shown in the list right now.
+    pub fn view_items(&self) -> Vec<(usize, usize)> {
+        self.board.visible_items(
+            &self.categories,
+            self.category_index,
+            &self.filter,
+            self.hide_empty,
+        )
+    }
+
+    /// The highlighted cleaner, if any.
+    pub fn current_item(&self) -> Option<(usize, usize)> {
+        self.view_items()
+            .get(self.item_list_state.selected()?)
+            .copied()
+    }
+
+    fn category_shown(&self, idx: usize) -> bool {
+        self.board
+            .category_visible(&self.categories, idx, self.hide_empty)
+    }
+
+    /// If the active category got hidden (empty after a scan), move on.
+    pub fn ensure_category_visible(&mut self) {
+        if self.categories.is_empty() || self.category_shown(self.category_index) {
+            return;
+        }
+        if let Some(first) = self
+            .board
+            .first_visible_category(&self.categories, self.hide_empty)
+        {
+            self.category_index = first;
+            self.item_list_state.select(Some(0));
+        }
+    }
+
+    pub fn toggle_hide_empty(&mut self) {
+        self.hide_empty = !self.hide_empty;
+        self.ensure_category_visible();
+        self.item_list_state.select(Some(0));
+    }
+
+    pub fn start_filter(&mut self) {
+        self.filter_active = true;
+    }
+
+    pub fn clear_filter(&mut self) {
+        self.filter.clear();
+        self.filter_active = false;
+        self.item_list_state.select(Some(0));
+    }
+
+    /// Key handling while the filter box has focus. Returns `true` if the key
+    /// was consumed.
+    pub fn handle_filter_key(&mut self, code: KeyCode) {
+        match code {
+            KeyCode::Esc => self.clear_filter(),
+            KeyCode::Enter => self.filter_active = false,
+            KeyCode::Backspace => {
+                self.filter.pop();
+                self.item_list_state.select(Some(0));
+            }
+            KeyCode::Down => self.next_item(),
+            KeyCode::Up => self.previous_item(),
+            KeyCode::Char(c) => {
+                self.filter.push(c);
+                self.item_list_state.select(Some(0));
+            }
+            _ => {}
+        }
+    }
+
+    pub fn next_item(&mut self) {
+        let len = self.view_items().len();
+        if len == 0 {
+            return;
+        }
+        let i = match self.item_list_state.selected() {
+            Some(i) if i + 1 < len => i + 1,
+            _ => 0,
         };
         self.item_list_state.select(Some(i));
     }
 
     pub fn previous_item(&mut self) {
-        let items = &self.categories[self.category_index].items;
+        let len = self.view_items().len();
+        if len == 0 {
+            return;
+        }
         let i = match self.item_list_state.selected() {
-            Some(i) => {
-                if i == 0 {
-                    items.len() - 1
-                } else {
-                    i - 1
-                }
-            }
-            None => 0,
+            Some(0) | None => len - 1,
+            Some(i) => i - 1,
         };
         self.item_list_state.select(Some(i));
     }
 
     pub fn toggle_selected(&mut self) {
-        if let Some(i) = self.item_list_state.selected() {
-            let item = &mut self.categories[self.category_index].items[i];
+        if let Some((ci, ii)) = self.current_item() {
             // Allow selection even for root items, will prompt for password later
+            let item = &mut self.categories[ci].items[ii];
             item.selected = !item.selected;
         }
     }
 
     pub fn next_category(&mut self) {
-        if self.category_index < self.categories.len() - 1 {
-            self.category_index += 1;
-        } else {
-            self.category_index = 0;
+        let n = self.categories.len();
+        for step in 1..=n {
+            let cand = (self.category_index + step) % n;
+            if self.category_shown(cand) {
+                self.category_index = cand;
+                break;
+            }
         }
-        // Reset selection in new category
         self.item_list_state.select(Some(0));
     }
 
     pub fn previous_category(&mut self) {
-        if self.category_index > 0 {
-            self.category_index -= 1;
-        } else {
-            self.category_index = self.categories.len() - 1;
+        let n = self.categories.len();
+        for step in 1..=n {
+            let cand = (self.category_index + n - step) % n;
+            if self.category_shown(cand) {
+                self.category_index = cand;
+                break;
+            }
         }
-        // Reset selection in new category
         self.item_list_state.select(Some(0));
     }
 
@@ -339,16 +455,18 @@ impl App {
         self.show_help = !self.show_help;
     }
 
+    /// Tick every cleaner currently listed (the category, or the filter hits).
     pub fn select_all(&mut self) {
-        for item in &mut self.categories[self.category_index].items {
+        for (ci, ii) in self.view_items() {
             // Allow selection of all items, will handle root permissions later
-            item.selected = true;
+            self.categories[ci].items[ii].selected = true;
         }
     }
 
+    /// Untick every cleaner currently listed.
     pub fn deselect_all(&mut self) {
-        for item in &mut self.categories[self.category_index].items {
-            item.selected = false;
+        for (ci, ii) in self.view_items() {
+            self.categories[ci].items[ii].selected = false;
         }
     }
 
@@ -967,6 +1085,12 @@ impl App {
             return Ok(false);
         }
 
+        // Filter box has focus: every key is text (or navigation)
+        if self.filter_active && !self.is_running && !self.show_progress_screen && !self.show_help {
+            self.handle_filter_key(key.code);
+            return Ok(false);
+        }
+
         // Schedule overlay
         if self.schedule_open {
             match key.code {
@@ -1076,7 +1200,23 @@ impl App {
             // Toggle search in removed items view
             (KeyCode::Char('/'), _) => {
                 if !self.show_help {
-                    self.toggle_search();
+                    if self.is_running || self.show_progress_screen {
+                        self.toggle_search();
+                    } else {
+                        self.start_filter();
+                    }
+                }
+            }
+            // Hide / show cleaners that have nothing to clean
+            (KeyCode::Char('e'), _) => {
+                if !self.show_help && !self.is_running {
+                    self.toggle_hide_empty();
+                }
+            }
+            // Re-measure everything
+            (KeyCode::Char('R'), _) => {
+                if !self.show_help && !self.is_running {
+                    self.start_scan();
                 }
             }
             // Clear search or cancel operations or return to main menu
@@ -1089,6 +1229,10 @@ impl App {
                 } else if self.show_progress_screen {
                     // Return to main menu from completed operations screen
                     self.show_progress_screen = false;
+                    // Sizes changed — measure again so the list is current.
+                    self.start_scan();
+                } else if !self.filter.is_empty() {
+                    self.clear_filter();
                 }
             }
             // Scroll removed items list
@@ -1235,7 +1379,7 @@ impl App {
                         self.detailed_list_scroll_state.select(Some(last_index));
                     }
                 } else {
-                    let len = self.categories[self.category_index].items.len();
+                    let len = self.view_items().len();
                     if len > 0 {
                         self.item_list_state.select(Some(len - 1));
                     }

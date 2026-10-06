@@ -591,3 +591,84 @@ fn recommended_selects_only_safe_user_land() {
         .filter(|i| i.selected)
         .all(|i| i.risk == cleansys_core::Risk::Safe && !i.requires_root));
 }
+
+fn app_with_two_categories() -> App {
+    let mut app = App::new();
+    app.categories = vec![
+        CleanerCategory {
+            name: "User Land Cleaners".into(),
+            description: "u".into(),
+            items: vec![
+                sample_item("Browser Caches", false),
+                sample_item("Trash", false),
+            ],
+        },
+        CleanerCategory {
+            name: "System Cleaners".into(),
+            description: "s".into(),
+            items: vec![sample_item("System Logs", true)],
+        },
+    ];
+    app
+}
+
+#[test]
+fn filter_searches_all_categories_and_navigation_follows_it() {
+    use crossterm::event::KeyCode;
+    let mut app = app_with_two_categories();
+    app.start_filter();
+    for c in "logs".chars() {
+        app.handle_filter_key(KeyCode::Char(c));
+    }
+    assert_eq!(app.view_items(), vec![(1, 0)]);
+
+    // Toggling acts on the filtered hit, not on category 0's first item.
+    app.item_list_state.select(Some(0));
+    app.toggle_selected();
+    assert!(app.categories[1].items[0].selected);
+    assert!(!app.categories[0].items[0].selected);
+
+    // Esc clears the filter and restores the category list.
+    app.handle_filter_key(KeyCode::Esc);
+    assert!(app.filter.is_empty() && !app.filter_active);
+    assert_eq!(app.view_items().len(), 2);
+}
+
+#[test]
+fn next_and_previous_item_wrap_over_the_visible_list() {
+    let mut app = app_with_two_categories();
+    app.item_list_state.select(Some(1));
+    app.next_item();
+    assert_eq!(app.item_list_state.selected(), Some(0));
+    app.previous_item();
+    assert_eq!(app.item_list_state.selected(), Some(1));
+}
+
+#[test]
+fn hide_empty_hides_scanned_empty_cleaners_but_never_selected_ones() {
+    use cleansys_core::{ScanBoard, ScanInfo};
+    let mut app = app_with_two_categories();
+    let mut board = ScanBoard::new(&app.categories);
+    board.start(3);
+    board.record(
+        0,
+        0,
+        ScanInfo {
+            bytes: 10,
+            ..Default::default()
+        },
+    );
+    board.record(0, 1, ScanInfo::default());
+    board.record(1, 0, ScanInfo::default());
+    app.board = board;
+    assert_eq!(app.view_items(), vec![(0, 0)]); // Trash hidden
+                                                // System category fully empty -> skipped by Tab navigation.
+    app.next_category();
+    assert_eq!(app.category_index, 0);
+
+    app.categories[0].items[1].selected = true;
+    assert_eq!(app.view_items(), vec![(0, 0), (0, 1)]);
+
+    app.toggle_hide_empty();
+    assert_eq!(app.view_items().len(), 2);
+}

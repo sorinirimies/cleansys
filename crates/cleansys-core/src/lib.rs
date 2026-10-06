@@ -26,6 +26,9 @@ pub mod engine;
 /// Framework-agnostic domain model (cleaner items, categories, run status).
 pub mod model;
 
+/// Background scanning: how much can every cleaner free?
+pub mod scan;
+
 /// Persisted user preferences (theme, etc.), shared by the TUI and GUI.
 pub mod settings;
 
@@ -44,6 +47,7 @@ pub use cleaners::cleaned_item::{
 };
 pub use cleaners::{system_cleaners, user_cleaners};
 pub use model::{load_categories, select_recommended, CleanerCategory, CleanerItem, Risk, Status};
+pub use scan::{spawn_scan, ScanBoard, ScanInfo};
 pub use settings::{load_settings, save_settings, Settings};
 pub use theme::{theme_by_index, theme_index_by_name, AppTheme, Rgb, THEME_COUNT, THEME_NAMES};
 pub use utils::{check_root, confirm, format_size, get_size, print_error, print_header};

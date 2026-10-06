@@ -7,7 +7,7 @@ use ratatui::{
     Frame,
 };
 // Using tui-checkbox library for consistent checkbox symbols across the application
-use tui_checkbox::{symbols as checkbox_symbols, Checkbox};
+use tui_checkbox::symbols as checkbox_symbols;
 use tui_spinner::{FluxFrames, FluxSpinner};
 
 use crate::app::{App, ChartType, CleanedItemType};
@@ -173,32 +173,25 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_main_content(f: &mut Frame, app: &mut App, area: Rect) {
-    // Adjust layout based on terminal width
-    let (categories_percent, content_percent) = if app.terminal_width < 80 {
-        // Narrow terminals: give more space to content
-        (25, 75)
-    } else if app.terminal_width < 120 {
-        // Medium terminals: balanced layout
-        (30, 70)
+    // Responsive: a sidebar of categories on wide terminals; on narrow ones the
+    // sidebar is replaced by a one-line category bar (Tab / Shift+Tab to switch).
+    let use_sidebar = area.width >= 90;
+    let content = if use_sidebar {
+        let sidebar_w = (area.width * 28 / 100).clamp(26, 40);
+        let chunks = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Length(sidebar_w), Constraint::Min(30)])
+            .split(area);
+        render_categories(f, app, chunks[0]);
+        chunks[1]
     } else {
-        // Wide terminals: can afford more space for categories
-        (35, 65)
+        area
     };
 
-    let horizontal_chunks = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(categories_percent), // Categories
-            Constraint::Percentage(content_percent),    // Cleaners/Details
-        ])
-        .split(area);
-
-    render_categories(f, app, horizontal_chunks[0]);
-
     if app.detailed_view {
-        render_details(f, app, horizontal_chunks[1]);
+        render_details(f, app, content);
     } else {
-        render_cleaners(f, app, horizontal_chunks[1]);
+        render_cleaner_pane(f, app, content, !use_sidebar);
     }
 }
 
@@ -889,51 +882,203 @@ fn render_removed_items_window(f: &mut Frame, app: &mut App, area: Rect) {
     f.render_widget(block, area);
 }
 
-fn render_categories(f: &mut Frame, app: &App, area: Rect) {
-    // Add icons to category names
-    let categories: Vec<ListItem> = app
-        .categories
+/// Colour a size by how much it is: small = normal, big = warm.
+fn size_style(bytes: u64) -> Style {
+    const GB: u64 = 1 << 30;
+    const MB: u64 = 1 << 20;
+    if bytes >= 5 * GB {
+        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+    } else if bytes >= 500 * MB {
+        Style::default().fg(Color::Yellow)
+    } else {
+        Style::default().fg(Color::White)
+    }
+}
+
+/// `left` spans, then `right` pushed against the right edge of `width` columns.
+fn row_line<'a>(mut left: Vec<Span<'a>>, right: Span<'a>, width: usize) -> Line<'a> {
+    let used: usize = left
         .iter()
-        .enumerate()
-        .map(|(i, category)| {
-            let content = Line::from(format!("{} ({})", category.name, category.description));
-            let style = if i == app.category_index {
+        .map(|s| s.content.chars().count())
+        .sum::<usize>()
+        + right.content.chars().count();
+    let gap = width.saturating_sub(used).max(1);
+    left.push(Span::raw(" ".repeat(gap)));
+    left.push(right);
+    Line::from(left)
+}
+
+/// `true` for categories on the root/system side (kept visibly separate).
+fn is_root_category(c: &cleansys_core::CleanerCategory) -> bool {
+    c.name == "System Cleaners" || c.name.ends_with(cleansys_core::model::ROOT_SUFFIX)
+}
+
+/// Scan progress / total, for block titles.
+fn scan_status(app: &App) -> String {
+    if app.board.is_scanning() {
+        let done = app.board.total - app.board.pending;
+        format!(
+            "{} scanning {done}/{}",
+            Status::Running.get_animation_frame(app.animation_frame),
+            app.board.total
+        )
+    } else if app.board.complete() {
+        format!("{} can be freed", format_size(app.board.total_bytes()))
+    } else {
+        String::new()
+    }
+}
+
+fn render_categories(f: &mut Frame, app: &App, area: Rect) {
+    let inner_w = area.width.saturating_sub(4) as usize;
+    let mut items: Vec<ListItem> = Vec::new();
+    let mut shown_user_header = false;
+    let mut shown_root_header = false;
+
+    for (i, category) in app.categories.iter().enumerate() {
+        if !app
+            .board
+            .category_visible(&app.categories, i, app.hide_empty)
+        {
+            continue;
+        }
+        let root = is_root_category(category);
+        if !root && !shown_user_header {
+            shown_user_header = true;
+            items.push(ListItem::new(Line::from(Span::styled(
+                "USER LAND",
+                Style::default()
+                    .fg(Color::DarkGray)
+                    .add_modifier(Modifier::BOLD),
+            ))));
+        }
+        if root && !shown_root_header {
+            shown_root_header = true;
+            items.push(ListItem::new(Line::from(Span::styled(
+                "SYSTEM · ROOT",
+                Style::default()
+                    .fg(Color::DarkGray)
+                    .add_modifier(Modifier::BOLD),
+            ))));
+        }
+
+        let active = i == app.category_index && app.filter.is_empty();
+        let ticked = category.items.iter().filter(|it| it.selected).count();
+        let name = category
+            .name
+            .trim_end_matches(cleansys_core::model::ROOT_SUFFIX)
+            .to_string();
+        let mut left = vec![Span::raw(if active { "▶ " } else { "  " }), Span::raw(name)];
+        if ticked > 0 {
+            left.push(Span::styled(
+                format!(" ({ticked}✓)"),
+                Style::default().fg(Color::Green),
+            ));
+        }
+        let right = match app.board.category_bytes(i) {
+            Some(b) if b > 0 => Span::styled(format_size(b), size_style(b)),
+            Some(_) => Span::styled("—", Style::default().fg(Color::DarkGray)),
+            None if app.board.is_scanning() => {
+                Span::styled("…", Style::default().fg(Color::DarkGray))
+            }
+            None => Span::raw(""),
+        };
+        let style = if active {
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD)
+        } else {
+            Style::default()
+        };
+        items.push(ListItem::new(row_line(left, right, inner_w)).style(style));
+    }
+
+    let list = List::new(items).block(
+        Block::default()
+            .title("📂 Categories")
+            .title_bottom(Line::from(scan_status(app)).right_aligned())
+            .borders(Borders::ALL),
+    );
+    f.render_widget(list, area);
+}
+
+/// The list of cleaners (+ optional category bar and detail box).
+fn render_cleaner_pane(f: &mut Frame, app: &mut App, area: Rect, show_category_bar: bool) {
+    let show_detail = area.height >= 18;
+    let mut constraints = Vec::new();
+    if show_category_bar {
+        constraints.push(Constraint::Length(1));
+    }
+    constraints.push(Constraint::Min(5));
+    if show_detail {
+        constraints.push(Constraint::Length(6));
+    }
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints(constraints)
+        .split(area);
+    let mut idx = 0;
+
+    if show_category_bar {
+        let cat = &app.categories[app.category_index];
+        let visible: Vec<usize> = (0..app.categories.len())
+            .filter(|i| {
+                app.board
+                    .category_visible(&app.categories, *i, app.hide_empty)
+            })
+            .collect();
+        let pos = visible
+            .iter()
+            .position(|i| *i == app.category_index)
+            .map(|p| p + 1)
+            .unwrap_or(1);
+        let size = app
+            .board
+            .category_bytes(app.category_index)
+            .filter(|b| *b > 0)
+            .map(|b| format!("  {}", format_size(b)))
+            .unwrap_or_default();
+        let bar = Paragraph::new(Line::from(vec![
+            Span::styled("‹ ", Style::default().fg(Color::DarkGray)),
+            Span::styled(
+                cat.name.clone(),
                 Style::default()
                     .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD)
-            } else {
-                Style::default()
-            };
-            ListItem::new(content).style(style)
-        })
-        .collect();
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!("  {pos}/{}{size}", visible.len()),
+                Style::default().fg(Color::DarkGray),
+            ),
+            Span::styled(" › (Tab)", Style::default().fg(Color::DarkGray)),
+        ]));
+        f.render_widget(bar, chunks[idx]);
+        idx += 1;
+    }
 
-    let categories_list = List::new(categories)
-        .block(
-            Block::default()
-                .title("📂 Categories")
-                .borders(Borders::ALL),
-        )
-        .highlight_style(
-            Style::default()
-                .add_modifier(Modifier::BOLD)
-                .fg(Color::Yellow),
-        );
-
-    f.render_widget(categories_list, area);
+    render_cleaners(f, app, chunks[idx]);
+    idx += 1;
+    if show_detail {
+        render_item_detail(f, app, chunks[idx]);
+    }
 }
 
 fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
-    let current_category = &app.categories[app.category_index];
+    let inner_w = area.width.saturating_sub(4) as usize; // borders + highlight symbol
+    let visible = app.view_items();
+    let filtering = !app.filter.trim().is_empty();
 
-    let items: Vec<ListItem> = current_category
-        .items
+    let items: Vec<ListItem> = visible
         .iter()
-        .map(|item| {
-            let mut parts = vec![];
+        .map(|&(ci, ii)| {
+            let item = &app.categories[ci].items[ii];
+            let info = app.board.get(ci, ii);
 
-            // Create checkbox using tui-checkbox with predefined symbols
-            // We use the ASCII bracket symbols for maximum terminal compatibility
+            let checkbox_symbol = if item.selected {
+                checkbox_symbols::CHECKED_X
+            } else {
+                checkbox_symbols::UNCHECKED_SPACE
+            };
             let checkbox_style = if item.selected {
                 Style::default()
                     .fg(Color::Green)
@@ -942,82 +1087,121 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
                 Style::default().fg(Color::White)
             };
 
-            // Use Checkbox::new() with predefined symbols from the library
-            let _checkbox = Checkbox::new("", item.selected)
-                .checked_symbol(checkbox_symbols::CHECKED_X)
-                .unchecked_symbol(checkbox_symbols::UNCHECKED_SPACE);
-
-            // Extract the symbol for use in our composite List item
-            let checkbox_symbol = if item.selected {
-                checkbox_symbols::CHECKED_X
-            } else {
-                checkbox_symbols::UNCHECKED_SPACE
-            };
-
-            parts.push(Span::styled(checkbox_symbol, checkbox_style));
-            parts.push(Span::raw(" "));
-
-            // Name
-            let name_style = if item.requires_root && !app.is_root {
+            let dimmed = (item.requires_root && !app.is_root)
+                || info.is_some_and(|s| s.bytes == 0 && s.error.is_none());
+            let name_style = if dimmed {
                 Style::default().fg(Color::DarkGray)
             } else {
                 Style::default().fg(Color::White)
             };
-            parts.push(Span::styled(&item.name, name_style));
 
-            // Root indicator
-            if item.requires_root {
-                parts.push(Span::styled(" (root)", Style::default().fg(Color::Red)));
-            }
-
-            // Status indicator
-            if let Some(status) = &item.status {
-                match status {
-                    Status::Running => {
-                        parts.push(Span::styled(
-                            " [Running]",
-                            Style::default().fg(Color::Yellow),
-                        ));
-                    }
-                    Status::Success(msg) => {
-                        parts.push(Span::styled(
-                            format!(" [{}]", msg),
-                            Style::default().fg(Color::Green),
-                        ));
-                    }
-                    Status::Error(msg) => {
-                        parts.push(Span::styled(
-                            format!(" [Error: {}]", msg),
-                            Style::default().fg(Color::Red),
-                        ));
-                    }
-                    Status::Pending => {
-                        parts.push(Span::styled(
-                            " [Pending]",
-                            Style::default().fg(Color::DarkGray),
-                        ));
-                    }
+            let mut left = vec![
+                Span::styled(checkbox_symbol, checkbox_style),
+                Span::raw(" "),
+                Span::styled(item.name.clone(), name_style),
+            ];
+            match item.risk {
+                cleansys_core::Risk::Safe => {}
+                cleansys_core::Risk::Moderate => {
+                    left.push(Span::styled(" ~", Style::default().fg(Color::Yellow)))
                 }
+                cleansys_core::Risk::Caution => left.push(Span::styled(
+                    " !",
+                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                )),
             }
-
-            // If item has cleaned bytes, show it
-            if item.bytes_cleaned > 0 {
-                parts.push(Span::styled(
-                    format!(" (Freed: {})", format_size(item.bytes_cleaned)),
-                    Style::default().fg(Color::Green),
+            if item.requires_root {
+                left.push(Span::styled(" (root)", Style::default().fg(Color::Red)));
+            }
+            if filtering {
+                left.push(Span::styled(
+                    format!("  · {}", app.categories[ci].name),
+                    Style::default().fg(Color::DarkGray),
                 ));
             }
 
-            ListItem::new(Line::from(parts))
+            // Right column: run status, else scanned size.
+            let right = match &item.status {
+                Some(Status::Running) => Span::styled(
+                    format!(
+                        "{} running",
+                        Status::Running.get_animation_frame(app.animation_frame)
+                    ),
+                    Style::default().fg(Color::Yellow),
+                ),
+                Some(Status::Success(_)) if item.bytes_cleaned > 0 => Span::styled(
+                    format!("✓ freed {}", format_size(item.bytes_cleaned)),
+                    Style::default().fg(Color::Green),
+                ),
+                Some(Status::Success(_)) => {
+                    Span::styled("✓ done", Style::default().fg(Color::Green))
+                }
+                Some(Status::Error(_)) => Span::styled("✗ error", Style::default().fg(Color::Red)),
+                Some(Status::Pending) => {
+                    Span::styled("queued", Style::default().fg(Color::DarkGray))
+                }
+                None => match info {
+                    Some(s) if s.error.is_some() => {
+                        Span::styled("scan failed", Style::default().fg(Color::Red))
+                    }
+                    Some(s) if s.bytes > 0 => {
+                        Span::styled(format_size(s.bytes), size_style(s.bytes))
+                    }
+                    Some(_) => Span::styled("—", Style::default().fg(Color::DarkGray)),
+                    None if app.board.is_scanning() => {
+                        Span::styled("…", Style::default().fg(Color::DarkGray))
+                    }
+                    None => Span::raw(""),
+                },
+            };
+            ListItem::new(row_line(left, right, inner_w))
         })
         .collect();
 
-    let items_list = List::new(items)
-        .block(
-            Block::default()
-                .title(format!("{} Items", current_category.name))
-                .borders(Borders::ALL),
+    let title = if filtering || app.filter_active {
+        format!(
+            "Cleaners — search: {}{}",
+            app.filter,
+            if app.filter_active { "▏" } else { "" }
         )
+    } else {
+        let c = &app.categories[app.category_index];
+        let hidden = if app.hide_empty && app.board.complete() {
+            "  (empty hidden, e: show)"
+        } else {
+            ""
+        };
+        format!(
+            "{}{hidden}",
+            c.name.trim_end_matches(cleansys_core::model::ROOT_SUFFIX)
+        )
+    };
+
+    let mut block = Block::default().title(title).borders(Borders::ALL);
+    if app.filter_active {
+        block = block.border_style(Style::default().fg(Color::Cyan));
+    }
+    let block = block.title_bottom(
+        Line::from(format!("{}   ~ moderate  ! caution", scan_status(app))).right_aligned(),
+    );
+
+    if visible.is_empty() {
+        let msg = if filtering {
+            "No cleaner matches your search."
+        } else if app.board.is_scanning() {
+            "Scanning your system…"
+        } else {
+            "Nothing to clean here — already tidy ✨  (e: show empty)"
+        };
+        f.render_widget(
+            Paragraph::new(Span::styled(msg, Style::default().fg(Color::DarkGray))).block(block),
+            area,
+        );
+        return;
+    }
+
+    let items_list = List::new(items)
+        .block(block)
         .highlight_style(
             Style::default()
                 .add_modifier(Modifier::BOLD)
@@ -1028,76 +1212,125 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
     f.render_stateful_widget(items_list, area, &mut app.item_list_state);
 }
 
-fn render_details(f: &mut Frame, app: &App, area: Rect) {
-    let current_category = &app.categories[app.category_index];
-
-    if let Some(selected) = app.item_list_state.selected() {
-        if selected < current_category.items.len() {
-            let item = &current_category.items[selected];
-
-            let mut text = vec![
-                Line::from(vec![Span::styled(
-                    format!("{} Keyboard Controls", item.name),
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )]),
-                Line::from(vec![Span::raw("")]),
-                Line::from(vec![
-                    Span::raw("Description: "),
-                    Span::styled(&item.description, Style::default().fg(Color::White)),
-                ]),
-                Line::from(vec![Span::raw("")]),
-                Line::from(vec![
-                    Span::raw("Requires root: "),
-                    if item.requires_root {
-                        Span::styled("Yes", Style::default().fg(Color::Red))
-                    } else {
-                        Span::styled("No", Style::default().fg(Color::Green))
-                    },
-                ]),
-                Line::from(vec![
-                    Span::raw("Status: "),
-                    match &item.status {
-                        Some(Status::Running) => {
-                            let spinner = Status::Running.get_animation_frame(app.animation_frame);
-                            Span::styled(
-                                format!("{} Running...", spinner),
-                                Style::default().fg(Color::Yellow),
-                            )
-                        }
-                        Some(Status::Success(msg)) => {
-                            Span::styled(format!("✓ {}", msg), Style::default().fg(Color::Green))
-                        }
-                        Some(Status::Error(msg)) => Span::styled(
-                            format!("✗ Error: {}", msg),
-                            Style::default().fg(Color::Red),
-                        ),
-                        Some(Status::Pending) => {
-                            Span::styled("• Waiting to start", Style::default().fg(Color::DarkGray))
-                        }
-                        None => Span::raw("Not run"),
-                    },
-                ]),
-            ];
-
-            if item.bytes_cleaned > 0 {
-                text.push(Line::from(vec![
-                    Span::raw("Space freed: "),
-                    Span::styled(
-                        format!("{:.2} GB", item.bytes_cleaned as f64 / 1_073_741_824.0),
-                        Style::default().fg(Color::Green),
-                    ),
-                ]));
-            }
-
-            let details = Paragraph::new(text)
-                .block(Block::default().title("Details").borders(Borders::ALL))
-                .wrap(Wrap { trim: true });
-
-            f.render_widget(details, area);
+/// Description + scan details of the highlighted cleaner.
+fn render_item_detail(f: &mut Frame, app: &App, area: Rect) {
+    let mut lines: Vec<Line> = Vec::new();
+    if let Some((ci, ii)) = app.current_item() {
+        let item = &app.categories[ci].items[ii];
+        let info = app.board.get(ci, ii);
+        let risk = match item.risk {
+            cleansys_core::Risk::Safe => ("safe", Color::Green),
+            cleansys_core::Risk::Moderate => ("moderate", Color::Yellow),
+            cleansys_core::Risk::Caution => ("CAUTION", Color::Red),
+        };
+        let mut head = vec![
+            Span::styled(
+                item.name.clone(),
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw("  "),
+            Span::styled(format!("[{}]", risk.0), Style::default().fg(risk.1)),
+        ];
+        if item.requires_root {
+            head.push(Span::styled(" [root]", Style::default().fg(Color::Red)));
+        }
+        lines.push(Line::from(head));
+        lines.push(Line::from(item.description.clone()));
+        lines.push(Line::from(match info {
+            Some(s) if s.error.is_some() => Span::styled(
+                format!("Scan failed: {}", s.error.clone().unwrap_or_default()),
+                Style::default().fg(Color::Red),
+            ),
+            Some(s) if s.bytes > 0 => Span::styled(
+                format!("Would free {} in {} item(s)", format_size(s.bytes), s.items),
+                size_style(s.bytes),
+            ),
+            Some(_) => Span::styled(
+                "Nothing to clean right now",
+                Style::default().fg(Color::DarkGray),
+            ),
+            None => Span::styled("Not measured yet…", Style::default().fg(Color::DarkGray)),
+        }));
+        if let Some(top) = info.and_then(|s| s.top_path.as_ref()) {
+            lines.push(Line::from(Span::styled(
+                format!("Biggest: {top}"),
+                Style::default().fg(Color::DarkGray),
+            )));
         }
     }
+    let widget = Paragraph::new(lines)
+        .block(Block::default().title("Details").borders(Borders::ALL))
+        .wrap(Wrap { trim: true });
+    f.render_widget(widget, area);
+}
+
+fn render_details(f: &mut Frame, app: &App, area: Rect) {
+    let Some((ci, ii)) = app.current_item() else {
+        return;
+    };
+    let item = &app.categories[ci].items[ii];
+
+    let mut text = vec![
+        Line::from(vec![Span::styled(
+            format!("{} Keyboard Controls", item.name),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )]),
+        Line::from(vec![Span::raw("")]),
+        Line::from(vec![
+            Span::raw("Description: "),
+            Span::styled(&item.description, Style::default().fg(Color::White)),
+        ]),
+        Line::from(vec![Span::raw("")]),
+        Line::from(vec![
+            Span::raw("Requires root: "),
+            if item.requires_root {
+                Span::styled("Yes", Style::default().fg(Color::Red))
+            } else {
+                Span::styled("No", Style::default().fg(Color::Green))
+            },
+        ]),
+        Line::from(vec![
+            Span::raw("Status: "),
+            match &item.status {
+                Some(Status::Running) => {
+                    let spinner = Status::Running.get_animation_frame(app.animation_frame);
+                    Span::styled(
+                        format!("{} Running...", spinner),
+                        Style::default().fg(Color::Yellow),
+                    )
+                }
+                Some(Status::Success(msg)) => {
+                    Span::styled(format!("✓ {}", msg), Style::default().fg(Color::Green))
+                }
+                Some(Status::Error(msg)) => {
+                    Span::styled(format!("✗ Error: {}", msg), Style::default().fg(Color::Red))
+                }
+                Some(Status::Pending) => {
+                    Span::styled("• Waiting to start", Style::default().fg(Color::DarkGray))
+                }
+                None => Span::raw("Not run"),
+            },
+        ]),
+    ];
+
+    if item.bytes_cleaned > 0 {
+        text.push(Line::from(vec![
+            Span::raw("Space freed: "),
+            Span::styled(
+                format_size(item.bytes_cleaned),
+                Style::default().fg(Color::Green),
+            ),
+        ]));
+    }
+
+    let details = Paragraph::new(text)
+        .block(Block::default().title("Details").borders(Borders::ALL))
+        .wrap(Wrap { trim: true });
+    f.render_widget(details, area);
 }
 
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
@@ -1361,7 +1594,12 @@ fn render_help(f: &mut Frame, area: Rect) {
         Line::from(vec![Span::raw(
             "  c: Cycle chart type (Bar → Count Pie → Size Pie → Bar)",
         )]),
-        Line::from(vec![Span::raw("  /: Search in detailed view")]),
+        Line::from(vec![Span::raw(
+            "  /: Filter cleaners across all categories (Esc clears)",
+        )]),
+        Line::from(vec![Span::raw(
+            "  e: Hide/show cleaners with nothing to clean   R: Re-scan sizes",
+        )]),
         Line::from(vec![Span::raw("")]),
         Line::from(vec![Span::styled(
             "🎛️ Advanced Controls:",

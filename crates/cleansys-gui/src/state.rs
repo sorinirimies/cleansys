@@ -4,19 +4,6 @@ use cleansys_core::{CleanerCategory, Status};
 
 use crate::theme::ThemeColors;
 
-/// What a background scan learned about one cleaner.
-#[derive(Debug, Clone, Default, PartialEq, Eq)]
-pub struct ScanInfo {
-    /// Bytes this cleaner would free right now.
-    pub bytes: u64,
-    /// Number of files/directories it would remove.
-    pub items: usize,
-    /// Path of the biggest item, for the detail line.
-    pub top_path: Option<String>,
-    /// Set when the scan failed.
-    pub error: Option<String>,
-}
-
 /// Top-level state for the CleanSys GUI application.
 pub struct CleanSysGui {
     /// Cleaner categories and items (shared domain model from `cleansys-core`).
@@ -59,13 +46,8 @@ pub struct CleanSysGui {
     pub needs_admin_notice: bool,
     /// Text in the search box ("" = no filter).
     pub search: String,
-    /// Background scan result per cleaner, shaped like `categories`:
-    /// `None` = not measured yet.
-    pub scan: Vec<Vec<Option<ScanInfo>>>,
-    /// Scan tasks still running.
-    pub scan_pending: usize,
-    /// Scan tasks started in the current scan.
-    pub scan_total: usize,
+    /// Background scan results (sizes per cleaner/category).
+    pub board: cleansys_core::ScanBoard,
     /// Whether cleaners with nothing to clean are hidden (after a scan).
     pub hide_empty: bool,
     /// Whether the activity log drawer is open.
@@ -107,10 +89,7 @@ impl CleanSysGui {
                 item.selected = settings.is_selected(&category.name, &item.name);
             }
         }
-        let scan = categories
-            .iter()
-            .map(|c| vec![None; c.items.len()])
-            .collect();
+        let board = cleansys_core::ScanBoard::new(&categories);
         Self {
             categories,
             logs: Vec::new(),
@@ -131,9 +110,7 @@ impl CleanSysGui {
             operations_completed: 0,
             needs_admin_notice: false,
             search: String::new(),
-            scan,
-            scan_pending: 0,
-            scan_total: 0,
+            board,
             hide_empty: true,
             show_log: false,
             schedule_open: false,
@@ -144,84 +121,49 @@ impl CleanSysGui {
         }
     }
 
-    /// A scan has finished for every cleaner.
-    pub fn scan_complete(&self) -> bool {
-        self.scan_total > 0 && self.scan_pending == 0
-    }
-
     /// Scan result for a cleaner, if measured.
-    pub fn scan_info(&self, cat: usize, item: usize) -> Option<&ScanInfo> {
-        self.scan.get(cat)?.get(item)?.as_ref()
+    pub fn scan_info(&self, cat: usize, item: usize) -> Option<&cleansys_core::ScanInfo> {
+        self.board.get(cat, item)
     }
 
-    /// Whether this cleaner is hidden by "Hide empty" (scanned, nothing found,
-    /// no error, and not ticked).
-    fn is_hidden_empty(&self, cat: usize, item: usize) -> bool {
-        self.hide_empty
-            && self.scan_complete()
-            && self
-                .scan_info(cat, item)
-                .is_some_and(|s| s.bytes == 0 && s.error.is_none())
-            && !self.categories[cat].items[item].selected
-    }
-
-    /// Cleaners to list in the main pane: search hits across all categories,
-    /// or the active category (minus hidden-empty ones).
+    /// Cleaners to list in the main pane (search hits or active category).
     pub fn visible_items(&self) -> Vec<(usize, usize)> {
-        let q = self.search.trim().to_lowercase();
-        let mut out = Vec::new();
-        for (ci, cat) in self.categories.iter().enumerate() {
-            if q.is_empty() && ci != self.active_tab {
-                continue;
-            }
-            for (ii, item) in cat.items.iter().enumerate() {
-                let hit = q.is_empty()
-                    || item.name.to_lowercase().contains(&q)
-                    || item.description.to_lowercase().contains(&q)
-                    || item.id.to_lowercase().contains(&q)
-                    || cat.name.to_lowercase().contains(&q);
-                if hit && (!q.is_empty() || !self.is_hidden_empty(ci, ii)) {
-                    out.push((ci, ii));
-                }
-            }
-        }
-        out
+        self.board.visible_items(
+            &self.categories,
+            self.active_tab,
+            &self.search,
+            self.hide_empty,
+        )
     }
 
     /// Whether a category should appear in the sidebar.
     pub fn category_visible(&self, cat: usize) -> bool {
-        if !(self.hide_empty && self.scan_complete()) {
-            return true;
-        }
-        (0..self.categories[cat].items.len()).any(|i| !self.is_hidden_empty(cat, i))
+        self.board
+            .category_visible(&self.categories, cat, self.hide_empty)
     }
 
-    /// Bytes a whole category could free (sum of scanned cleaners), if any scanned.
+    /// Bytes a whole category could free, if any of it was scanned.
     pub fn category_bytes(&self, cat: usize) -> Option<u64> {
-        let row = self.scan.get(cat)?;
-        row.iter()
-            .any(Option::is_some)
-            .then(|| row.iter().flatten().map(|s| s.bytes).sum())
+        self.board.category_bytes(cat)
     }
 
     /// Total the ticked, scanned cleaners would free.
     pub fn selected_reclaimable(&self) -> u64 {
-        self.selected_indices()
-            .into_iter()
-            .filter_map(|(c, i)| self.scan_info(c, i))
-            .map(|s| s.bytes)
-            .sum()
+        self.board.selected_bytes(&self.categories)
     }
 
     /// Total of everything scanned.
     pub fn total_reclaimable(&self) -> u64 {
-        self.scan.iter().flatten().flatten().map(|s| s.bytes).sum()
+        self.board.total_bytes()
     }
 
     /// If the active tab got hidden, move to the first visible category.
     pub fn ensure_active_visible(&mut self) {
         if !self.category_visible(self.active_tab) {
-            if let Some(first) = (0..self.categories.len()).find(|c| self.category_visible(*c)) {
+            if let Some(first) = self
+                .board
+                .first_visible_category(&self.categories, self.hide_empty)
+            {
                 self.active_tab = first;
             }
         }
