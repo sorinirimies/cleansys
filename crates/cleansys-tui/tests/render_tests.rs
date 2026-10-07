@@ -163,13 +163,13 @@ fn totals_show_a_spinner_instead_of_numbers_while_the_scan_is_running() {
     );
     app.board = board;
 
-    for (w, h) in [(140, 40), (80, 40)] {
+    for (w, h) in [(160, 40), (80, 40)] {
         let text = screen_text(&mut app, w, h);
         assert!(
             text.contains("scanning 1/4"),
             "{w}x{h}: scan progress visible"
         );
-        if w >= 100 {
+        if w >= 150 {
             // the compact footer of narrow terminals only has room for key hints
             assert!(text.contains("measuring"), "{w}x{h}: footer says measuring");
         }
@@ -191,7 +191,7 @@ fn totals_show_a_spinner_instead_of_numbers_while_the_scan_is_running() {
             },
         );
     }
-    let text = screen_text(&mut app, 140, 40);
+    let text = screen_text(&mut app, 160, 40);
     assert!(text.contains("to free") && text.contains("can be freed"));
     assert!(!text.contains("measuring"));
 }
@@ -334,4 +334,19 @@ fn renders_running_state_at_small_terminal_size() {
     let backend = TestBackend::new(60, 18);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal.draw(|f| ui(f, &mut app)).unwrap();
+}
+
+#[test]
+fn wide_footer_keeps_every_key_hint_visible() {
+    let mut app = app_with_categories();
+    let text = screen_text(&mut app, 160, 40);
+    for hint in [
+        "Space: Select",
+        "Enter: Run",
+        "L: Log",
+        "?: Help",
+        "q: Quit",
+    ] {
+        assert!(text.contains(hint), "footer lost `{hint}`:\n{text}");
+    }
 }

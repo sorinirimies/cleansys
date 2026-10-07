@@ -8,7 +8,7 @@
 # or Chromium; override with BROWSER=/path/to/it). GIFs are assembled with ffmpeg.
 #
 # Output (demo/previews/): web-wide.png web-medium.png web-narrow.png web-preview.png
-#                          web-schedule.png web-flow.gif web-responsive.gif
+#                          web-schedule.png web-details.png web-flow.gif web-responsive.gif
 #
 # Requires: nushell, ffmpeg, a Chromium-based browser, and a release build of cleansys-web.
 
@@ -33,9 +33,25 @@ def find-browser [] {
     error make {msg: "no Chromium-based browser found; set BROWSER=/path/to/it"}
 }
 
+# Run the browser with a watchdog: some Chromium builds leave helper processes holding the
+# pipe open after the screenshot is written, which would hang a plain `e>| ignore`. Output
+# goes to /dev/null (no pipe to wait on) and perl's alarm kills a browser that never exits.
+def run-browser [browser: string, args: list<string>] {
+    # The fixture points HOME at the demo directory; a browser started from there has to
+    # create (and time out creating) a brand-new profile every time, so give it the real HOME.
+    let real_home = (^sh -c 'eval echo "~$(id -un)"' | str trim)
+    # No headless instance may be left before/after: a second one would hand off to a
+    # still-exiting first one and never write its screenshot.
+    try { ^pkill -f "headless=new" }
+    with-env {HOME: $real_home} {
+        try { ^perl -e 'alarm 15; exec @ARGV' $browser ...$args o> /dev/null e> /dev/null }
+    }
+    try { ^pkill -f "headless=new" }
+}
+
 def shoot [browser: string, url: string, width: int, height: int, out: string] {
     # --force-device-scale-factor=2 keeps text crisp in the README
-    ^$browser --headless=new --no-sandbox --disable-gpu --hide-scrollbars --force-device-scale-factor=2 $"--window-size=($width),($height)" $"--screenshot=($out)" $url e>| ignore
+    run-browser $browser [--headless=new --no-sandbox --disable-gpu --hide-scrollbars --force-device-scale-factor=2 $"--window-size=($width),($height)" $"--screenshot=($out)" $url]
     print $"✓ ($out)"
 }
 
@@ -46,7 +62,7 @@ def shoot-narrow [browser: string, url: string, width: int, height: int, out: st
     let page = (mktemp -t cleansys-frame.XXXX | $"($in).html")
     $"<!doctype html><body style='margin:0;background:#11111b'><iframe src='($url)' style='border:0;width:($width)px;height:($height)px;display:block;margin:0 auto'></iframe></body>" | save -f $page
     let raw = (mktemp -t cleansys-narrow.XXXX | $"($in).png")
-    ^$browser --headless=new --no-sandbox --disable-gpu --hide-scrollbars --force-device-scale-factor=2 $"--window-size=($win),($height)" $"--screenshot=($raw)" $"file://($page)" e>| ignore
+    run-browser $browser [--headless=new --no-sandbox --disable-gpu --hide-scrollbars --force-device-scale-factor=2 $"--window-size=($win),($height)" $"--screenshot=($raw)" $"file://($page)"]
     let x = ((($win - $width) / 2 | into int) * 2)
     ^ffmpeg -v error -y -i $raw -vf $"crop=($width * 2):($height * 2):($x):0" $out
     rm -f $page $raw
@@ -110,6 +126,11 @@ def main [] {
     post "/select" {op: "none", back: "/"}
     post "/toggle" {id: "proj-rust", back: "/"}
     post "/toggle" {id: "proj-js-build-caches", back: "/"}
+    post "/toggle" {id: "proj-gradle", back: "/"}
+    # open Gradle's details and untick one path: it is left alone by the clean
+    post "/toggle-entry" {path: ($env.HOME | path join "Projects" "android-shop" "app" "build"), back: "/"}
+    shoot $browser $"($base)/?cat=2&open=proj-gradle" 1100 900 ($out | path join "web-details.png")
+    let f0 = ($tmp | path join "0.png"); shoot $browser $"($base)/?cat=2&open=proj-gradle" 1100 760 $f0
     let f1 = ($tmp | path join "1.png"); shoot $browser $"($base)/?cat=2" 1100 760 $f1
     let f2 = ($tmp | path join "2.png"); shoot $browser $"($base)/confirm" 1100 760 $f2
     post "/run"
@@ -118,7 +139,7 @@ def main [] {
     post "/dismiss"
     wait-scan
     let f4 = ($tmp | path join "4.png"); shoot $browser $"($base)/?cat=2" 1100 760 $f4
-    make-gif [$f1 $f2 $f3 $f4] ($out | path join "web-flow.gif") 2.0 900
+    make-gif [$f0 $f1 $f2 $f3 $f4] ($out | path join "web-flow.gif") 2.0 900
 
     ^pkill -f "release/cleansys-web"
     try { job kill $server }

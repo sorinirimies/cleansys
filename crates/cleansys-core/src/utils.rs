@@ -159,8 +159,24 @@ pub fn execute_with_sudo(command: &str, args: &[&str]) -> Result<std::process::O
         .context(format!("Failed to execute command: {}", command))
 }
 
+static QUIET: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// Silence the `print_*` helpers. Full-screen front-ends (the TUI) call this so a
+/// cleaner's progress lines don't scribble over the screen they are drawing.
+pub fn set_quiet(quiet: bool) {
+    QUIET.store(quiet, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Whether the `print_*` helpers are currently silenced.
+pub fn is_quiet() -> bool {
+    QUIET.load(std::sync::atomic::Ordering::Relaxed)
+}
+
 /// Print a header with a colorful banner
 pub fn print_header(text: &str) {
+    if is_quiet() {
+        return;
+    }
     let width = 60;
     let padding = (width - text.len()) / 2;
     let line = "=".repeat(width);
@@ -177,16 +193,25 @@ pub fn print_header(text: &str) {
 
 /// Print a success message
 pub fn print_success(message: &str) {
+    if is_quiet() {
+        return;
+    }
     println!("{} {}", "✓".green().bold(), message);
 }
 
 /// Print a warning message
 pub fn print_warning(message: &str) {
+    if is_quiet() {
+        return;
+    }
     println!("{} {}", "!".yellow().bold(), message);
 }
 
 /// Print an error message
 pub fn print_error(message: &str) {
+    if is_quiet() {
+        return;
+    }
     eprintln!("{} {}", "✗".red().bold(), message);
 }
 

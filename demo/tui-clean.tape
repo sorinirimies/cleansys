@@ -20,11 +20,15 @@ Type "./target/release/cleansys"
 Enter
 Sleep 5s
 
-# Project build output: tick Rust target/, then open it (→) and untick one project
+# Project build output: tick Rust target/ and Gradle build/, then open Gradle (→) and untick one path
 Tab
 Sleep 600ms
 Tab
 Sleep 1500ms
+Space
+Sleep 800ms
+Down
+Sleep 400ms
 Space
 Sleep 800ms
 Right
@@ -33,12 +37,11 @@ Screenshot demo/target/tui-clean-details.png
 Down
 Sleep 500ms
 Space
-Sleep 1200ms
+Sleep 1500ms
 Left
 Sleep 800ms
 
 # ...and the JS framework caches
-Down
 Down
 Down
 Sleep 600ms

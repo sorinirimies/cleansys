@@ -270,3 +270,19 @@ fn remove_dir_all_parallel_deletes_deep_trees_and_never_follows_symlinks() {
         assert!(!link.exists() && keep.join("precious.txt").exists());
     }
 }
+
+#[test]
+fn quiet_mode_toggles_and_print_helpers_stay_safe_either_way() {
+    use cleansys_core::utils::{
+        is_quiet, print_error, print_header, print_success, print_warning, set_quiet,
+    };
+    set_quiet(true);
+    assert!(is_quiet());
+    // No output, no panic.
+    print_header("x");
+    print_success("x");
+    print_warning("x");
+    print_error("x");
+    set_quiet(false);
+    assert!(!is_quiet());
+}

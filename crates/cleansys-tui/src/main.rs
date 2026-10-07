@@ -208,6 +208,9 @@ fn run_tui() -> Result<()> {
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
+    // The screen belongs to the TUI: cleaners must not print progress lines over it.
+    cleansys_core::utils::set_quiet(true);
+
     // Create app state
     let mut app = App::new();
 
@@ -252,6 +255,8 @@ fn run_tui() -> Result<()> {
             Err(e) => break Err(e),
         }
     };
+
+    cleansys_core::utils::set_quiet(false);
 
     // Restore terminal
     disable_raw_mode()?;

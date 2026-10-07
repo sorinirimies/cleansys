@@ -906,7 +906,7 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
 
     let inner_area = block.inner(area);
 
-    if inner_area.width < 125 {
+    if inner_area.width < 150 {
         // Narrow terminals: selection summary on one line, compact key hints below.
         let n = app
             .categories
@@ -959,8 +959,8 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
         let footer_chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([
-                Constraint::Percentage(40), // Status info
-                Constraint::Percentage(60), // Controls
+                Constraint::Length(50), // Status info
+                Constraint::Min(0),     // Controls (right-aligned, take the rest)
             ])
             .split(inner_area);
 

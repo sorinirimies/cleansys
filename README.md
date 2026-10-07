@@ -58,6 +58,9 @@ the sidebar becomes a drop-down on narrow windows.
 </tr><tr>
 <td><b>Preview (dry run)</b><br><img src="demo/previews/web-preview.png" width="430"></td>
 <td><b>Schedule</b><br><img src="demo/previews/web-schedule.png" width="430"></td>
+</tr><tr>
+<td><b>Details — pick exactly which paths go</b> (and the <i>Idle ≥</i> day selector in the bar)<br><img src="demo/previews/web-details.png" width="430"></td>
+<td></td>
 </tr></table>
 
 <p align="center"><img src="demo/previews/web-api.gif" alt="cleansys-web JSON API driven from nushell" width="800"></p>
@@ -66,8 +69,9 @@ the sidebar becomes a drop-down on narrow windows.
 
 | | |
 |---|---|
-| **Run it for real** — confirm → progress → freed → automatic re-scan<br><img src="demo/previews/tui-clean.gif" width="440"> | **Schedule it** — `S`<br><img src="demo/previews/tui-schedule.gif" width="440"> |
+| **Run it for real** — pick paths (`→`), confirm, live progress and the activity log *under the list*, summary, automatic re-scan<br><img src="demo/previews/tui-clean.gif" width="440"> | **Schedule it** — `S`<br><img src="demo/previews/tui-schedule.gif" width="440"> |
 | **User land vs root** — root cleaners ask for your password only when run<br><img src="demo/previews/tui-system-root.gif" width="440"> | **Narrow terminals** — the sidebar collapses to a category bar<br><img src="demo/previews/tui-narrow.gif" width="440"> |
+| **Details** — `→` opens a cleaner: every path with its size, `Space` unticks one<br><img src="demo/previews/tui-details.png" width="440"> | **Done** — the outcome, freed space and activity log stay in the main view; `Esc` dismisses<br><img src="demo/previews/tui-clean-done.png" width="440"> |
 
 ### Web UI
 
