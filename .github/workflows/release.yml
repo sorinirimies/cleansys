@@ -152,6 +152,9 @@ jobs:
       - name: Build GUI
         run: cargo build --release -p cleansys-gui --target ${{ matrix.target }}
 
+      - name: Build web UI
+        run: cargo build --release -p cleansys-web --target ${{ matrix.target }}
+
       # ── Linux: .deb, .rpm ────────────────────────────────────────────────────
       - name: Install Nushell
         if: matrix.os == 'linux'
@@ -190,6 +193,8 @@ jobs:
              dist/cleansys-gui-${{ matrix.target }}${{ matrix.suffix }} || true
           cp target/${{ matrix.target }}/release/cleansys${{ matrix.suffix }} \
              dist/cleansys-tui-${{ matrix.target }}${{ matrix.suffix }} || true
+          cp target/${{ matrix.target }}/release/cleansys-web${{ matrix.suffix }} \
+             dist/cleansys-web-${{ matrix.target }}${{ matrix.suffix }} || true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
@@ -367,7 +372,19 @@ jobs:
           cargo info cleansys-gui@$V 2>/dev/null | grep -q "^cleansys-gui" \
             && echo "⏭️  Already published." || {
               cp README.md crates/cleansys-gui/README.md
-              cargo publish -p cleansys-gui --allow-dirty
+              cargo publish -p cleansys-gui --allow-dirty && sleep 20
+            }
+
+      - name: Publish cleansys-web
+        if: env.HAS_TOKEN == 'true'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          V="${{ needs.validate.outputs.version }}"
+          # Needs Rust 1.98+ (Topcoat): the `stable` toolchain installed above satisfies it.
+          cargo info cleansys-web@$V 2>/dev/null | grep -q "^cleansys-web" \
+            && echo "⏭️  Already published." || {
+              cargo publish -p cleansys-web --allow-dirty
             }
 
   # ── 6. Update AUR ─────────────────────────────────────────────────────────────

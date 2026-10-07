@@ -4,7 +4,7 @@
 
 use std/assert
 use runner.nu *
-use ../ci/package_linux.nu [alien-args, is-linux-package-file, gui-deb-control, tui-deb-control]
+use ../ci/package_linux.nu [alien-args, is-linux-package-file, gui-deb-control, tui-deb-control, web-deb-control]
 
 # ── alien-args ───────────────────────────────────────────────────────────────
 
@@ -111,5 +111,14 @@ def "test package_linux.nu: does not invoke rpmbuild" [] {
 }
 
 # ── Main ────────────────────────────────────────────────────────────────────
+
+def "test web-deb-control: names the package and interpolates version and architecture" [] {
+    let control = (web-deb-control "0.7.2" "arm64")
+    assert ($control | str contains "Package: cleansys-web")
+    assert ($control | str contains "Version: 0.7.2")
+    assert ($control | str contains "Architecture: arm64")
+    assert ($control | str contains "Topcoat")
+    assert (not ($control | str contains "Package: cleansys-gui"))
+}
 
 def main [] { run-tests }

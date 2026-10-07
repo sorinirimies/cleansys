@@ -138,6 +138,9 @@ jobs:
       - name: Build GUI
         run: cargo build --release -p cleansys-gui --target ${{ matrix.target }}
 
+      - name: Build web UI
+        run: cargo build --release -p cleansys-web --target ${{ matrix.target }}
+
       - name: Install Nushell
         run: cargo install nu --locked
 
@@ -161,6 +164,7 @@ jobs:
           mkdir -p dist
           cp target/${{ matrix.target }}/release/cleansys-gui  dist/cleansys-gui-${{ matrix.target }} || true
           cp target/${{ matrix.target }}/release/cleansys      dist/cleansys-tui-${{ matrix.target }} || true
+          cp target/${{ matrix.target }}/release/cleansys-web  dist/cleansys-web-${{ matrix.target }} || true
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v3
@@ -217,15 +221,20 @@ jobs:
       - name: Build GUI for Windows
         run: cargo build --release -p cleansys-gui --target x86_64-pc-windows-gnu
 
+      - name: Build web UI for Windows
+        run: cargo build --release -p cleansys-web --target x86_64-pc-windows-gnu
+
       - name: Stage Windows binaries and build zip
         run: |
           mkdir -p dist
           cp target/x86_64-pc-windows-gnu/release/cleansys-gui.exe     dist/cleansys-gui-x86_64-windows.exe
           cp target/x86_64-pc-windows-gnu/release/cleansys.exe dist/cleansys-tui-x86_64-windows.exe
+          cp target/x86_64-pc-windows-gnu/release/cleansys-web.exe dist/cleansys-web-x86_64-windows.exe
           cd dist
           zip cleansys-${{ needs.validate.outputs.version }}-x86_64-windows.zip \
             cleansys-gui-x86_64-windows.exe \
-            cleansys-tui-x86_64-windows.exe
+            cleansys-tui-x86_64-windows.exe \
+            cleansys-web-x86_64-windows.exe
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v3
@@ -403,5 +412,17 @@ jobs:
           cargo info cleansys@$V 2>/dev/null | grep -q "^cleansys" \
             && echo "⏭️  Already published." || {
               cp README.md crates/cleansys-tui/README.md
-              cargo publish -p cleansys --allow-dirty
+              cargo publish -p cleansys --allow-dirty && sleep 20
+            }
+
+      - name: Publish cleansys-web
+        if: env.HAS_TOKEN == 'true'
+        env:
+          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
+        run: |
+          V="${{ needs.validate.outputs.version }}"
+          # Needs Rust 1.98+ (Topcoat): the `stable` toolchain installed above satisfies it.
+          cargo info cleansys-web@$V 2>/dev/null | grep -q "^cleansys-web" \
+            && echo "⏭️  Already published." || {
+              cargo publish -p cleansys-web --allow-dirty
             }

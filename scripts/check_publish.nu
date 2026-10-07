@@ -17,7 +17,7 @@ def main [] {
 
     # ── 1. Documentation checks ───────────────────────────────────────────────
     print "── Step 1: Documentation checks ──"
-    let doc_crates = ["cleansys" "cleansys-gui"]
+    let doc_crates = ["cleansys" "cleansys-gui" "cleansys-web"]
 
     for crate in $doc_crates {
         print $"  📖 Checking docs for ($crate)..."
@@ -44,8 +44,8 @@ def main [] {
     print ""
 
     # ── 3. Cargo check for TUI and GUI crates ────────────────────────────────
-    print "── Step 3: Cargo check (TUI & GUI) ──"
-    let check_crates = ["cleansys" "cleansys-gui"]
+    print "── Step 3: Cargo check (TUI, GUI & web) ──"
+    let check_crates = ["cleansys" "cleansys-gui" "cleansys-web"]
 
     for crate in $check_crates {
         print $"  🔍 Running cargo check for ($crate)..."

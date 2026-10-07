@@ -117,7 +117,7 @@ cargo build --workspace --release          # binaries in target/release/
 cargo install --path crates/cleansys-tui   # or crates/cleansys-gui
 ```
 
-Pre-built packages (`.deb`, `.rpm`, AppImage, Windows installer, macOS `.dmg`) are on the [Releases](https://github.com/sorinirimies/cleansys/releases) page. `just --list` shows all development tasks.
+Pre-built packages (`.deb` and `.rpm` for the TUI, GUI and web UI, AppImage, Windows installer and zip, macOS `.dmg`, plus raw `cleansys-web-<target>` binaries) are on the [Releases](https://github.com/sorinirimies/cleansys/releases) page; only the latest version's files are kept. `just --list` shows all development tasks.
 
 ## 🚀 Quick start
 

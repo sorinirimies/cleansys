@@ -55,6 +55,19 @@ Homepage: https://github.com/sorinirimies/cleansys
 "
 }
 
+# Build the DEBIAN/control file contents for the local web UI .deb package.
+export def web-deb-control [version: string, arch: string]: nothing -> string {
+    $"Package: cleansys-web
+Version: ($version)
+Architecture: ($arch)
+Maintainer: Sorin Albu-Irimies <sorinirimies@gmail.com>
+Description: CleanSys web — local web UI for system cleanup \(Topcoat\)
+ A server-rendered local web interface with the same cleaners, scheduler and safety rules as the TUI and GUI.
+ Binds to 127.0.0.1 by default; run `cleansys-web` and open the printed URL.
+Homepage: https://github.com/sorinirimies/cleansys
+"
+}
+
 # Convert an already-built .deb into a .rpm using `alien`, and return the
 # path to the produced .rpm file.
 #
@@ -123,7 +136,26 @@ MIT License — see /usr/share/common-licenses/MIT
     run-external "dpkg-deb" "--build" $gui_deb_root $gui_deb_path
     print $"✅ Built cleansys-gui_($version)_($arch).deb"
 
-    # ── .rpm for both (via alien, from the .deb built above) ────────────────
+    # ── .deb for cleansys-web (binary name: cleansys-web) ───────────────────
+    let web_deb_root = $"($dist_dir)/deb-web"
+    mkdir $"($web_deb_root)/DEBIAN"
+    mkdir $"($web_deb_root)/usr/bin"
+    mkdir $"($web_deb_root)/usr/share/doc/cleansys-web"
+
+    cp $"target/($target)/release/cleansys-web" $"($web_deb_root)/usr/bin/cleansys-web"
+
+    (web-deb-control $version $arch) | save -f $"($web_deb_root)/DEBIAN/control"
+
+    $"CleanSys web ($version)
+Copyright 2024 Sorin Albu-Irimies
+MIT License — see /usr/share/common-licenses/MIT
+" | save -f $"($web_deb_root)/usr/share/doc/cleansys-web/copyright"
+
+    let web_deb_path = $"($dist_dir)/cleansys-web_($version)_($arch).deb"
+    run-external "dpkg-deb" "--build" $web_deb_root $web_deb_path
+    print $"✅ Built cleansys-web_($version)_($arch).deb"
+
+    # ── .rpm for all three (via alien, from the .deb built above) ───────────
     let tui_rpm_file = (alien-deb-to-rpm $tui_deb_path $"($dist_dir)/alien-rpm/tui")
     cp $tui_rpm_file $"($dist_dir)/cleansys-($version)-($rpm_arch).rpm"
     print $"✅ Built cleansys-($version)-($rpm_arch).rpm"
@@ -131,6 +163,10 @@ MIT License — see /usr/share/common-licenses/MIT
     let gui_rpm_file = (alien-deb-to-rpm $gui_deb_path $"($dist_dir)/alien-rpm/gui")
     cp $gui_rpm_file $"($dist_dir)/cleansys-gui-($version)-($rpm_arch).rpm"
     print $"✅ Built cleansys-gui-($version)-($rpm_arch).rpm"
+
+    let web_rpm_file = (alien-deb-to-rpm $web_deb_path $"($dist_dir)/alien-rpm/web")
+    cp $web_rpm_file $"($dist_dir)/cleansys-web-($version)-($rpm_arch).rpm"
+    print $"✅ Built cleansys-web-($version)-($rpm_arch).rpm"
 
     print ""
     print "📦 Linux packages:"
