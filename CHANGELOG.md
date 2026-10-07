@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 - fix(core): evict stale project index cache; wipe cached sudo password on drop
 ### 📦 Other Changes
 - ux: show a spinner instead of totals until the scan is done (TUI via tui-spinner, GUI, web)
+### 🔧 Chores
+- chore: bump version to 0.7.6
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.7...v0.7.6
 ## 0.7.7 - 2026-10-07
 ### 🔧 Chores
