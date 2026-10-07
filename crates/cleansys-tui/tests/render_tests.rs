@@ -7,7 +7,7 @@
 //! at all despite being the TUI's entire rendering layer (1600+ lines).
 
 use anyhow::Result;
-use cleansys_core::{CleanedItemType, CleanerCategory, CleanerItem, CleaningResult, RunOptions};
+use cleansys_core::{CleanerCategory, CleanerItem, CleaningResult, RunOptions};
 use cleansys_tui::app::App;
 use cleansys_tui::render::ui;
 use ratatui::backend::TestBackend;

@@ -480,3 +480,202 @@ fn hide_empty_hides_scanned_empty_cleaners_but_never_selected_ones() {
     app.toggle_hide_empty();
     assert_eq!(app.view_items().len(), 2);
 }
+
+// ── clean runs: worker thread, progress state, summary, keys ─────────────────
+
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+
+fn key(app: &mut App, code: KeyCode) {
+    app.handle_key(KeyEvent::new(code, KeyModifiers::NONE))
+        .unwrap();
+}
+
+fn wait_for_run(app: &mut App) {
+    for _ in 0..500 {
+        app.poll_run();
+        if !app.is_running {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("run did not finish");
+}
+
+fn failing_item(name: &str) -> CleanerItem {
+    let mut it = sample_item(name, false);
+    it.function = std::sync::Arc::new(|_o: RunOptions| Err(anyhow::anyhow!("x: disk on fire")));
+    it
+}
+
+#[test]
+fn run_marks_success_and_failure_and_builds_a_summary() {
+    let mut app = app_with_categories();
+    app.confirmation_mode = false;
+    app.categories[0].items[1] = failing_item("Trash");
+    app.categories[0].items[0].selected = true;
+    app.categories[0].items[1].selected = true;
+    app.request_run().unwrap();
+    assert!(app.is_running);
+    assert_eq!(app.run_total, 2);
+    assert!(app.show_log, "activity log opens when a run starts");
+
+    wait_for_run(&mut app);
+
+    assert!(matches!(
+        app.categories[0].items[0].status,
+        Some(cleansys_core::Status::Success(_))
+    ));
+    match &app.categories[0].items[1].status {
+        Some(cleansys_core::Status::Error(m)) => assert_eq!(m, "disk on fire"),
+        other => panic!("expected an error status, got {other:?}"),
+    }
+    assert_eq!(app.run_done, 2);
+    let sum = app.run_summary.clone().expect("summary");
+    assert_eq!((sum.ok, sum.failed, sum.cancelled), (1, 1, false));
+    assert!(app.run.is_none());
+    assert!(app
+        .operation_logs
+        .iter()
+        .any(|l| l.contains("disk on fire")));
+    assert!(
+        app.board.total > 0 || app.board.is_scanning() || !app.categories.is_empty(),
+        "a re-scan is started after the run"
+    );
+}
+
+#[test]
+fn starting_a_run_clears_the_previous_summary_and_log() {
+    let mut app = app_with_categories();
+    app.confirmation_mode = false;
+    app.run_summary = Some(Default::default());
+    app.log("old line");
+    app.categories[0].items[0].selected = true;
+    app.request_run().unwrap();
+    assert!(app.run_summary.is_none());
+    assert!(!app.operation_logs.iter().any(|l| l == "old line"));
+    wait_for_run(&mut app);
+}
+
+#[test]
+fn selection_and_run_keys_are_ignored_while_a_clean_is_running() {
+    let mut app = app_with_categories();
+    app.confirmation_mode = false;
+    app.categories[0].items[0].selected = true;
+    app.request_run().unwrap();
+    assert!(app.is_running);
+
+    let before: Vec<bool> = app.categories[0].items.iter().map(|i| i.selected).collect();
+    key(&mut app, KeyCode::Char(' '));
+    key(&mut app, KeyCode::Char('a'));
+    key(&mut app, KeyCode::Char('A'));
+    key(&mut app, KeyCode::Char('n'));
+    key(&mut app, KeyCode::Char('r'));
+    let after: Vec<bool> = app.categories[0].items.iter().map(|i| i.selected).collect();
+    assert_eq!(before, after, "ticks must not change mid-run");
+    assert!(!app.awaiting_run_confirmation);
+
+    // Navigation still works.
+    let sel = app.item_list_state.selected();
+    key(&mut app, KeyCode::Down);
+    assert_ne!(app.item_list_state.selected(), sel);
+    wait_for_run(&mut app);
+}
+
+#[test]
+fn q_cancels_a_running_clean_instead_of_quitting() {
+    let mut app = app_with_categories();
+    app.confirmation_mode = false;
+    for it in &mut app.categories[0].items {
+        it.selected = true;
+    }
+    app.request_run().unwrap();
+    let quit = app
+        .handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE))
+        .unwrap();
+    assert!(!quit, "q during a run cancels, it must not quit the app");
+    assert!(app.operation_logs.iter().any(|l| l.contains("Cancelling")));
+    wait_for_run(&mut app);
+    // Once idle, q quits again.
+    let quit = app
+        .handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE))
+        .unwrap();
+    assert!(quit);
+}
+
+#[test]
+fn esc_dismisses_the_summary_and_l_toggles_the_log() {
+    let mut app = app_with_categories();
+    app.run_summary = Some(Default::default());
+    key(&mut app, KeyCode::Esc);
+    assert!(app.run_summary.is_none());
+
+    assert!(!app.show_log);
+    key(&mut app, KeyCode::Char('L'));
+    assert!(app.show_log);
+    key(&mut app, KeyCode::Char('L'));
+    assert!(!app.show_log);
+}
+
+#[test]
+fn notice_is_cleared_by_the_next_key() {
+    let mut app = app_with_categories();
+    app.request_run().unwrap();
+    assert!(app.notice.is_some());
+    key(&mut app, KeyCode::Down);
+    assert!(app.notice.is_none());
+}
+
+#[test]
+fn activity_log_is_bounded() {
+    let mut app = app_with_categories();
+    for i in 0..1200 {
+        app.log(format!("line {i}"));
+    }
+    assert!(app.operation_logs.len() <= 500);
+    assert_eq!(app.operation_logs.last().unwrap(), "line 1199");
+    assert_eq!(app.operation_logs.first().unwrap(), "line 700");
+}
+
+#[test]
+fn details_focus_navigation_and_toggle() {
+    use cleansys_core::{ScanBoard, ScanEntry, ScanInfo};
+    let mut app = app_with_categories();
+    let e = |p: &str, skippable| ScanEntry {
+        path: p.into(),
+        bytes: 10,
+        label: "l".into(),
+        skippable,
+    };
+    app.board = ScanBoard::new(&app.categories);
+    app.board.start(1);
+    app.board.record(
+        0,
+        0,
+        ScanInfo {
+            bytes: 20,
+            items: 2,
+            entries: vec![e("/a", true), e("/b", false)],
+            ..ScanInfo::default()
+        },
+    );
+    key(&mut app, KeyCode::Right);
+    assert_eq!(app.expanded, Some((0, 0)));
+    key(&mut app, KeyCode::Char(' '));
+    assert!(!app.board.entry_selected("/a"));
+    key(&mut app, KeyCode::Down);
+    key(&mut app, KeyCode::Char(' ')); // /b is not skippable: no-op
+    assert!(app.board.entry_selected("/b"));
+    key(&mut app, KeyCode::Char('a'));
+    assert!(app.board.entry_selected("/a"));
+    key(&mut app, KeyCode::Left);
+    assert!(app.expanded.is_none() && app.entry_cursor.is_none());
+}
+
+#[test]
+fn idle_days_step_does_nothing_while_running() {
+    let mut app = app_with_categories();
+    app.is_running = true;
+    let before = app.min_age_days;
+    key(&mut app, KeyCode::Char(']'));
+    assert_eq!(app.min_age_days, before);
+}

@@ -42,6 +42,23 @@ Screenshot demo/target/tui-2-preview.png
 Escape
 Sleep 800ms
 
+# Open a cleaner (→): every path it would remove, each tickable (Space), ← to go back
+Right
+Sleep 1500ms
+Screenshot demo/target/tui-details.png
+Down
+Sleep 500ms
+Space
+Sleep 1200ms
+Left
+Sleep 800ms
+
+# Idle-days selector: ] = only projects idle longer, [ = fewer days
+Type "]"
+Sleep 2s
+Type "["
+Sleep 2s
+
 # Search every category at once
 Type "/"
 Sleep 400ms

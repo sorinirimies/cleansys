@@ -1,4 +1,4 @@
-# CleanSys TUI — a real clean run (on the synthetic demo HOME): confirm, progress, freed space, rescan
+# CleanSys TUI — a real clean run (on the synthetic demo HOME): pick paths, confirm, live progress in the main view, summary, rescan
 
 Output demo/previews/tui-clean.gif
 
@@ -20,13 +20,24 @@ Type "./target/release/cleansys"
 Enter
 Sleep 5s
 
-# Project build output: tick Rust target/ and the JS framework caches
+# Project build output: tick Rust target/, then open it (→) and untick one project
 Tab
 Sleep 600ms
 Tab
 Sleep 1500ms
 Space
 Sleep 800ms
+Right
+Sleep 1800ms
+Screenshot demo/target/tui-clean-details.png
+Down
+Sleep 500ms
+Space
+Sleep 1200ms
+Left
+Sleep 800ms
+
+# ...and the JS framework caches
 Down
 Down
 Down
@@ -35,17 +46,18 @@ Space
 Sleep 1500ms
 Screenshot demo/target/tui-clean-1.png
 
-# Run -> confirm
+# Run -> confirm. Progress, the outcome and the activity log stay in the main view.
 Enter
 Sleep 2s
 Type "y"
-Sleep 3s
+Sleep 2500ms
 Screenshot demo/target/tui-clean-2.png
-Sleep 3s
-
-# Back to the list: sizes re-measured, freed space gone
-Escape
 Sleep 5s
 Screenshot demo/target/tui-clean-3.png
+
+# Dismiss the summary: sizes were re-measured, freed space is gone
+Escape
+Sleep 4s
+Screenshot demo/target/tui-clean-4.png
 Type "q"
 Sleep 500ms

@@ -84,6 +84,7 @@ pub struct App {
     pub operation_logs: Vec<String>,
     /// One-line notice shown under the list (cleared on the next key).
     pub notice: Option<String>,
+    /// Ask for confirmation before running (`y` toggles).
     pub confirmation_mode: bool,
     pub password_prompt: PasswordPrompt,
     pub needs_sudo: bool,
@@ -291,9 +292,7 @@ impl App {
                 self.min_age_days = next;
                 self.start_scan();
             }
-            Err(e) => self
-                .operation_logs
-                .push(format!("❌ Could not save the idle-days setting: {e}")),
+            Err(e) => self.log(format!("❌ Could not save the idle-days setting: {e}")),
         }
     }
 
@@ -550,9 +549,7 @@ impl App {
         for (name, function) in selected {
             match function(cleansys_core::RunOptions::preview().with_skips()) {
                 Ok(result) => self.preview_results.push((name, result)),
-                Err(e) => self
-                    .operation_logs
-                    .push(format!("⚠️  Preview failed for {name}: {e}")),
+                Err(e) => self.log(format!("⚠️  Preview failed for {name}: {e}")),
             }
         }
         cleansys_core::engine::skip::clear_skipped();
@@ -990,8 +987,7 @@ impl App {
                             // Authentication failed, stay on prompt
                         }
                         Err(e) => {
-                            self.operation_logs
-                                .push(format!("❌ Authentication error: {}", e));
+                            self.log(format!("❌ Authentication error: {e}"));
                             self.password_prompt.hide();
                             self.needs_sudo = false;
                             self.pending_operations.clear();
@@ -1256,10 +1252,8 @@ impl App {
                     self.select_all_everywhere();
                 }
             }
-            (KeyCode::Char('N'), _) => {
-                if !self.show_help && !self.is_running {
-                    self.deselect_all_everywhere();
-                }
+            (KeyCode::Char('N'), _) if !self.show_help && !self.is_running => {
+                self.deselect_all_everywhere();
             }
             _ => {}
         }
