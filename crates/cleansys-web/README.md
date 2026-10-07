@@ -16,9 +16,16 @@ form, and pages refresh themselves while a scan or a clean is running.
 | URL | |
 |---|---|
 | `/` | cleaners (`?cat=2&q=gradle&hide=0&theme=Nord`) |
+| `/auth` | sudo password prompt (loopback binds only) |
 | `/preview` · `/confirm` · `/progress` | dry-run, confirmation, live progress of a clean |
 | `/schedule` | automatic cleaning (systemd/cron, launchd, Task Scheduler) |
 | `/api/categories` · `/api/status` · `/api/themes` · `/api/health` | JSON |
+
+**Details & selection.** Each cleaner has a *▸ Details* link that lists every path it would remove
+(with sizes) and a checkbox per path, plus *Select all* / *Select none* (`?open=<cleaner-id>` keeps it
+expanded). Unticked paths are skipped by both Preview and Clean. The **Idle ≥** drop-down in the action
+bar sets how long a project must be untouched before its build output (`target/`, `node_modules`, …)
+is offered; it is saved to `engine.json` and triggers a re-scan.
 
 Responsive on the same breakpoints as the GUI and TUI: ≥ 980 px sidebar, ≥ 700 px narrower sidebar,
 below that a category drop-down and icon-only buttons.

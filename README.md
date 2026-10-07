@@ -23,6 +23,8 @@ from a **terminal UI**, a **desktop GUI**, a **local web UI** or the **command l
 - **One-key smart selection** — `r` / ✨ *Recommended* ticks only the safe, user-land cleaners that actually have something to free.
 - **~190 cleaners** — browsers, chat/media apps, IDEs, Gradle/Android, Cargo, npm, Docker, Hugging Face/Ollama, Claude/Codex session data, OS logs and more. See [What it cleans](#-what-it-cleans).
 - **Project build output** — finds `target/`, `build/`, `node_modules/`, `.venv/`… next to a marker file (`Cargo.toml`, `build.gradle.kts`, `package.json`…) and, by default, only in projects you haven't touched for 14 days.
+- **Pick exactly what goes** — expand any cleaner to see every path it would remove (each project's `target/`, each cache folder…) and untick the ones you want to keep, in the TUI, GUI and web UI. See [Details & fine-grained selection](#details--fine-grained-selection).
+- **Idle-days selector** — choose in the app how long a project must be untouched before its build output is offered (any age … 90 days).
 - **User land vs. root, kept separate** — everything that needs your password lives in its own *System · root* section; nothing asks for sudo until you run it.
 - **Risk levels** — `safe`, `moderate` (slow to rebuild, marked `~`) and `caution` (model weights, chat history, marked `!`; never part of bulk/unattended runs).
 - **Automatic cleaning** — daily/weekly/monthly via systemd/cron, launchd or Task Scheduler, configurable from the TUI, GUI or CLI.
@@ -79,6 +81,7 @@ cleansys-web --port 8080 --no-open --theme "Tokyo Night"
 sudo cleansys-web                # optional: run as root (no password prompt needed)
 ```
 
+- **Details**: *▸ Details* under a cleaner lists every path with a checkbox (*Select all* / *Select none*); the **Idle ≥** drop-down in the action bar sets the project idle-days threshold.
 - **Pages**: `/` cleaners (sidebar, search, hide-empty, risk badges, sizes) · `/preview` dry run · `/confirm` → `/progress` real clean · `/schedule` automatic cleaning.
 - **JSON**: `/api/categories` · `/api/status` · `/api/themes` · `/api/health`.
 - **Responsive**: ≥ 980 px sidebar · ≥ 700 px narrower sidebar · below that a category drop-down, icon-only buttons and a full-width *Clean* button.
@@ -184,6 +187,30 @@ Marks next to names: `~` moderate, `!` caution, `(root)` needs your password.
 - **Details**: each cleaner has a *▸ Details* button listing every path with a checkbox — untick the projects you want to keep. The **Idle ≥** drop-down in the action bar sets how long a project must be untouched before its build output is offered.
 - ⏰ **Schedule** opens the automatic-cleaning dialog. 43 themes (Catppuccin, Dracula, Nord, Tokyo Night…), remembered across restarts.
 - Scans and runs happen on background threads — the window never freezes.
+- **Details & day selector** — see [below](#details--fine-grained-selection).
+
+### Details & fine-grained selection
+
+Every front-end can open a cleaner to show **each path it would remove, with its size**, and lets you
+untick individual paths. The classic case is *Rust target/ Directories*: expand it, see
+`stem-mqtt 44 GB · synthazia 40 GB · …`, and keep the project you're still building.
+
+| | Expand | Pick paths |
+|---|---|---|
+| **TUI** | `→` on a cleaner | `↑/↓` move · `Space` tick one · `a` / `n` all / none · `←` / `Esc` back |
+| **GUI** | **▸ Details** on the row | checkbox per path · *Select all* / *Select none* |
+| **Web** | **▸ Details** under the row | checkbox per path · *Select all* / *Select none* |
+
+- The *"X selected"* size and the **Clean N · X GB** button count only the ticked paths; **Preview** and **Run** both leave unticked paths alone.
+- Each cleaner lists its 300 biggest paths (the rest are noted as *"… and N smaller not listed"*).
+- Cleaners that run a command (e.g. `docker prune`) show their paths for information but are removed as a whole — the list says so.
+- Selections are for the current scan; a re-scan resets them.
+
+**Idle-days selector.** Project build output (`target/`, `node_modules`, …) is only offered once its
+project has been untouched for *N* days (default 14) — so a category can look empty while you're actively
+working. Change it right in the app, no config file needed: **TUI** `[` / `]`, **GUI** and **web** the
+*Idle ≥* drop-down in the action bar (any age, 1, 3, 7, 14, 30, 60, 90 days). It's saved to `engine.json`
+(`min_age_days`) and triggers a re-scan.
 
 ### Command line
 
@@ -249,6 +276,8 @@ include `caution` cleaners** unless you explicitly ticked them (scope *selected*
 ```json
 { "scan_roots": ["~/work"], "max_depth": 6, "min_age_days": 14, "exclude": ["~/work/keep-me/**"] }
 ```
+
+`min_age_days` can also be changed live from the TUI (`[` / `]`), GUI and web UI (*Idle ≥* selector).
 
 `min_age_days` (default **14**) means build output is only removed when nothing in the project changed for that
 long — set `0` to disable. `CLEANSYS_SCAN_ROOTS` overrides `scan_roots` (path-list).
