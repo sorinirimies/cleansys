@@ -107,8 +107,12 @@ fn test_categories() -> Vec<cleansys_core::CleanerCategory> {
 }
 
 async fn start() -> SocketAddr {
+    start_with(test_categories()).await
+}
+
+async fn start_with(categories: Vec<cleansys_core::CleanerCategory>) -> SocketAddr {
     sandbox();
-    let state = Shared::new(test_categories());
+    let state = Shared::new(categories);
     state.set_root(false);
     state.start_scan();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -366,4 +370,64 @@ async fn header_badge_switches_to_root_when_a_root_category_is_open() {
         "root category shows ROOT"
     );
     assert!(!root.body.contains("badge user"));
+}
+
+#[tokio::test]
+async fn totals_show_a_spinner_while_the_scan_is_running_and_numbers_after() {
+    use cleansys_core::{
+        CleanedItem, CleanerCategory, CleanerItem, CleaningResult, Risk, cleaner_fn,
+    };
+    let slow = CleanerItem {
+        id: "slow".into(),
+        risk: Risk::Safe,
+        name: "Slow cleaner".into(),
+        description: "takes a moment".into(),
+        requires_root: false,
+        selected: false,
+        function: cleaner_fn(|_| {
+            std::thread::sleep(Duration::from_millis(1500));
+            let mut r = CleaningResult::new();
+            r.add_item(CleanedItem::file(
+                PathBuf::from("/nonexistent/slow"),
+                4096,
+                "t",
+            ));
+            Ok(r)
+        }),
+        bytes_cleaned: 0,
+        last_result: None,
+        status: None,
+    };
+    let addr = start_with(vec![CleanerCategory {
+        name: "User Land Cleaners".into(),
+        description: "u".into(),
+        items: vec![slow],
+    }])
+    .await;
+
+    post(addr, "/toggle", "id=slow&back=%2F").await;
+    let during = get(addr, "/").await;
+    assert!(
+        during.body.contains("class=\"spin\""),
+        "spinner while scanning"
+    );
+    assert!(during.body.contains("measuring"), "label says measuring");
+    assert!(
+        !during.body.contains("selected ·"),
+        "no partial total while scanning"
+    );
+    assert!(
+        during.body.contains("http-equiv=\"refresh\""),
+        "page refreshes itself"
+    );
+
+    wait_for_scan(addr).await;
+    let after = get(addr, "/").await;
+    assert!(!after.body.contains("measuring"));
+    assert!(
+        after.body.contains("selected ·")
+            && after.body.contains("selected ·")
+            && after.body.contains("to free"),
+        "numbers appear once ready"
+    );
 }

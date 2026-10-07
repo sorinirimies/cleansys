@@ -144,7 +144,7 @@ impl CleanSysGui {
 
     /// Bytes a whole category could free, if any of it was scanned.
     pub fn category_bytes(&self, cat: usize) -> Option<u64> {
-        self.board.category_bytes(cat)
+        self.board.category_bytes_when_done(cat)
     }
 
     /// Total the ticked, scanned cleaners would free.

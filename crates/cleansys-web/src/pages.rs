@@ -145,7 +145,7 @@ async fn home(cx: &Cx) -> Result<impl View> {
                     } else {
                         <div class="rows">
                             for i in &rows {
-                                item_row(item: &snap.items[*i], back: back.clone(), show_category: if searching { snap.categories.get(snap.items[*i].category).map(|c| c.name.clone()) } else { None })
+                                item_row(item: &snap.items[*i], back: back.clone(), show_category: if searching { snap.categories.get(snap.items[*i].category).map(|c| c.name.clone()) } else { None }, scanning_now: snap.scanning)
                             }
                         </div>
                     }

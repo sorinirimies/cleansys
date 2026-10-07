@@ -104,6 +104,19 @@ impl ScanBoard {
             .then(|| row.iter().flatten().map(|s| s.bytes).sum())
     }
 
+    /// Every cleaner of the category has been measured (a partial sum would mislead).
+    pub fn category_done(&self, cat: usize) -> bool {
+        self.info
+            .get(cat)
+            .is_some_and(|row| !row.is_empty() && row.iter().all(Option::is_some))
+    }
+
+    /// Category total, only once the whole category is measured.
+    pub fn category_bytes_when_done(&self, cat: usize) -> Option<u64> {
+        self.category_done(cat)
+            .then(|| self.category_bytes(cat).unwrap_or(0))
+    }
+
     pub fn total_bytes(&self) -> u64 {
         self.info.iter().flatten().flatten().map(|s| s.bytes).sum()
     }
@@ -329,6 +342,27 @@ mod tests {
         assert!(!board.category_visible(&c, 1, true));
         assert!(board.category_visible(&c, 1, false));
         assert_eq!(board.first_visible_category(&c, true), Some(0));
+    }
+
+    #[test]
+    fn category_totals_are_only_given_once_every_cleaner_is_measured() {
+        let c = cats();
+        let mut board = ScanBoard::new(&c);
+        board.start(3);
+        assert_eq!(board.category_bytes_when_done(0), None);
+        board.record(
+            0,
+            0,
+            ScanInfo {
+                bytes: 100,
+                ..Default::default()
+            },
+        );
+        assert!(!board.category_done(0), "one of two measured");
+        assert_eq!(board.category_bytes_when_done(0), None);
+        board.record(0, 1, ScanInfo::default());
+        assert_eq!(board.category_bytes_when_done(0), Some(100));
+        assert_eq!(board.category_bytes_when_done(1), None);
     }
 
     #[test]

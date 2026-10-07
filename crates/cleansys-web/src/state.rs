@@ -224,7 +224,7 @@ impl Shared {
                 name: c.name.clone(),
                 description: c.description.clone(),
                 root: is_root_category(c),
-                bytes: g.board.category_bytes(ci),
+                bytes: g.board.category_bytes_when_done(ci),
                 ticked: c.items.iter().filter(|i| i.selected).count(),
                 visible: true,
             });

@@ -707,6 +707,9 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
         "⏳ Cleaning…".to_string()
     } else if selected == 0 {
         "Select cleaners".to_string()
+    } else if scanning {
+        // A partial sum would mislead: say we are still measuring.
+        format!("🧹 Clean {selected} · measuring…")
     } else if reclaim > 0 {
         format!("🧹 Clean {selected} · {}", format_size(reclaim))
     } else {

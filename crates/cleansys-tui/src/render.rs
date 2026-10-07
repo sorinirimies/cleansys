@@ -878,6 +878,42 @@ fn size_style(bytes: u64) -> Style {
     }
 }
 
+/// One animated spinner glyph from the `tui-spinner` crate, as spans that can be dropped
+/// into any `Line` (the widget implements `Into<Text>`).
+fn spinner_spans(app: &App) -> Vec<Span<'static>> {
+    FluxSpinner::new(app.animation_frame as u64)
+        .frames(FluxFrames::CLASSIC)
+        .color(Color::Cyan)
+        .to_lines()
+        .into_iter()
+        .next()
+        .map(|l| l.spans)
+        .unwrap_or_default()
+}
+
+/// ` (X to free)` for the footer — a spinner instead of numbers while the scan is still
+/// running (the partial sum would be misleading).
+fn to_free_spans(app: &App) -> Vec<Span<'static>> {
+    if app.board.is_scanning() {
+        let mut v = vec![Span::styled(" (", Style::default().fg(Color::DarkGray))];
+        v.extend(spinner_spans(app));
+        v.push(Span::styled(
+            " measuring…)",
+            Style::default().fg(Color::DarkGray),
+        ));
+        return v;
+    }
+    let b = app.board.selected_bytes(&app.categories);
+    if b > 0 {
+        vec![Span::styled(
+            format!(" ({} to free)", format_size(b)),
+            Style::default().fg(Color::Green),
+        )]
+    } else {
+        Vec::new()
+    }
+}
+
 /// `left` spans, then `right` pushed against the right edge of `width` columns.
 fn row_line<'a>(mut left: Vec<Span<'a>>, right: Span<'a>, width: usize) -> Line<'a> {
     let used: usize = left
@@ -896,19 +932,23 @@ fn is_root_category(c: &cleansys_core::CleanerCategory) -> bool {
     c.name == "System Cleaners" || c.name.ends_with(cleansys_core::model::ROOT_SUFFIX)
 }
 
-/// Scan progress / total, for block titles.
-fn scan_status(app: &App) -> String {
+/// Scan progress / total, for block titles: a spinner while measuring, the total after.
+fn scan_line(app: &App) -> Line<'static> {
     if app.board.is_scanning() {
         let done = app.board.total - app.board.pending;
-        format!(
-            "{} scanning {done}/{}",
-            Status::Running.get_animation_frame(app.animation_frame),
-            app.board.total
-        )
+        let mut spans = spinner_spans(app);
+        spans.push(Span::styled(
+            format!(" scanning {done}/{}", app.board.total),
+            Style::default().fg(Color::Cyan),
+        ));
+        Line::from(spans)
     } else if app.board.complete() {
-        format!("{} can be freed", format_size(app.board.total_bytes()))
+        Line::from(Span::styled(
+            format!("{} can be freed", format_size(app.board.total_bytes())),
+            Style::default().fg(Color::Green),
+        ))
     } else {
-        String::new()
+        Line::default()
     }
 }
 
@@ -956,12 +996,13 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
         } else {
             String::new()
         };
-        let right = match app.board.category_bytes(i) {
+        let right = match app.board.category_bytes_when_done(i) {
             Some(b) if b > 0 => Span::styled(format_size(b), size_style(b)),
             Some(_) => Span::styled("—", Style::default().fg(Color::DarkGray)),
-            None if app.board.is_scanning() => {
-                Span::styled("…", Style::default().fg(Color::DarkGray))
-            }
+            None if app.board.is_scanning() => spinner_spans(app)
+                .into_iter()
+                .next()
+                .unwrap_or_else(|| Span::raw("…")),
             None => Span::raw(""),
         };
         // Truncate the name so the size column never gets pushed out.
@@ -989,7 +1030,7 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
     let list = List::new(items).block(
         Block::default()
             .title("📂 Categories")
-            .title_bottom(Line::from(scan_status(app)).right_aligned())
+            .title_bottom(scan_line(app).right_aligned())
             .borders(Borders::ALL),
     );
     f.render_widget(list, area);
@@ -1027,24 +1068,35 @@ fn render_cleaner_pane(f: &mut Frame, app: &mut App, area: Rect, show_category_b
             .unwrap_or(1);
         let size = app
             .board
-            .category_bytes(app.category_index)
+            .category_bytes_when_done(app.category_index)
             .filter(|b| *b > 0)
             .map(|b| format!("  {}", format_size(b)))
             .unwrap_or_default();
-        let bar = Paragraph::new(Line::from(vec![
-            Span::styled("‹ ", Style::default().fg(Color::DarkGray)),
-            Span::styled(
-                cat.name.clone(),
-                Style::default()
-                    .fg(Color::Yellow)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                format!("  {pos}/{}{size}", visible.len()),
-                Style::default().fg(Color::DarkGray),
-            ),
-            Span::styled(" › (Tab)", Style::default().fg(Color::DarkGray)),
-        ]));
+        let bar = Paragraph::new(Line::from(
+            vec![
+                Span::styled("‹ ", Style::default().fg(Color::DarkGray)),
+                Span::styled(
+                    cat.name.clone(),
+                    Style::default()
+                        .fg(Color::Yellow)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!("  {pos}/{}{size}", visible.len()),
+                    Style::default().fg(Color::DarkGray),
+                ),
+                Span::styled(" › (Tab)", Style::default().fg(Color::DarkGray)),
+            ]
+            .into_iter()
+            .chain(if app.board.is_scanning() {
+                let mut v = vec![Span::raw("  ")];
+                v.extend(scan_line(app).spans);
+                v
+            } else {
+                Vec::new()
+            })
+            .collect::<Vec<_>>(),
+        ));
         f.render_widget(bar, chunks[idx]);
         idx += 1;
     }
@@ -1142,9 +1194,10 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
                         Span::styled(format_size(s.bytes), size_style(s.bytes))
                     }
                     Some(_) => Span::styled("—", Style::default().fg(Color::DarkGray)),
-                    None if app.board.is_scanning() => {
-                        Span::styled("…", Style::default().fg(Color::DarkGray))
-                    }
+                    None if app.board.is_scanning() => spinner_spans(app)
+                        .into_iter()
+                        .next()
+                        .unwrap_or_else(|| Span::raw("…")),
                     None => Span::raw(""),
                 },
             };
@@ -1175,9 +1228,14 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
     if app.filter_active {
         block = block.border_style(Style::default().fg(Color::Cyan));
     }
-    let block = block.title_bottom(
-        Line::from(format!("{}   ~ moderate  ! caution", scan_status(app))).right_aligned(),
-    );
+    let block = block.title_bottom({
+        let mut spans = scan_line(app).spans;
+        spans.push(Span::styled(
+            "   ~ moderate  ! caution",
+            Style::default().fg(Color::DarkGray),
+        ));
+        Line::from(spans).right_aligned()
+    });
 
     if visible.is_empty() {
         let msg = if filtering {
@@ -1453,7 +1511,6 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             .flat_map(|c| &c.items)
             .filter(|i| i.selected)
             .count();
-        let bytes = app.board.selected_bytes(&app.categories);
         let key = |k: &'static str, label: &'static str, color: Color| {
             vec![
                 Span::styled(k, Style::default().fg(color).add_modifier(Modifier::BOLD)),
@@ -1468,7 +1525,7 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
         hints.extend(key("S", "Sched", Color::Cyan));
         hints.extend(key("?", "Help", Color::Magenta));
         hints.extend(key("q", "Quit", Color::Red));
-        let status = Line::from(vec![
+        let mut status_spans = vec![
             Span::styled("Selected: ", Style::default().fg(Color::White)),
             Span::styled(
                 n.to_string(),
@@ -1476,15 +1533,9 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
                     .fg(Color::Blue)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(
-                if bytes > 0 {
-                    format!(" ({} to free)", format_size(bytes))
-                } else {
-                    String::new()
-                },
-                Style::default().fg(Color::Green),
-            ),
-        ]);
+        ];
+        status_spans.extend(to_free_spans(app));
+        let status = Line::from(status_spans);
         let lines = if inner_area.height >= 2 {
             vec![status, Line::from(hints)]
         } else {
@@ -1502,7 +1553,7 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             .split(inner_area);
 
         // Status information
-        let status_text = vec![Line::from(vec![
+        let mut status_spans = vec![
             Span::styled(
                 "User: ",
                 Style::default()
@@ -1538,18 +1589,9 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
                     .fg(Color::Blue)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled(
-                {
-                    let b = app.board.selected_bytes(&app.categories);
-                    if b > 0 {
-                        format!(" ({} to free)", format_size(b))
-                    } else {
-                        String::new()
-                    }
-                },
-                Style::default().fg(Color::Green),
-            ),
-        ])];
+        ];
+        status_spans.extend(to_free_spans(app));
+        let status_text = vec![Line::from(status_spans)];
 
         // Controls - organized by function
         let controls_text = vec![Line::from(vec![

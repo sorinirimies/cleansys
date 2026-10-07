@@ -209,3 +209,68 @@ fn renders_completed_run_summary() {
     assert!(!app.is_running);
     render_once(&mut app);
 }
+
+/// Render and return the whole screen as one string.
+fn screen_text(app: &mut App, width: u16, height: u16) -> String {
+    let backend = TestBackend::new(width, height);
+    let mut terminal = Terminal::new(backend).expect("create terminal");
+    terminal.draw(|f| ui(f, app)).expect("draw");
+    let buffer = terminal.backend().buffer().clone();
+    buffer
+        .content()
+        .chunks(width as usize)
+        .map(|row| row.iter().map(|c| c.symbol()).collect::<String>())
+        .collect::<Vec<_>>()
+        .join("\n")
+}
+
+#[test]
+fn totals_show_a_spinner_instead_of_numbers_while_the_scan_is_running() {
+    use cleansys_core::{ScanBoard, ScanInfo};
+    let mut app = app_with_categories();
+    app.categories[0].items[0].selected = true;
+    let mut board = ScanBoard::new(&app.categories);
+    board.start(4);
+    // one of four measured: a partial total would be misleading
+    board.record(
+        0,
+        0,
+        ScanInfo {
+            bytes: 5 << 30,
+            ..Default::default()
+        },
+    );
+    app.board = board;
+
+    for (w, h) in [(140, 40), (80, 40)] {
+        let text = screen_text(&mut app, w, h);
+        assert!(
+            text.contains("scanning 1/4"),
+            "{w}x{h}: scan progress visible"
+        );
+        if w >= 100 {
+            // the compact footer of narrow terminals only has room for key hints
+            assert!(text.contains("measuring"), "{w}x{h}: footer says measuring");
+        }
+        assert!(!text.contains("to free"), "{w}x{h}: no partial total");
+        assert!(
+            !text.contains("can be freed"),
+            "{w}x{h}: no partial grand total"
+        );
+    }
+
+    // once finished, the numbers appear
+    for (c, i) in [(0, 1), (1, 0), (1, 1)] {
+        app.board.record(
+            c,
+            i,
+            ScanInfo {
+                bytes: 1 << 20,
+                ..Default::default()
+            },
+        );
+    }
+    let text = screen_text(&mut app, 140, 40);
+    assert!(text.contains("to free") && text.contains("can be freed"));
+    assert!(!text.contains("measuring"));
+}

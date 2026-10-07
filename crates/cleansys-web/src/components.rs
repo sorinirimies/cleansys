@@ -85,6 +85,12 @@ fn cat_size(c: &CatView) -> (String, &'static str) {
     }
 }
 
+/// A small CSS-animated spinner shown instead of numbers that are not ready yet.
+#[component]
+pub async fn spinner() -> Result<impl View> {
+    Ok(view! { <span class="spin" role="status" aria-label="measuring"></span> })
+}
+
 /// Sidebar of categories: USER LAND above SYSTEM · ROOT.
 #[component]
 pub async fn side_nav(
@@ -103,7 +109,9 @@ pub async fn side_nav(
                 <a class=(if c.index == active && q.trim().is_empty() { "cat active" } else { "cat" }) href=(nav_href(c.index, &q, hide))>
                     <span class="name">(c.name.clone())</span>
                     if c.ticked > 0 { <span class="tick">(c.ticked) " ✓"</span> }
-                    <span class=(format!("sz {}", cat_size(c).1))>(cat_size(c).0)</span>
+                    <span class=(format!("sz {}", cat_size(c).1))>
+                        if c.bytes.is_none() && scanning { spinner() } else { (cat_size(c).0) }
+                    </span>
                 </a>
             }
             if !root.is_empty() {
@@ -112,7 +120,9 @@ pub async fn side_nav(
                     <a class=(if c.index == active && q.trim().is_empty() { "cat active" } else { "cat" }) href=(nav_href(c.index, &q, hide))>
                         <span class="name">(c.name.trim_end_matches(cleansys_core::model::ROOT_SUFFIX).to_string())</span>
                         if c.ticked > 0 { <span class="tick">(c.ticked) " ✓"</span> }
-                        <span class=(format!("sz {}", cat_size(c).1))>(cat_size(c).0)</span>
+                        <span class=(format!("sz {}", cat_size(c).1))>
+                            if c.bytes.is_none() && scanning { spinner() } else { (cat_size(c).0) }
+                        </span>
                     </a>
                 }
             }
@@ -146,6 +156,7 @@ pub async fn item_row(
     item: &ItemView,
     back: String,
     show_category: Option<String>,
+    scanning_now: bool,
 ) -> Result<impl View> {
     let size = item.scan.as_ref();
     let class = format!(
@@ -179,8 +190,10 @@ pub async fn item_row(
                         } else {
                             "nothing to clean"
                         }
+                    } else if scanning_now {
+                        spinner() " measuring…"
                     } else {
-                        "…"
+                        "—"
                     }
                 </span>
                 <noscript><button type="submit">"Toggle"</button></noscript>
@@ -204,7 +217,7 @@ pub async fn action_bar(
             <div class="inner">
                 <div class="sum">
                     if snap.scanning {
-                        <b>"Scanning your system… " (snap.scan_done) "/" (snap.scan_total)</b>
+                        <b>spinner() " Scanning your system… " (snap.scan_done) "/" (snap.scan_total)</b>
                         <div class="progress"><span style=(format!("width:{}%", (snap.scan_done * 100).checked_div(snap.scan_total).unwrap_or(0)))></span></div>
                     } else if snap.selected_count == 0 {
                         <b>(fmt(snap.total_bytes)) " can be freed"</b>
@@ -224,7 +237,9 @@ pub async fn action_bar(
                 </form>
                 <a class="btn" href=(if can_run { "/preview" } else { "#" }) aria-disabled=(if can_run { "false" } else { "true" }) title="Show exactly what would be removed (deletes nothing)"><span class="ico">"🔍"</span><span class="lbl">"🔍 Preview"</span></a>
                 <a class="btn primary" href=(if can_run { "/confirm" } else { "#" }) aria-disabled=(if can_run { "false" } else { "true" })>
-                    if can_run {
+                    if can_run && snap.scanning {
+                        "🧹 Clean " (snap.selected_count) " · " spinner() " measuring…"
+                    } else if can_run {
                         "🧹 Clean " (snap.selected_count) " · " (fmt(reclaim))
                     } else {
                         "Select cleaners"

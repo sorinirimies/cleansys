@@ -82,6 +82,9 @@ label.item input[type=checkbox] { width:18px; height:18px; accent-color:var(--ac
 .progress { height:6px; background:var(--line); border-radius:3px; overflow:hidden; margin-top:4px; }
 .progress > span { display:block; height:100%; background:var(--accent); }
 .ico { display:none; }
+.spin { display:inline-block; width:.9em; height:.9em; border:2px solid var(--line); border-top-color:var(--accent); border-radius:50%; vertical-align:-.12em; animation:spin .8s linear infinite; }
+@keyframes spin { to { transform:rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration:2.4s; } }
 
 /* ── tables / pages ── */
 .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }
