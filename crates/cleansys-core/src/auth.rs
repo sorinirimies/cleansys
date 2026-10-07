@@ -29,7 +29,21 @@ fn password_cell() -> &'static Mutex<Option<String>> {
 /// Cache a validated sudo password for later privileged commands to reuse.
 pub fn cache_sudo_password(password: String) {
     if let Ok(mut guard) = password_cell().lock() {
-        *guard = Some(password);
+        if let Some(old) = guard.replace(password) {
+            wipe(old);
+        }
+    }
+}
+
+/// Best-effort overwrite of a password buffer before it is freed, so it
+/// doesn't linger in freed heap memory. Volatile writes stop the compiler
+/// from eliding the (otherwise dead) stores.
+fn wipe(mut s: String) {
+    // SAFETY: all-zero bytes are valid UTF-8, so the String stays valid.
+    unsafe {
+        for b in s.as_bytes_mut() {
+            std::ptr::write_volatile(b, 0);
+        }
     }
 }
 
@@ -37,7 +51,9 @@ pub fn cache_sudo_password(password: String) {
 /// cancelled, or the app is closing).
 pub fn clear_cached_sudo_password() {
     if let Ok(mut guard) = password_cell().lock() {
-        guard.take();
+        if let Some(old) = guard.take() {
+            wipe(old);
+        }
     }
 }
 

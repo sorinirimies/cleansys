@@ -328,6 +328,13 @@ fn index_cache() -> &'static std::sync::Mutex<Option<(String, std::time::Instant
     CACHE.get_or_init(|| std::sync::Mutex::new(None))
 }
 
+/// Drop the cached directory index (frees memory once scanning is done).
+pub fn clear_index_cache() {
+    if let Ok(mut guard) = index_cache().lock() {
+        guard.take();
+    }
+}
+
 /// One level of the walk: marker files found in `dir`, and its sub-directories to visit.
 fn scan_one_dir(
     dir: &Path,
@@ -377,13 +384,15 @@ fn project_index(cfg: &EngineConfig, needed: &[String]) -> Index {
     let roots = cfg.effective_roots();
     let key = format!("{roots:?}|{}", cfg.max_depth);
 
-    if let Ok(guard) = index_cache().lock() {
+    if let Ok(mut guard) = index_cache().lock() {
         if let Some((k, at, idx)) = guard.as_ref() {
             let covers = needed.iter().all(|n| idx.patterns.contains(n));
             if *k == key && at.elapsed() < INDEX_TTL && covers {
                 return idx.clone();
             }
         }
+        // Miss/stale: drop old index now so it can't linger while rebuilding.
+        guard.take();
     }
 
     let mut patterns: Vec<String> = super::registry::known_project_markers();
