@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.7.5 - 2026-10-07
+### ⚡ Performance
+- perf(core): parallel directory sizing (rayon, first 4 levels) — Gradle cache 18s -> 4.5s, full scan 20s -> 7.8s
+- perf(core): parallel directory deletion, parallel marker-only project index, streaming file filters
+### 📦 Other Changes
+- scripts: prune_release_assets.nu auto-detects platform/repo/token/latest; just prune-releases[-preview]
+- scripts: prune_release_assets.nu — pure testable helpers, refuse unknown keep tag, nu tests (as in tokenburn)
+- gui/web: header badge shows ROOT while a system (root) category is open
+- release: ship cleansys-web with the rest — crates.io publish, raw binaries, Windows zip, .deb/.rpm; check_publish covers it
+### 🔄 CI
+- ci: keep only the latest release's uploaded assets
+- ci(gitea): checkout@v4 in prune job
+- ci: weekly + manual prune of old release assets (GitHub and Gitea)
+- ci: fix run 2098 — tests no longer assume non-root (CI runs as root), rustdoc private link, retry apt downloads
+### 🧪 Testing
+- test(web): root-badge test shows empty categories (hide=0) so it passes on Linux CI
+- test(web): server tests use a small fake category set instead of scanning the real machine (11 parallel scans timed out on slower/busier hosts); 6s -> 0.15s
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.1...v0.7.5
+## 0.7.1 - 2026-10-06
+### 🔧 Chores
+- chore: bump version to 0.7.1
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.0...v0.7.1
 ## 0.7.0 - 2026-10-06
 ### ✨ Features
 - feat(core): declarative cleaner engine with dev, build-artifact and AI/LLM cleaners
@@ -66,13 +88,19 @@ All notable changes to this project will be documented in this file.
 - chore: bump version to 0.6.15
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.12...v0.6.15
 ## 0.6.12 - 2026-09-24
+### 📦 Other Changes
+- merge: reconcile second round of gitea nightly divergence, bump to 0.6.14
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-24
+- chore: bump version to 0.6.12
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.13...v0.6.12
+## 0.6.13 - 2026-09-23
 ### 🐛 Bug Fixes
 - fix(ci): disable Gitea nightly deps-update schedule to prevent dual auto-release
 ### 📚 Documentation
 - docs: update README and CHANGELOG for v0.6.8
 ### 📦 Other Changes
 - merge: reconcile diverged GitHub/gitea-starscream nightly auto-release histories
-- merge: reconcile second round of gitea nightly divergence, bump to 0.6.14
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-17
 - chore: bump version to 0.6.9
@@ -84,9 +112,7 @@ All notable changes to this project will be documented in this file.
 - chore: bump version to 0.6.12
 - chore(deps): nightly dependency upgrade 2026-09-23
 - chore: bump version to 0.6.13
-- chore(deps): nightly dependency upgrade 2026-09-24
-- chore: bump version to 0.6.12
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.8...v0.6.12
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.8...v0.6.13
 ## 0.6.8 - 2026-09-16
 ### 🔧 Chores
 - chore: bump version to 0.6.8
