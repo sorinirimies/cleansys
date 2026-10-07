@@ -2,6 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.7.6 - 2026-10-07
+### 🐛 Bug Fixes
+- fix(core): evict stale project index cache; wipe cached sudo password on drop
+### 📦 Other Changes
+- ux: show a spinner instead of totals until the scan is done (TUI via tui-spinner, GUI, web)
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.7...v0.7.6
+## 0.7.7 - 2026-10-07
+### 🔧 Chores
+- chore: bump version to 0.7.7
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.5...v0.7.7
 ## 0.7.5 - 2026-10-07
 ### ⚡ Performance
 - perf(core): parallel directory sizing (rayon, first 4 levels) — Gradle cache 18s -> 4.5s, full scan 20s -> 7.8s
