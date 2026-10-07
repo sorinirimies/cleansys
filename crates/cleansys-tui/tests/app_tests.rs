@@ -2,8 +2,8 @@
 //! view-state cycling logic (pure state machine, no terminal I/O required).
 
 use anyhow::Result;
-use cleansys_core::{CleanedItemType, CleanerCategory, CleanerItem, CleaningResult, RunOptions};
-use cleansys_tui::app::{App, ChartType, FilterMode, SortMode, ViewMode};
+use cleansys_core::{CleanerCategory, CleanerItem, CleaningResult, RunOptions};
+use cleansys_tui::app::App;
 
 fn noop(_opts: RunOptions) -> Result<CleaningResult> {
     Ok(CleaningResult::new())
@@ -21,51 +21,6 @@ fn sample_item(name: &str, requires_root: bool) -> CleanerItem {
         bytes_cleaned: 0,
         last_result: None,
         status: None,
-    }
-}
-
-/// Populate `app.detailed_cleaned_items` with a handful of real-shaped
-/// entries (standing in for a completed cleaning run), used by tests that
-/// exercise `get_category_distribution`/`get_filtered_detailed_items`.
-fn seed_detailed_items(app: &mut App) {
-    let entries = [
-        (
-            "/home/user/.cache/pip/wheels/abc123.whl",
-            15_728_640u64,
-            "User Land Cleaners",
-            "pip cache",
-            CleanedItemType::File,
-        ),
-        (
-            "/home/user/.mozilla/firefox/abc.default/cache2",
-            104_857_600,
-            "User Land Cleaners",
-            "firefox cache",
-            CleanedItemType::Directory,
-        ),
-        (
-            "/home/user/.npm/_cacache",
-            8_388_608,
-            "User Land Cleaners",
-            "npm cache",
-            CleanedItemType::Directory,
-        ),
-        (
-            "/var/cache/apt/archives",
-            52_428_800,
-            "System Cleaners",
-            "APT cache",
-            CleanedItemType::Directory,
-        ),
-    ];
-    for (path, size, category, cleaner_name, item_type) in entries {
-        app.add_detailed_cleaned_item(
-            path.to_string(),
-            size,
-            category.to_string(),
-            cleaner_name.to_string(),
-            item_type.into(),
-        );
     }
 }
 
@@ -164,173 +119,24 @@ fn select_all_and_deselect_all_affect_current_category_only() {
 }
 
 #[test]
-fn cycle_view_mode_goes_through_all_variants() {
-    let mut app = app_with_categories();
-    app.view_mode = ViewMode::Standard;
-
-    app.cycle_view_mode();
-    assert_eq!(app.view_mode, ViewMode::Compact);
-    app.cycle_view_mode();
-    assert_eq!(app.view_mode, ViewMode::Detailed);
-    app.cycle_view_mode();
-    assert_eq!(app.view_mode, ViewMode::Performance);
-    app.cycle_view_mode();
-    assert_eq!(app.view_mode, ViewMode::Standard);
-}
-
-#[test]
-fn cycle_sort_mode_goes_through_all_variants() {
-    let mut app = app_with_categories();
-    app.sort_mode = SortMode::Name;
-
-    app.cycle_sort_mode();
-    assert_eq!(app.sort_mode, SortMode::Size);
-    app.cycle_sort_mode();
-    assert_eq!(app.sort_mode, SortMode::Status);
-    app.cycle_sort_mode();
-    assert_eq!(app.sort_mode, SortMode::Category);
-    app.cycle_sort_mode();
-    assert_eq!(app.sort_mode, SortMode::Name);
-}
-
-#[test]
-fn cycle_filter_mode_goes_through_all_variants() {
-    let mut app = app_with_categories();
-    app.filter_mode = FilterMode::All;
-
-    app.cycle_filter_mode();
-    assert_eq!(app.filter_mode, FilterMode::Selected);
-    app.cycle_filter_mode();
-    assert_eq!(app.filter_mode, FilterMode::Completed);
-    app.cycle_filter_mode();
-    assert_eq!(app.filter_mode, FilterMode::Errors);
-    app.cycle_filter_mode();
-    assert_eq!(app.filter_mode, FilterMode::UserOnly);
-    app.cycle_filter_mode();
-    assert_eq!(app.filter_mode, FilterMode::SystemOnly);
-    app.cycle_filter_mode();
-    assert_eq!(app.filter_mode, FilterMode::All);
-}
-
-#[test]
-fn toggle_chart_type_cycles_bar_pie_count_pie_size() {
-    let mut app = app_with_categories();
-    app.chart_type = ChartType::Bar;
-
-    app.toggle_chart_type();
-    assert_eq!(app.chart_type, ChartType::PieCount);
-    app.toggle_chart_type();
-    assert_eq!(app.chart_type, ChartType::PieSize);
-    app.toggle_chart_type();
-    assert_eq!(app.chart_type, ChartType::Bar);
-}
-
-#[test]
-fn toggle_help_and_compact_mode() {
+fn toggle_help() {
     let mut app = app_with_categories();
     assert!(!app.show_help);
     app.toggle_help();
     assert!(app.show_help);
     app.toggle_help();
     assert!(!app.show_help);
-
-    let was_compact = app.compact_mode;
-    app.toggle_compact_mode();
-    assert_eq!(app.compact_mode, !was_compact);
 }
 
 #[test]
-fn search_toggle_and_input() {
-    let mut app = app_with_categories();
-    assert!(!app.search_active);
-
-    app.toggle_search();
-    assert!(app.search_active);
-
-    app.add_search_char('a');
-    app.add_search_char('b');
-    assert_eq!(app.search_query, "ab");
-
-    app.remove_search_char();
-    assert_eq!(app.search_query, "a");
-
-    app.clear_search();
-    assert!(!app.search_active);
-    assert!(app.search_query.is_empty());
-}
-
-#[test]
-fn get_category_distribution_groups_by_cleaner_name() {
-    let mut app = App::new();
-    seed_detailed_items(&mut app);
-    let distribution = app.get_category_distribution();
-    assert!(!distribution.is_empty());
-    // Sorted by total size descending.
-    for pair in distribution.windows(2) {
-        assert!(pair[0].2 >= pair[1].2);
-    }
-}
-
-#[test]
-fn get_filtered_detailed_items_respects_search_query() {
-    let mut app = App::new();
-    seed_detailed_items(&mut app);
-    app.search_query = "firefox".to_string();
-    let filtered = app.get_filtered_detailed_items();
-    assert!(!filtered.is_empty());
-    assert!(filtered
-        .iter()
-        .all(|item| item.path.to_lowercase().contains("firefox")
-            || item.category.to_lowercase().contains("firefox")
-            || item.cleaner_name.to_lowercase().contains("firefox")));
-}
-
-#[test]
-fn get_filtered_detailed_items_sort_by_size_is_descending() {
-    let mut app = App::new();
-    seed_detailed_items(&mut app);
-    app.sort_mode = SortMode::Size;
-    let filtered = app.get_filtered_detailed_items();
-    for pair in filtered.windows(2) {
-        assert!(pair[0].size >= pair[1].size);
-    }
-}
-
-#[test]
-fn clear_errors_resets_error_status_and_counter() {
-    let mut app = app_with_categories();
-    app.categories[0].items[0].status = Some(cleansys_core::Status::Error("boom".to_string()));
-    app.errors_count = 1;
-
-    app.clear_errors();
-
-    assert!(app.categories[0].items[0].status.is_none());
-    assert_eq!(app.errors_count, 0);
-}
-
-#[test]
-fn update_counters_counts_selected_errors_and_operations() {
-    let mut app = app_with_categories();
-    app.categories[0].items[0].selected = true;
-    app.categories[0].items[1].status = Some(cleansys_core::Status::Error("x".to_string()));
-    app.categories[0].items[2].status = Some(cleansys_core::Status::Success("ok".to_string()));
-
-    app.update_counters();
-
-    assert_eq!(app.selected_cleaners_count, 1);
-    assert_eq!(app.errors_count, 1);
-    assert_eq!(app.operation_count, 2);
-}
-
-#[test]
-fn request_run_with_nothing_selected_logs_message() {
+fn request_run_with_nothing_selected_shows_a_notice() {
     let mut app = app_with_categories();
     app.request_run().unwrap();
     assert!(!app.awaiting_run_confirmation);
     assert!(app
-        .result_messages
-        .iter()
-        .any(|m| m.contains("No items selected")));
+        .notice
+        .as_deref()
+        .is_some_and(|m| m.contains("Nothing selected")));
 }
 
 #[test]
@@ -407,14 +213,14 @@ fn request_run_with_root_item_and_no_root_needs_elevation() {
 }
 
 #[test]
-fn run_preview_with_nothing_selected_logs_message() {
+fn run_preview_with_nothing_selected_shows_a_notice() {
     let mut app = app_with_categories();
     app.run_preview();
     assert!(!app.preview_open);
     assert!(app
-        .result_messages
-        .iter()
-        .any(|m| m.contains("No items selected")));
+        .notice
+        .as_deref()
+        .is_some_and(|m| m.contains("Nothing selected")));
 }
 
 #[test]

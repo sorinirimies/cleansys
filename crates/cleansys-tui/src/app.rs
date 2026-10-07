@@ -6,34 +6,6 @@ use std::time::Instant;
 
 use crate::components::password_prompt::PasswordPrompt;
 use cleansys_core::{check_root, format_size, CleanerCategory, CleanerFn, Status};
-use std::time::SystemTime;
-
-#[derive(Debug, Clone)]
-pub struct DetailedCleanedItem {
-    pub path: String,
-    pub size: u64,
-    pub category: String,
-    pub cleaner_name: String,
-    pub timestamp: SystemTime,
-    pub item_type: CleanedItemType,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum CleanedItemType {
-    File,
-    Directory,
-    Log,
-}
-
-impl From<cleansys_core::CleanedItemType> for CleanedItemType {
-    fn from(value: cleansys_core::CleanedItemType) -> Self {
-        match value {
-            cleansys_core::CleanedItemType::File => CleanedItemType::File,
-            cleansys_core::CleanedItemType::Directory => CleanedItemType::Directory,
-            cleansys_core::CleanedItemType::SymLink => CleanedItemType::File,
-        }
-    }
-}
 
 /// One editable row of the schedule overlay.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -48,41 +20,27 @@ pub enum ScheduleField {
     Backend,
 }
 
+/// Outcome of the last finished clean, shown under the cleaner list (like the GUI's
+/// "✓ Freed X" headline and the web UI's "Done" summary).
+#[derive(Debug, Clone, Default)]
+pub struct RunSummary {
+    /// Bytes freed.
+    pub freed: u64,
+    /// Cleaners that ran (including ones that found nothing).
+    pub ok: usize,
+    /// Cleaners that failed or were cancelled.
+    pub failed: usize,
+    /// Wall-clock time of the run.
+    pub elapsed: String,
+    /// The run was cancelled before finishing.
+    pub cancelled: bool,
+}
+
+/// Cap on activity-log lines kept in memory.
+const MAX_LOG_LINES: usize = 500;
+
 /// Type alias for pending operations: (category_index, item_index, name, function, requires_root)
 pub type PendingOperation = (usize, usize, String, CleanerFn, bool);
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ViewMode {
-    Standard,
-    Compact,
-    Detailed,
-    Performance,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum SortMode {
-    Name,
-    Size,
-    Status,
-    Category,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum FilterMode {
-    All,
-    Selected,
-    Completed,
-    Errors,
-    UserOnly,
-    SystemOnly,
-}
-
-#[derive(Debug, Clone, PartialEq)]
-pub enum ChartType {
-    Bar,
-    PieCount,
-    PieSize,
-}
 
 // `Status`, `CleanerItem`, and `CleanerCategory` now live in `cleansys-core`
 // so the TUI and GUI front-ends share the exact same domain model.
@@ -104,35 +62,29 @@ pub struct App {
     pub is_running: bool,
     pub operation_start_time: Option<Instant>,
     pub operation_end_time: Option<Instant>,
+    /// Bytes freed so far by the current / last run.
     pub total_bytes_cleaned: u64,
     pub show_help: bool,
-    pub result_messages: Vec<String>,
-    pub detailed_view: bool,
-    pub current_cleaner_index: usize,
     pub animation_frame: usize,
     pub last_frame_time: Instant,
     pub terminal_width: u16,
     pub terminal_height: u16,
-    pub compact_mode: bool,
-    pub show_performance_stats: bool,
-    pub operation_count: usize,
-    pub errors_count: usize,
-    pub paused: bool,
-    pub confirmation_mode: bool,
-    pub selected_cleaners_count: usize,
-    pub view_mode: ViewMode,
-    pub sort_mode: SortMode,
-    pub filter_mode: FilterMode,
-    pub detailed_cleaned_items: Vec<DetailedCleanedItem>,
-    pub detailed_list_scroll_state: ListState,
-    pub search_query: String,
-    pub search_active: bool,
-    pub detailed_view_filter: String,
-    pub demo_operation_timer: Option<Instant>,
-    pub demo_operations_completed: usize,
-    pub chart_type: ChartType,
+    /// Worker running the current clean (None when idle).
+    pub run: Option<crate::run::RunHandle>,
+    /// Cleaners in the current / last run, and how many have finished.
+    pub run_total: usize,
+    pub run_done: usize,
+    /// Name of the cleaner being run right now.
+    pub run_current: Option<String>,
+    /// Summary of the last finished run (shown under the list until dismissed).
+    pub run_summary: Option<RunSummary>,
+    /// Whether the activity log panel is open (`L`).
+    pub show_log: bool,
+    /// Activity log lines (most recent last, capped).
     pub operation_logs: Vec<String>,
-    pub show_progress_screen: bool,
+    /// One-line notice shown under the list (cleared on the next key).
+    pub notice: Option<String>,
+    pub confirmation_mode: bool,
     pub password_prompt: PasswordPrompt,
     pub needs_sudo: bool,
     pub pending_operations: Vec<PendingOperation>,
@@ -197,37 +149,19 @@ impl App {
             operation_end_time: None,
             total_bytes_cleaned: 0,
             show_help: false,
-            result_messages: Vec::new(),
-            detailed_view: false,
-            current_cleaner_index: 0,
             animation_frame: 0,
             last_frame_time: Instant::now(),
             terminal_width: width,
             terminal_height: height,
-            compact_mode: height < 25,
-            show_performance_stats: false,
-            operation_count: 0,
-            errors_count: 0,
-            paused: false,
-            confirmation_mode: true,
-            selected_cleaners_count: 0,
-            view_mode: if height < 25 {
-                ViewMode::Compact
-            } else {
-                ViewMode::Standard
-            },
-            sort_mode: SortMode::Category,
-            filter_mode: FilterMode::All,
-            detailed_cleaned_items: Vec::new(),
-            detailed_list_scroll_state: ListState::default(),
-            search_query: String::new(),
-            search_active: false,
-            detailed_view_filter: String::new(),
-            demo_operation_timer: None,
-            demo_operations_completed: 0,
-            chart_type: ChartType::PieCount,
+            run: None,
+            run_total: 0,
+            run_done: 0,
+            run_current: None,
+            run_summary: None,
+            show_log: false,
             operation_logs: Vec::new(),
-            show_progress_screen: false,
+            notice: None,
+            confirmation_mode: true,
             password_prompt: PasswordPrompt::new(),
             needs_sudo: false,
             pending_operations: Vec::new(),
@@ -251,58 +185,6 @@ impl App {
         app.item_list_state.select(Some(0));
 
         app
-    }
-
-    pub fn toggle_search(&mut self) {
-        self.search_active = !self.search_active;
-        if !self.search_active {
-            self.search_query.clear();
-        }
-    }
-
-    pub fn clear_search(&mut self) {
-        self.search_active = false;
-        self.search_query.clear();
-        self.detailed_view_filter.clear();
-    }
-
-    pub fn add_search_char(&mut self, c: char) {
-        if self.search_active {
-            self.search_query.push(c);
-        }
-    }
-
-    pub fn remove_search_char(&mut self) {
-        if self.search_active {
-            self.search_query.pop();
-        }
-    }
-
-    pub fn get_category_distribution(&self) -> Vec<(String, usize, u64)> {
-        let mut category_map: std::collections::HashMap<String, (usize, u64)> =
-            std::collections::HashMap::new();
-
-        for item in &self.detailed_cleaned_items {
-            // Create a unique key that combines cleaner name with category type
-            // This differentiates between user and system cleaners with the same name
-            let display_name = if item.category.contains("System") {
-                format!("{} (System)", item.cleaner_name)
-            } else {
-                item.cleaner_name.clone()
-            };
-
-            let entry = category_map.entry(display_name).or_insert((0, 0));
-            entry.0 += 1;
-            entry.1 += item.size;
-        }
-
-        let mut categories: Vec<(String, usize, u64)> = category_map
-            .into_iter()
-            .map(|(name, (count, size))| (name, count, size))
-            .collect();
-
-        categories.sort_by_key(|b| std::cmp::Reverse(b.2)); // Sort by size descending
-        categories
     }
 
     // ── scanning, filtering, list navigation ──────────────────────────
@@ -593,8 +475,9 @@ impl App {
             .any(|c| c.items.iter().any(|i| i.selected));
 
         if !has_selected {
-            self.result_messages
-                .push("No items selected. Please select items to clean.".to_string());
+            self.set_notice(
+                "Nothing selected — tick cleaners first (Space, or r for recommended).",
+            );
             return Ok(());
         }
 
@@ -610,8 +493,9 @@ impl App {
         }
 
         if selected_cleaners.is_empty() {
-            self.operation_logs
-                .push("No cleaners selected. Please select at least one cleaner.".to_string());
+            self.set_notice(
+                "Nothing selected — tick cleaners first (Space, or r for recommended).",
+            );
             return Ok(());
         }
 
@@ -654,8 +538,9 @@ impl App {
             .collect();
 
         if selected.is_empty() {
-            self.result_messages
-                .push("No items selected. Please select items to preview.".to_string());
+            self.set_notice(
+                "Nothing selected — tick cleaners first (Space, or r for recommended).",
+            );
             return;
         }
 
@@ -832,48 +717,6 @@ impl App {
         self.preview_results.clear();
     }
 
-    /// Actually kick off execution: reset per-run counters/logs, clear all
-    /// items' previous status/bytes_cleaned, and mark the given selection as
-    /// `Pending`. Shared by both the direct (already-elevated) path in
-    /// [`Self::begin_execution`] and the post-password-authentication path in
-    /// [`Self::handle_key`] so the two can never drift out of sync again (a
-    /// previous copy-pasted duplicate of this omitted the `item.status =
-    /// None` reset and the trailing `update_counters()` call, which could
-    /// leave stale status/error counts from a prior run visible after
-    /// authenticating via the sudo password prompt).
-    fn start_operations(&mut self, selected_cleaners: &[PendingOperation]) {
-        self.is_running = true;
-        self.show_progress_screen = true;
-        self.operation_start_time = Some(Instant::now());
-        self.operation_end_time = None;
-        self.total_bytes_cleaned = 0;
-        self.demo_operation_timer = Some(Instant::now());
-        self.demo_operations_completed = 0;
-        self.result_messages.clear();
-        self.operation_logs.clear();
-        self.detailed_cleaned_items.clear(); // Clear previous cleaning results
-        self.current_cleaner_index = 0;
-
-        // Reset status and bytes_cleaned for all items to start fresh
-        for category in &mut self.categories {
-            for item in &mut category.items {
-                item.bytes_cleaned = 0;
-                item.status = None;
-            }
-        }
-
-        // Set all selected cleaners to Pending
-        for (cat_idx, item_idx, _, _, _) in selected_cleaners {
-            self.categories[*cat_idx].items[*item_idx].status = Some(Status::Pending);
-        }
-
-        self.update_counters();
-
-        // Operations will be processed by update_demo_operations over time.
-        // The is_running flag will be automatically turned off when all
-        // operations complete.
-    }
-
     /// Test-only public wrapper around the private `Self::start_operations`,
     /// so integration tests in `tests/` (a separate crate, which can only
     /// see `pub` items) can drive the exact same post-authentication code
@@ -881,6 +724,217 @@ impl App {
     #[cfg(debug_assertions)]
     pub fn start_operations_for_tests(&mut self, selected_cleaners: &[PendingOperation]) {
         self.start_operations(selected_cleaners);
+    }
+
+    /// Append a line to the activity log (bounded).
+    pub fn log(&mut self, line: impl Into<String>) {
+        self.operation_logs.push(line.into());
+        if self.operation_logs.len() > MAX_LOG_LINES {
+            let excess = self.operation_logs.len() - MAX_LOG_LINES;
+            self.operation_logs.drain(..excess);
+        }
+    }
+
+    /// Show a one-line notice under the list (cleared on the next key press).
+    pub fn set_notice(&mut self, msg: impl Into<String>) {
+        self.notice = Some(msg.into());
+    }
+
+    /// Start the given cleaners on a background worker: mark them queued, open the
+    /// activity log and return immediately. Progress arrives through [`App::poll_run`].
+    /// Shared by the direct (already-elevated) path in [`Self::begin_execution`] and
+    /// the post-password-authentication path in [`Self::handle_key`].
+    fn start_operations(&mut self, selected_cleaners: &[PendingOperation]) {
+        self.is_running = true;
+        self.operation_start_time = Some(Instant::now());
+        self.operation_end_time = None;
+        self.total_bytes_cleaned = 0;
+        self.run_summary = None;
+        self.run_total = selected_cleaners.len();
+        self.run_done = 0;
+        self.run_current = None;
+        self.show_log = true;
+        self.operation_logs.clear();
+        self.collapse_details();
+
+        // Reset status for all items, then queue the selection.
+        for category in &mut self.categories {
+            for item in &mut category.items {
+                item.bytes_cleaned = 0;
+                item.status = None;
+            }
+        }
+        for (cat_idx, item_idx, _, _, _) in selected_cleaners {
+            self.categories[*cat_idx].items[*item_idx].status = Some(Status::Pending);
+        }
+        self.log(format!("Cleaning {} cleaner(s)…", selected_cleaners.len()));
+
+        self.run = Some(crate::run::spawn(
+            selected_cleaners.to_vec(),
+            self.board.skipped_paths(),
+            self.is_root,
+        ));
+    }
+
+    /// Drain worker messages (call every tick). Returns `true` if anything changed.
+    pub fn poll_run(&mut self) -> bool {
+        use crate::run::RunMsg;
+        let mut msgs = Vec::new();
+        if let Some(run) = &self.run {
+            while let Ok(m) = run.rx.try_recv() {
+                msgs.push(m);
+            }
+        }
+        let changed = !msgs.is_empty();
+        let mut finished = false;
+        for m in msgs {
+            match m {
+                RunMsg::Started(c, i) => {
+                    if let Some(item) = self.categories.get_mut(c).and_then(|c| c.items.get_mut(i))
+                    {
+                        item.status = Some(Status::Running);
+                        let name = item.name.clone();
+                        self.log(format!("🔄 Running: {name}"));
+                        self.run_current = Some(name);
+                    }
+                }
+                RunMsg::Finished(c, i, result) => self.finish_cleaner(c, i, result),
+                RunMsg::Cancelled(c, i) => {
+                    if let Some(item) = self.categories.get_mut(c).and_then(|c| c.items.get_mut(i))
+                    {
+                        item.status = Some(Status::Error("Cancelled".to_string()));
+                    }
+                    self.run_done += 1;
+                }
+                RunMsg::Done => finished = true,
+            }
+        }
+        if finished {
+            self.finish_run();
+        }
+        changed
+    }
+
+    fn finish_cleaner(
+        &mut self,
+        c: usize,
+        i: usize,
+        result: Result<cleansys_core::CleaningResult, String>,
+    ) {
+        self.run_done += 1;
+        let Some(item) = self.categories.get_mut(c).and_then(|c| c.items.get_mut(i)) else {
+            return;
+        };
+        let name = item.name.clone();
+        let root = item.requires_root;
+        match result {
+            Ok(res) => {
+                let bytes = res.total_bytes;
+                item.status = Some(Status::Success(format!(
+                    "Cleaned {name}{} ({}, {} item(s))",
+                    if root { " (root)" } else { "" },
+                    format_size(bytes),
+                    res.item_count()
+                )));
+                item.bytes_cleaned = bytes;
+                item.last_result = Some(res.clone());
+                self.total_bytes_cleaned += bytes;
+                if bytes == 0 {
+                    self.log(format!("ℹ️  {name}: nothing to clean"));
+                } else {
+                    self.log(format!(
+                        "✅ {name}: freed {} across {} item(s)",
+                        format_size(bytes),
+                        res.item_count()
+                    ));
+                    for it in res.items.iter().take(20) {
+                        self.log(format!("   → {} ({})", it.path_str(), format_size(it.size)));
+                    }
+                    if res.items.len() > 20 {
+                        self.log(format!("   … and {} more", res.items.len() - 20));
+                    }
+                }
+            }
+            Err(msg) => {
+                item.status = Some(Status::Error(msg.clone()));
+                self.log(format!("❌ {name}: {msg}"));
+            }
+        }
+    }
+
+    fn finish_run(&mut self) {
+        self.run = None;
+        self.is_running = false;
+        self.run_current = None;
+        self.operation_end_time = Some(Instant::now());
+        let (mut ok, mut failed) = (0, 0);
+        let mut cancelled = false;
+        for item in self.categories.iter().flat_map(|c| &c.items) {
+            match &item.status {
+                Some(Status::Success(_)) => ok += 1,
+                Some(Status::Error(m)) => {
+                    failed += 1;
+                    cancelled |= m == "Cancelled";
+                }
+                _ => {}
+            }
+        }
+        let summary = RunSummary {
+            freed: self.total_bytes_cleaned,
+            ok,
+            failed,
+            elapsed: self.get_elapsed_time(),
+            cancelled,
+        };
+        let line = format!(
+            "🎉 Cleaning {} — freed {}",
+            if cancelled { "cancelled" } else { "complete" },
+            format_size(summary.freed)
+        );
+        self.log(line.clone());
+        crate::notifications::notify_completion(&line);
+        self.run_summary = Some(summary);
+        // Sizes changed — measure again so the list shows what is left.
+        self.start_scan();
+    }
+
+    /// Stop the run after the cleaner currently executing (remaining ones are
+    /// marked cancelled by the worker).
+    pub fn cancel_run(&mut self) {
+        if let Some(run) = &self.run {
+            run.cancel();
+            self.log("⏹ Cancelling after the current cleaner…");
+        }
+    }
+
+    /// Dismiss the finished-run summary.
+    pub fn dismiss_summary(&mut self) {
+        self.run_summary = None;
+    }
+
+    pub fn get_elapsed_time(&self) -> String {
+        match self.operation_start_time {
+            Some(start) => {
+                let elapsed = self
+                    .operation_end_time
+                    .map_or_else(|| start.elapsed(), |end| end.duration_since(start));
+                if elapsed.as_secs() < 60 {
+                    format!("{}s", elapsed.as_secs())
+                } else {
+                    format!("{}m {}s", elapsed.as_secs() / 60, elapsed.as_secs() % 60)
+                }
+            }
+            None => "0s".to_string(),
+        }
+    }
+
+    /// Advance the spinner animation (called every frame).
+    pub fn update_animation(&mut self) {
+        let now = Instant::now();
+        if now.duration_since(self.last_frame_time).as_millis() > 100 {
+            self.animation_frame = (self.animation_frame + 1) % 10;
+            self.last_frame_time = now;
+        }
     }
 
     /// Actually start execution of the given selected cleaners: prompts for
@@ -910,203 +964,6 @@ impl App {
         self.start_operations(&selected_cleaners);
 
         Ok(())
-    }
-
-    pub fn update_animation(&mut self) {
-        let now = Instant::now();
-        if now.duration_since(self.last_frame_time).as_millis() > 100 {
-            self.animation_frame = (self.animation_frame + 1) % 10;
-            self.last_frame_time = now;
-        }
-
-        // Update demo operations if running
-        if self.is_running {
-            self.update_demo_operations();
-        }
-    }
-
-    pub fn update_demo_operations(&mut self) {
-        if let Some(start_time) = self.demo_operation_timer {
-            let elapsed = start_time.elapsed().as_millis();
-
-            // Find next pending operation to start
-            type Operation = (usize, usize, String, CleanerFn, bool);
-            let mut pending_operations: Vec<Operation> = Vec::new();
-            for (cat_idx, category) in self.categories.iter().enumerate() {
-                for (item_idx, item) in category.items.iter().enumerate() {
-                    if matches!(item.status, Some(Status::Pending)) {
-                        pending_operations.push((
-                            cat_idx,
-                            item_idx,
-                            item.name.to_string(),
-                            item.function.clone(),
-                            item.requires_root,
-                        ));
-                    }
-                }
-            }
-
-            // Start next operation every 1.5 seconds (paced so the progress
-            // screen shows operations completing one at a time rather than
-            // all at once, even though each one runs synchronously).
-            let operations_to_start = (elapsed / 1500) as usize;
-            if operations_to_start > self.demo_operations_completed
-                && !pending_operations.is_empty()
-            {
-                if let Some((cat_idx, item_idx, _name, _function, _requires_root)) =
-                    pending_operations.first()
-                {
-                    // Set to running
-                    self.categories[*cat_idx].items[*item_idx].status = Some(Status::Running);
-                    self.demo_operations_completed += 1;
-                }
-            }
-
-            // Complete running operations after 2 seconds
-            let mut running_operations: Vec<Operation> = Vec::new();
-            for (cat_idx, category) in self.categories.iter().enumerate() {
-                for (item_idx, item) in category.items.iter().enumerate() {
-                    if matches!(item.status, Some(Status::Running)) {
-                        running_operations.push((
-                            cat_idx,
-                            item_idx,
-                            item.name.to_string(),
-                            item.function.clone(),
-                            item.requires_root,
-                        ));
-                    }
-                }
-            }
-
-            // Complete operations that have been running for at least 2 seconds
-            for (cat_idx, item_idx, name, function, requires_root) in running_operations {
-                self.operation_logs.push(format!("Starting: {}", name));
-
-                // Check if operation requires root and we don't have it
-                let result: anyhow::Result<cleansys_core::CleaningResult> =
-                    if requires_root && !self.is_root && !self.password_prompt.is_authenticated() {
-                        // Show password prompt and pause operations
-                        self.needs_sudo = true;
-                        self.password_prompt.show();
-                        self.is_running = false;
-                        self.operation_logs
-                            .push(format!("🔒 {}: Waiting for sudo authentication...", name));
-                        // Return error to mark this operation as pending
-                        Err(anyhow::anyhow!("Waiting for sudo authentication"))
-                    } else {
-                        self.operation_logs.push(format!("🔄 Executing: {}", name));
-                        cleansys_core::engine::skip::set_skipped(self.board.skipped_paths());
-                        let r = function(cleansys_core::RunOptions::execute().with_skips());
-                        cleansys_core::engine::skip::clear_skipped();
-                        r
-                    };
-
-                // Process result
-                match result {
-                    Ok(cleaning_result) => {
-                        let bytes = cleaning_result.total_bytes;
-                        let msg = if requires_root {
-                            format!(
-                                "Cleaned {} (root) ({}, {} item(s))",
-                                name,
-                                format_size(bytes),
-                                cleaning_result.item_count()
-                            )
-                        } else {
-                            format!(
-                                "Cleaned {} ({}, {} item(s))",
-                                name,
-                                format_size(bytes),
-                                cleaning_result.item_count()
-                            )
-                        };
-                        self.categories[cat_idx].items[item_idx].status =
-                            Some(Status::Success(msg));
-                        self.categories[cat_idx].items[item_idx].bytes_cleaned = bytes;
-                        self.total_bytes_cleaned += bytes;
-                        self.operation_logs.push(format!(
-                            "✅ Completed {}: {} freed across {} item(s)",
-                            name,
-                            format_size(bytes),
-                            cleaning_result.item_count()
-                        ));
-
-                        // Record real per-item detail (path + size) for the detailed view.
-                        let category_name = self.categories[cat_idx].name.clone();
-                        for item in &cleaning_result.items {
-                            self.operation_logs.push(format!(
-                                "  → {} ({})",
-                                item.path_str(),
-                                format_size(item.size)
-                            ));
-                            self.add_detailed_cleaned_item(
-                                item.path_str(),
-                                item.size,
-                                category_name.clone(),
-                                name.clone(),
-                                item.item_type.clone().into(),
-                            );
-                        }
-                        self.categories[cat_idx].items[item_idx].last_result =
-                            Some(cleaning_result);
-
-                        if bytes == 0 {
-                            self.operation_logs.push(format!(
-                                "ℹ️  {}: nothing to clean (already empty on {})",
-                                name,
-                                cleansys_core::cleaners::platform::platform_name()
-                            ));
-                        }
-                    }
-                    Err(e) => {
-                        let error_msg = if requires_root && !self.is_root {
-                            "Requires sudo - restart with 'sudo cleansys'".to_string()
-                        } else {
-                            format!(
-                                "Failed: {}",
-                                e.to_string()
-                                    .split(':')
-                                    .next_back()
-                                    .unwrap_or("Unknown error")
-                                    .trim()
-                            )
-                        };
-                        self.categories[cat_idx].items[item_idx].status =
-                            Some(Status::Error(error_msg.clone()));
-                        self.operation_logs
-                            .push(format!("❌ Failed {}: {}", name, error_msg));
-
-                        // Add helpful message for sudo requirement
-                        if requires_root
-                            && !self.is_root
-                            && !self
-                                .result_messages
-                                .iter()
-                                .any(|msg| msg.contains("sudo cleansys"))
-                        {
-                            self.result_messages.push(
-                                "💡 System cleaners require root privileges. Run 'sudo cleansys' to clean system files.".to_string()
-                            );
-                        }
-                    }
-                }
-            }
-        }
-    }
-
-    pub fn cancel_sudo_operations(&mut self) {
-        // Mark all operations as cancelled
-        for category in &mut self.categories {
-            for item in &mut category.items {
-                if item.selected && matches!(item.status, Some(Status::Running | Status::Pending)) {
-                    item.status = Some(Status::Error("Operation cancelled by user".to_string()));
-                    item.selected = false; // Deselect the item
-                }
-            }
-        }
-
-        self.result_messages
-            .push("Cleaning operations cancelled by user.".to_string());
     }
 
     pub fn handle_key(&mut self, key: KeyEvent) -> Result<bool> {
@@ -1185,7 +1042,7 @@ impl App {
         }
 
         // Filter box has focus: every key is text (or navigation)
-        if self.filter_active && !self.is_running && !self.show_progress_screen && !self.show_help {
+        if self.filter_active && !self.show_help {
             self.handle_filter_key(key.code);
             return Ok(false);
         }
@@ -1233,37 +1090,40 @@ impl App {
             return Ok(false);
         }
 
+        // Any key clears the transient notice.
+        self.notice = None;
+
         match (key.code, key.modifiers) {
-            // Quit
+            // Quit (or leave help / cancel a running clean)
             (KeyCode::Char('q'), _) => {
                 if self.show_help {
                     self.show_help = false;
                 } else if self.is_running {
-                    // Cancel current cleaning operations
-                    self.is_running = false;
-                    self.cancel_sudo_operations();
+                    self.cancel_run();
                 } else {
                     return Ok(true);
                 }
             }
 
-            // Navigation
+            // Navigation (stays usable while a clean is running)
             (KeyCode::Down, _) => {
                 if !self.show_help {
-                    if self.is_running || self.show_progress_screen {
-                        self.scroll_detailed_list_down();
-                    } else {
-                        self.next_item();
-                    }
+                    self.next_item();
                 }
             }
             (KeyCode::Up, _) => {
                 if !self.show_help {
-                    if self.is_running || self.show_progress_screen {
-                        self.scroll_detailed_list_up();
-                    } else {
-                        self.previous_item();
-                    }
+                    self.previous_item();
+                }
+            }
+            (KeyCode::Char('j'), _) => {
+                if !self.show_help {
+                    self.next_item();
+                }
+            }
+            (KeyCode::Char('k'), _) => {
+                if !self.show_help {
+                    self.previous_item();
                 }
             }
             (KeyCode::Tab, _) => {
@@ -1274,6 +1134,15 @@ impl App {
             (KeyCode::BackTab, _) => {
                 if !self.show_help {
                     self.previous_category();
+                }
+            }
+            (KeyCode::Home, _) if !self.show_help => {
+                self.item_list_state.select(Some(0));
+            }
+            (KeyCode::End, _) if !self.show_help => {
+                let len = self.view_items().len();
+                if len > 0 {
+                    self.item_list_state.select(Some(len - 1));
                 }
             }
             // Expand the highlighted cleaner's per-path details
@@ -1295,7 +1164,7 @@ impl App {
             }
             // Selection
             (KeyCode::Char(' '), KeyModifiers::NONE) => {
-                if !self.show_help {
+                if !self.show_help && !self.is_running {
                     self.toggle_selected();
                 }
             }
@@ -1329,15 +1198,16 @@ impl App {
             (KeyCode::Char('?' | 'h'), _) => {
                 self.toggle_help();
             }
-
-            // Toggle search in removed items view
+            // Activity log panel
+            (KeyCode::Char('L'), _) => {
+                if !self.show_help {
+                    self.show_log = !self.show_log;
+                }
+            }
+            // Filter across every category
             (KeyCode::Char('/'), _) => {
                 if !self.show_help {
-                    if self.is_running || self.show_progress_screen {
-                        self.toggle_search();
-                    } else {
-                        self.start_filter();
-                    }
+                    self.start_filter();
                 }
             }
             // Hide / show cleaners that have nothing to clean
@@ -1352,170 +1222,43 @@ impl App {
                     self.start_scan();
                 }
             }
-            // Clear search or cancel operations or return to main menu
-            (KeyCode::Esc, _) => {
-                if self.search_active {
-                    self.clear_search();
-                } else if self.is_running {
-                    self.is_running = false;
-                    self.cancel_sudo_operations();
-                } else if self.show_progress_screen {
-                    // Return to main menu from completed operations screen
-                    self.show_progress_screen = false;
-                    // Sizes changed — measure again so the list is current.
-                    self.start_scan();
-                } else if !self.filter.is_empty() {
-                    self.clear_filter();
-                }
-            }
-            // Scroll removed items list
-            (KeyCode::Char('j'), _) => {
-                if !self.show_help {
-                    self.scroll_detailed_list_down();
-                }
-            }
-            (KeyCode::Char('k'), _) => {
-                if !self.show_help {
-                    self.scroll_detailed_list_up();
-                }
-            }
-            // Select all in current category
-            (KeyCode::Char('a'), _) => {
-                if !self.show_help {
-                    self.select_all();
-                }
-            }
-            // Deselect all in current category
-            (KeyCode::Char('n'), _) => {
-                if !self.show_help {
-                    self.deselect_all();
-                }
-            }
-            // Select all across every category
-            (KeyCode::Char('A'), _) => {
-                if !self.show_help {
-                    self.select_all_everywhere();
-                }
-            }
-            // Deselect all across every category
-            (KeyCode::Char('N'), _) => {
-                if !self.show_help {
-                    self.deselect_all_everywhere();
-                }
-            }
-
-            // Toggle compact mode
-            (KeyCode::Char('m'), _) => {
-                if !self.show_help {
-                    self.toggle_compact_mode();
-                }
-            }
-            // Toggle auto scroll log
-            (KeyCode::Char('s'), _) => {
-                if !self.show_help && self.is_running {
-                    self.toggle_auto_scroll();
-                }
-            }
-            // Toggle performance stats
-            (KeyCode::Char('p'), _) => {
-                if !self.show_help {
-                    self.toggle_performance_stats();
-                }
-            }
-            // Cycle view mode
-            (KeyCode::Char('v'), _) => {
-                if !self.show_help {
-                    self.cycle_view_mode();
-                }
-            }
-            // Cycle sort mode
-            (KeyCode::Char('o'), _) => {
-                if !self.show_help {
-                    self.cycle_sort_mode();
-                }
-            }
-            // Cycle filter mode
-            (KeyCode::Char('f'), _) => {
-                if !self.show_help {
-                    self.cycle_filter_mode();
-                }
-            }
-            // Toggle pause/resume operations
-            (KeyCode::Char(' '), KeyModifiers::CONTROL) => {
-                if self.is_running {
-                    self.toggle_pause();
-                }
-            }
-            // Toggle confirmation mode
+            // Toggle the "ask before running" confirmation
             (KeyCode::Char('y'), _) => {
                 if !self.show_help {
                     self.toggle_confirmation_mode();
                 }
             }
-            // Toggle chart type
-            (KeyCode::Char('c'), _) => {
-                if !self.show_help {
-                    self.toggle_chart_type();
+            // Dismiss the run summary / cancel a clean / clear the filter
+            (KeyCode::Esc, _) => {
+                if self.show_help {
+                    self.show_help = false;
+                } else if self.is_running {
+                    self.cancel_run();
+                } else if self.run_summary.is_some() {
+                    self.dismiss_summary();
+                } else if !self.filter.is_empty() {
+                    self.clear_filter();
                 }
             }
-            // Clear all errors
-            (KeyCode::Char('x'), _) => {
-                if !self.show_help {
-                    self.clear_errors();
+            // Select / deselect in this category or everywhere
+            (KeyCode::Char('a'), _) => {
+                if !self.show_help && !self.is_running {
+                    self.select_all();
                 }
             }
-            // Handle search input (only when search is active)
-            (KeyCode::Char(c), _) => {
-                if self.search_active {
-                    self.add_search_char(c);
-                } else if !self.show_help {
-                    self.toggle_selected();
+            (KeyCode::Char('n'), _) => {
+                if !self.show_help && !self.is_running {
+                    self.deselect_all();
                 }
             }
-            // Backspace in search
-            (KeyCode::Backspace, _) => {
-                if self.search_active {
-                    self.remove_search_char();
+            (KeyCode::Char('A'), _) => {
+                if !self.show_help && !self.is_running {
+                    self.select_all_everywhere();
                 }
             }
-            // Page scrolling for removed items (when in progress view)
-            (KeyCode::PageUp, _) => {
-                if self.is_running || self.show_progress_screen {
-                    // Scroll up by 10 items
-                    for _ in 0..10 {
-                        self.scroll_detailed_list_up();
-                    }
-                }
-            }
-            (KeyCode::PageDown, _) => {
-                if self.is_running || self.show_progress_screen {
-                    // Scroll down by 10 items
-                    for _ in 0..10 {
-                        self.scroll_detailed_list_down();
-                    }
-                }
-            }
-            // Enhanced navigation with Ctrl modifiers
-            (KeyCode::Home, _) => {
-                if !self.show_help {
-                    if self.is_running || self.show_progress_screen {
-                        self.detailed_list_scroll_state.select(Some(0));
-                    } else {
-                        self.item_list_state.select(Some(0));
-                    }
-                }
-            }
-            (KeyCode::End, _) if !self.show_help => {
-                if self.is_running || self.show_progress_screen {
-                    if !self.detailed_cleaned_items.is_empty() {
-                        let last_index = (self.detailed_cleaned_items.len() * 3).saturating_sub(1);
-                        self.detailed_list_scroll_state.select(Some(last_index));
-                    }
-                } else {
-                    let len = self.view_items().len();
-                    if len > 0 {
-                        self.item_list_state.select(Some(len - 1));
-                    }
+            (KeyCode::Char('N'), _) => {
+                if !self.show_help && !self.is_running {
+                    self.deselect_all_everywhere();
                 }
             }
             _ => {}
@@ -1529,261 +1272,7 @@ impl App {
         self.terminal_height = height;
     }
 
-    pub fn toggle_compact_mode(&mut self) {
-        self.compact_mode = !self.compact_mode;
-        self.view_mode = if self.compact_mode {
-            ViewMode::Compact
-        } else {
-            ViewMode::Standard
-        };
-    }
-
-    pub fn toggle_auto_scroll(&mut self) {
-        // Auto scroll functionality for operation logs
-    }
-
-    pub fn toggle_performance_stats(&mut self) {
-        self.show_performance_stats = !self.show_performance_stats;
-    }
-
-    pub fn cycle_view_mode(&mut self) {
-        self.view_mode = match self.view_mode {
-            ViewMode::Standard => ViewMode::Compact,
-            ViewMode::Compact => ViewMode::Detailed,
-            ViewMode::Detailed => ViewMode::Performance,
-            ViewMode::Performance => ViewMode::Standard,
-        };
-    }
-
-    pub fn cycle_sort_mode(&mut self) {
-        self.sort_mode = match self.sort_mode {
-            SortMode::Name => SortMode::Size,
-            SortMode::Size => SortMode::Status,
-            SortMode::Status => SortMode::Category,
-            SortMode::Category => SortMode::Name,
-        };
-    }
-
-    pub fn cycle_filter_mode(&mut self) {
-        self.filter_mode = match self.filter_mode {
-            FilterMode::All => FilterMode::Selected,
-            FilterMode::Selected => FilterMode::Completed,
-            FilterMode::Completed => FilterMode::Errors,
-            FilterMode::Errors => FilterMode::UserOnly,
-            FilterMode::UserOnly => FilterMode::SystemOnly,
-            FilterMode::SystemOnly => FilterMode::All,
-        };
-    }
-
-    pub fn toggle_pause(&mut self) {
-        self.paused = !self.paused;
-    }
-
     pub fn toggle_confirmation_mode(&mut self) {
         self.confirmation_mode = !self.confirmation_mode;
-    }
-
-    pub fn update_counters(&mut self) {
-        self.selected_cleaners_count = self
-            .categories
-            .iter()
-            .flat_map(|cat| &cat.items)
-            .filter(|item| item.selected)
-            .count();
-
-        self.errors_count = self
-            .categories
-            .iter()
-            .flat_map(|cat| &cat.items)
-            .filter(|item| matches!(item.status, Some(Status::Error(_))))
-            .count();
-
-        self.operation_count = self
-            .categories
-            .iter()
-            .flat_map(|cat| &cat.items)
-            .filter(|item| item.status.is_some())
-            .count();
-
-        // Auto-complete when all operations are finished
-        if self.is_running && self.operation_count > 0 {
-            let running_count = self
-                .categories
-                .iter()
-                .flat_map(|cat| &cat.items)
-                .filter(|item| matches!(item.status, Some(Status::Running)))
-                .count();
-
-            let pending_count = self
-                .categories
-                .iter()
-                .flat_map(|cat| &cat.items)
-                .filter(|item| matches!(item.status, Some(Status::Pending)))
-                .count();
-
-            let selected_count = self
-                .categories
-                .iter()
-                .flat_map(|cat| &cat.items)
-                .filter(|item| item.selected)
-                .count();
-
-            // If no operations are running or pending, and we have selected items, mark as complete
-            if running_count == 0 && pending_count == 0 && selected_count > 0 {
-                self.is_running = false;
-                self.demo_operation_timer = None;
-                self.operation_end_time = Some(Instant::now());
-
-                // Add completion message
-                if !self
-                    .result_messages
-                    .iter()
-                    .any(|msg| msg.contains("Completed"))
-                {
-                    let summary = format!(
-                        "Cleaning completed! Total space freed: {}",
-                        format_size(self.total_bytes_cleaned)
-                    );
-                    self.result_messages
-                        .push(format!("✅ {summary} (Press ESC to return to main menu)"));
-                    crate::notifications::notify_completion(&summary);
-                }
-                // Keep show_progress_screen true so user stays on details screen
-            }
-        }
-    }
-
-    pub fn clear_errors(&mut self) {
-        for category in &mut self.categories {
-            for item in &mut category.items {
-                if matches!(item.status, Some(Status::Error(_))) {
-                    item.status = None;
-                }
-            }
-        }
-        self.errors_count = 0;
-    }
-
-    pub fn get_elapsed_time(&self) -> String {
-        if let Some(start_time) = self.operation_start_time {
-            let elapsed = if let Some(end_time) = self.operation_end_time {
-                // Operation completed, show total time
-                end_time.duration_since(start_time)
-            } else {
-                // Operation still running, show current elapsed time
-                start_time.elapsed()
-            };
-
-            if elapsed.as_secs() < 60 {
-                format!("{}s", elapsed.as_secs())
-            } else {
-                format!("{}m {}s", elapsed.as_secs() / 60, elapsed.as_secs() % 60)
-            }
-        } else {
-            "0s".to_string()
-        }
-    }
-
-    pub fn add_detailed_cleaned_item(
-        &mut self,
-        path: String,
-        size: u64,
-        category: String,
-        cleaner_name: String,
-        item_type: CleanedItemType,
-    ) {
-        let item = DetailedCleanedItem {
-            path,
-            size,
-            category,
-            cleaner_name,
-            timestamp: SystemTime::now(),
-            item_type,
-        };
-        self.detailed_cleaned_items.push(item);
-
-        // Keep only last 1000 items to prevent memory issues
-        if self.detailed_cleaned_items.len() > 1000 {
-            self.detailed_cleaned_items.remove(0);
-        }
-    }
-
-    pub fn scroll_detailed_list_up(&mut self) {
-        if let Some(selected) = self.detailed_list_scroll_state.selected() {
-            if selected > 0 {
-                self.detailed_list_scroll_state.select(Some(selected - 1));
-            }
-        } else {
-            // Start from the bottom when first navigating
-            let total_items = if !self.detailed_cleaned_items.is_empty() {
-                self.detailed_cleaned_items.len() * 3 // Account for spacing between items
-            } else {
-                45 // Sample items count for demo
-            };
-            if total_items > 0 {
-                self.detailed_list_scroll_state
-                    .select(Some(total_items - 1));
-            }
-        }
-    }
-
-    pub fn scroll_detailed_list_down(&mut self) {
-        let total_items = if !self.detailed_cleaned_items.is_empty() {
-            self.detailed_cleaned_items.len() * 3 // Account for spacing between items
-        } else {
-            45 // Sample items count for demo
-        };
-
-        if let Some(selected) = self.detailed_list_scroll_state.selected() {
-            if selected < total_items.saturating_sub(1) {
-                self.detailed_list_scroll_state.select(Some(selected + 1));
-            }
-        } else if total_items > 0 {
-            self.detailed_list_scroll_state.select(Some(0));
-        }
-    }
-
-    pub fn get_filtered_detailed_items(&self) -> Vec<&DetailedCleanedItem> {
-        let mut items: Vec<&DetailedCleanedItem> = self
-            .detailed_cleaned_items
-            .iter()
-            .filter(|item| {
-                // Apply search filter
-                if !self.search_query.is_empty() {
-                    let query_lower = self.search_query.to_lowercase();
-                    return item.path.to_lowercase().contains(&query_lower)
-                        || item.category.to_lowercase().contains(&query_lower)
-                        || item.cleaner_name.to_lowercase().contains(&query_lower);
-                }
-
-                // Apply category filter
-                if !self.detailed_view_filter.is_empty() {
-                    return item
-                        .category
-                        .to_lowercase()
-                        .contains(&self.detailed_view_filter.to_lowercase());
-                }
-
-                true
-            })
-            .collect();
-
-        // Sort based on current sort mode
-        match self.sort_mode {
-            SortMode::Name => items.sort_by(|a, b| a.path.cmp(&b.path)),
-            SortMode::Size => items.sort_by_key(|b| std::cmp::Reverse(b.size)), // Largest first
-            SortMode::Category => items.sort_by(|a, b| a.category.cmp(&b.category)),
-            SortMode::Status => items.sort_by_key(|b| std::cmp::Reverse(b.timestamp)), // Most recent first
-        }
-
-        items
-    }
-
-    pub fn toggle_chart_type(&mut self) {
-        self.chart_type = match self.chart_type {
-            ChartType::Bar => ChartType::PieCount,
-            ChartType::PieCount => ChartType::PieSize,
-            ChartType::PieSize => ChartType::Bar,
-        };
     }
 }

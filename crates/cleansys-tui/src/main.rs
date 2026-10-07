@@ -236,11 +236,9 @@ fn run_tui() -> Result<()> {
                 Err(e) => break Err(e),
             },
             Ok(Event::Tick) => {
-                // Update animation frame on tick
-                if app.is_running {
-                    app.update_animation();
-                }
-                // Pull in finished background scan results.
+                app.update_animation();
+                // Progress of a running clean and of the background scan.
+                app.poll_run();
                 app.poll_scan();
             }
             Ok(Event::Resize(width, height)) => {

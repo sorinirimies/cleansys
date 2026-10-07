@@ -1,17 +1,15 @@
 use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    symbols,
     text::{Line, Span},
-    widgets::{Axis, Block, Borders, Chart, Clear, Dataset, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, Gauge, List, ListItem, Paragraph, Wrap},
     Frame,
 };
 // Using tui-checkbox library for consistent checkbox symbols across the application
 use tui_checkbox::symbols as checkbox_symbols;
 use tui_spinner::{FluxFrames, FluxSpinner};
 
-use crate::app::{App, ChartType, CleanedItemType};
-use crate::pie_chart::create_pie_chart_from_distribution;
+use crate::app::App;
 use cleansys_core::{format_size, Status};
 
 pub fn ui(f: &mut Frame, app: &mut App) {
@@ -50,8 +48,6 @@ pub fn ui(f: &mut Frame, app: &mut App) {
 
     if app.show_help {
         render_help(f, chunks[1]);
-    } else if app.is_running || app.show_progress_screen {
-        render_progress_screen(f, app, chunks[1]);
     } else {
         render_main_content(f, app, chunks[1]);
     }
@@ -179,6 +175,18 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
 fn render_main_content(f: &mut Frame, app: &mut App, area: Rect) {
     // Responsive: a sidebar of categories on wide terminals; on narrow ones the
     // sidebar is replaced by a one-line category bar (Tab / Shift+Tab to switch).
+    // The run panel (progress while cleaning, summary afterwards, activity log) sits
+    // under the list, so the main view never changes while a clean runs.
+    let panel_h = run_panel_height(app, area.height);
+    let (area, panel_area) = if panel_h > 0 {
+        let split = Layout::default()
+            .direction(Direction::Vertical)
+            .constraints([Constraint::Min(6), Constraint::Length(panel_h)])
+            .split(area);
+        (split[0], Some(split[1]))
+    } else {
+        (area, None)
+    };
     let use_sidebar = area.width >= 90;
     let content = if use_sidebar {
         let sidebar_w = (area.width * 28 / 100).clamp(26, 40);
@@ -192,677 +200,167 @@ fn render_main_content(f: &mut Frame, app: &mut App, area: Rect) {
         area
     };
 
-    if app.detailed_view {
-        render_details(f, app, content);
-    } else {
-        render_cleaner_pane(f, app, content, !use_sidebar);
+    render_cleaner_pane(f, app, content, !use_sidebar);
+    if let Some(panel) = panel_area {
+        render_run_panel(f, app, panel);
     }
 }
 
-fn render_progress_screen(f: &mut Frame, app: &mut App, area: Rect) {
-    // Render both progress and details in a unified view
-    render_unified_progress_view(f, app, area);
-}
-
-fn render_unified_progress_view(f: &mut Frame, app: &mut App, area: Rect) {
-    // Update app counters first
-    app.update_counters();
-
-    // Ultra-compact layout for extremely small terminals
-    if area.width < 50 || area.height < 15 {
-        render_ultra_compact_view(f, app, area);
-        return;
+/// Rows of the status part of the run panel (progress / summary box, or a one-line notice).
+fn status_rows(app: &App) -> u16 {
+    if app.is_running || app.run_summary.is_some() {
+        3
+    } else {
+        u16::from(app.notice.is_some())
     }
-
-    // Show 2-section layout: Combined Progress Overview + Removed Items
-    let main_chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Percentage(if app.terminal_height >= 35 {
-                55
-            } else if app.terminal_height >= 25 {
-                50
-            } else {
-                45
-            }), // Combined progress overview - responsive percentage
-            Constraint::Percentage(if app.terminal_height >= 35 {
-                45
-            } else if app.terminal_height >= 25 {
-                50
-            } else {
-                55
-            }), // Removed items window - responsive percentage
-        ])
-        .margin(1)
-        .split(area);
-
-    // ===== TOP SECTION: Combined Progress Overview =====
-    render_combined_progress_overview(f, app, main_chunks[0]);
-
-    // ===== BOTTOM SECTION: Removed Items Window =====
-    render_removed_items_window(f, app, main_chunks[1]);
 }
 
-fn render_combined_progress_overview(f: &mut Frame, app: &App, area: Rect) {
-    let block = Block::default()
-        .title("📊 Progress Overview & Operations")
-        .title_style(
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
-
-    let inner_area = block.inner(area);
-
-    // Responsive height allocation based on terminal size - make chart area bigger
-    let stats_height = if area.height < 15 {
-        5 // Minimal height for very short terminals
-    } else if area.height < 20 {
-        7 // Compact layout for short terminals
-    } else if area.height < 25 {
-        9 // Medium layout
+/// Rows of the activity log (only on tall enough terminals).
+fn log_rows(app: &App, avail: u16) -> u16 {
+    if app.show_log && avail >= 22 {
+        7
     } else {
-        12 // Standard height for normal terminals - much bigger for better chart
-    };
-
-    // Split into top (stats + chart) and bottom (operations)
-    let main_sections = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(stats_height), // Stats and chart section
-            Constraint::Min(6),               // Operations section
-        ])
-        .split(inner_area);
-
-    // Top section: Progress stats and chart
-    render_progress_stats_and_chart(f, app, main_sections[0]);
-
-    // Bottom section: Operations summary
-    render_operations_summary(f, app, main_sections[1]);
-
-    f.render_widget(block, area);
+        0
+    }
 }
 
-fn render_progress_stats_and_chart(f: &mut Frame, app: &App, area: Rect) {
-    let elapsed_time = app.get_elapsed_time();
-    let total_ops = app.operation_count;
-    let completed_ops = total_ops.saturating_sub(app.errors_count);
-    let progress_percent = completed_ops
-        .checked_mul(100)
-        .and_then(|v| v.checked_div(total_ops))
-        .unwrap_or(0);
+/// Rows the run panel needs (0 = nothing to show).
+fn run_panel_height(app: &App, avail: u16) -> u16 {
+    (status_rows(app) + log_rows(app, avail)).min(avail.saturating_sub(8))
+}
 
-    // Responsive layout based on terminal width - give chart much more space
-    let show_chart = area.width >= 80; // Hide chart on narrow terminals
-
-    let horizontal_chunks = if show_chart {
-        let stats_percent = if area.width < 100 {
-            45 // Much more space for chart on narrow terminals
-        } else if area.width < 130 {
-            40 // Balanced layout for medium terminals - chart gets 60%
-        } else {
-            35 // Even more space for chart on wide terminals - chart gets 65%
-        };
-
-        Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(stats_percent),
-                Constraint::Percentage(100 - stats_percent),
-            ])
-            .split(area)
-    } else {
-        // Use full width for stats when chart is hidden
-        Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([Constraint::Percentage(100)])
-            .split(area)
+/// Progress while cleaning, the outcome afterwards, a one-line notice, and the
+/// activity log — the TUI counterpart of the GUI action bar / the web progress panel.
+fn render_run_panel(f: &mut Frame, app: &App, area: Rect) {
+    let top_h = status_rows(app).min(area.height);
+    let log_h = area.height - top_h;
+    let top = Rect {
+        height: top_h,
+        ..area
+    };
+    let log = Rect {
+        y: area.y + top_h,
+        height: log_h,
+        ..area
     };
 
-    // Left side: Progress stats
-    let stats_lines = vec![
-        Line::from(vec![
-            Span::styled(
-                "Progress: ",
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                format!("{}%", progress_percent),
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(format!(" ({}/{})", completed_ops, total_ops)),
-            Span::raw("  ⏱️ "),
-            Span::styled(
-                elapsed_time,
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]),
-        Line::from(vec![
-            Span::raw("█".repeat((progress_percent * 35) / 100)),
-            Span::styled(
-                "░".repeat(35 - (progress_percent * 35) / 100),
-                Style::default().fg(Color::DarkGray),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled("✅ ", Style::default().fg(Color::Green)),
-            Span::styled(
-                format!("{} OK", completed_ops),
-                Style::default().fg(Color::Green),
-            ),
-            Span::raw("  "),
-            Span::styled("⚡ ", Style::default().fg(Color::Yellow)),
-            Span::styled(
-                format!(
-                    "{} Active",
-                    if app.is_running {
-                        total_ops.saturating_sub(completed_ops)
-                    } else {
-                        0
-                    }
-                ),
-                Style::default().fg(Color::Yellow),
-            ),
-            Span::raw("  "),
-            Span::styled("❌ ", Style::default().fg(Color::Red)),
-            Span::styled(
-                format!("{} Errors", app.errors_count),
-                Style::default().fg(Color::Red),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled(
-                "💾 Total freed: ",
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                format_size(app.total_bytes_cleaned),
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]),
-    ];
-
-    let stats_para = Paragraph::new(stats_lines);
-    f.render_widget(stats_para, horizontal_chunks[0]);
-
-    // Right side: Chart (only if terminal is wide enough)
-    if show_chart && horizontal_chunks.len() > 1 {
-        match app.chart_type {
-            ChartType::Bar => {
-                render_vertical_bar_chart(f, app, horizontal_chunks[1]);
-            }
-            ChartType::PieCount => {
-                render_pie_chart_distribution(f, app, horizontal_chunks[1]);
-            }
-            ChartType::PieSize => {
-                render_pie_chart_size_distribution(f, app, horizontal_chunks[1]);
-            }
+    if top_h > 0 {
+        if app.is_running {
+            render_progress_bar(f, app, top);
+        } else if let Some(sum) = &app.run_summary {
+            render_summary(f, sum, top);
+        } else if let Some(msg) = &app.notice {
+            f.render_widget(
+                Paragraph::new(Span::styled(
+                    msg.clone(),
+                    Style::default().fg(Color::Yellow),
+                )),
+                top,
+            );
         }
     }
+    if log_h >= 3 {
+        render_activity_log(f, app, log);
+    }
 }
 
-fn render_ultra_compact_view(f: &mut Frame, app: &App, area: Rect) {
-    let elapsed_time = app.get_elapsed_time();
-    let total_ops = app.operation_count;
-    let completed_ops = total_ops.saturating_sub(app.errors_count);
-    let progress_percent = completed_ops
-        .checked_mul(100)
-        .and_then(|v| v.checked_div(total_ops))
-        .unwrap_or(0);
+fn render_progress_bar(f: &mut Frame, app: &App, area: Rect) {
+    let total = app.run_total.max(1);
+    let ratio = (app.run_done as f64 / total as f64).clamp(0.0, 1.0);
+    let title = format!(
+        " Cleaning {}/{} · freed {} · {} ",
+        app.run_done,
+        app.run_total,
+        format_size(app.total_bytes_cleaned),
+        app.get_elapsed_time()
+    );
+    let label = match &app.run_current {
+        Some(name) => format!("running {name}"),
+        None => "starting…".to_string(),
+    };
+    let gauge = Gauge::default()
+        .block(
+            Block::default()
+                .title(title)
+                .title_bottom(Line::from(" q / Esc: cancel · L: log ").right_aligned())
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(Color::Green)),
+        )
+        .gauge_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
+        .ratio(ratio)
+        .label(label);
+    f.render_widget(gauge, area);
+}
 
-    // Ultra-compact single block with essential info only
-    let compact_lines = vec![
-        Line::from(vec![Span::styled(
-            format!("Cleansys [{}x{}]", area.width, area.height),
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )]),
-        Line::from(vec![
-            Span::styled(
-                format!("{}% ", progress_percent),
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw("█".repeat(
-                ((progress_percent * (area.width.saturating_sub(10) as usize)) / 100).min(30),
-            )),
-        ]),
-        Line::from(vec![
-            Span::styled(
-                format!("✅{} ❌{} ", completed_ops, app.errors_count),
-                Style::default().fg(Color::White),
-            ),
-            Span::styled(
-                format_size(app.total_bytes_cleaned),
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ]),
-        Line::from(vec![
-            Span::styled(
-                format!("⏱️{} ", elapsed_time),
-                Style::default().fg(Color::Cyan),
-            ),
-            Span::styled(
-                if app.is_running { "RUNNING" } else { "DONE" },
-                Style::default().fg(if app.is_running {
-                    Color::Yellow
-                } else {
-                    Color::Green
-                }),
-            ),
-        ]),
+fn render_summary(f: &mut Frame, sum: &crate::app::RunSummary, area: Rect) {
+    let (icon, color) = if sum.cancelled {
+        ("⏹", Color::Yellow)
+    } else if sum.failed > 0 {
+        ("⚠", Color::Yellow)
+    } else {
+        ("✓", Color::Green)
+    };
+    let mut spans = vec![
+        Span::styled(
+            format!("{icon} Freed {}", format_size(sum.freed)),
+            Style::default().fg(color).add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(format!(" across {} cleaner(s)", sum.ok)),
     ];
-
+    if sum.failed > 0 {
+        spans.push(Span::styled(
+            format!(" · {} failed/cancelled", sum.failed),
+            Style::default().fg(Color::Red),
+        ));
+    }
+    spans.push(Span::styled(
+        format!(" · {}", sum.elapsed),
+        Style::default().fg(Color::DarkGray),
+    ));
     let block = Block::default()
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(color))
+        .title(if sum.cancelled {
+            " Cancelled "
+        } else {
+            " Done "
+        })
+        .title_bottom(Line::from(" Esc: dismiss · L: log ").right_aligned());
+    f.render_widget(Paragraph::new(Line::from(spans)).block(block), area);
+}
+
+fn render_activity_log(f: &mut Frame, app: &App, area: Rect) {
+    let block = Block::default()
+        .title(" Activity ")
         .borders(Borders::ALL)
         .border_style(Style::default().fg(Color::DarkGray));
-
-    let para = Paragraph::new(compact_lines)
-        .block(block)
-        .wrap(Wrap { trim: true });
-
-    f.render_widget(para, area);
-}
-
-fn render_vertical_bar_chart(f: &mut Frame, app: &App, area: Rect) {
-    // Get real data from cleaned items
-    let category_distribution = app.get_category_distribution();
-
-    // Only show chart if we have real data
-    if !category_distribution.is_empty() {
-        // Use real data, limit to top 6 categories to fit in chart
-        let limited_data: Vec<_> = category_distribution.iter().take(6).collect();
-        let max_count = limited_data
-            .iter()
-            .map(|(_, count, _)| *count)
-            .max()
-            .unwrap_or(1) as f64;
-
-        let chart_data: Vec<(f64, f64)> = limited_data
-            .iter()
-            .enumerate()
-            .map(|(i, (_, count, _))| (i as f64, *count as f64))
-            .collect();
-
-        let category_names: Vec<&str> = limited_data
-            .iter()
-            .map(|(name, _, _)| {
-                // Truncate label for narrow terminals
-                if area.width < 80 {
-                    if name.len() > 6 {
-                        &name[..6]
-                    } else {
-                        name
-                    }
-                } else if area.width < 100 {
-                    if name.len() > 8 {
-                        &name[..8]
-                    } else {
-                        name
-                    }
-                } else if name.len() > 12 {
-                    &name[..12]
-                } else {
-                    name
-                }
-            })
-            .collect();
-
-        // Create dataset for the chart
-        let dataset = Dataset::default()
-            .name("Cleaned Items")
-            .marker(symbols::Marker::Block)
-            .style(
-                Style::default()
-                    .fg(Color::Cyan)
-                    .add_modifier(Modifier::BOLD),
-            )
-            .data(&chart_data);
-
-        // Create x-axis labels
-        let x_labels = if category_names.len() <= 3 {
-            vec![
-                Span::raw(category_names.first().unwrap_or(&"").to_string()),
-                Span::raw(category_names.get(1).unwrap_or(&"").to_string()),
-                Span::raw(category_names.get(2).unwrap_or(&"").to_string()),
-            ]
-        } else {
-            vec![
-                Span::raw(category_names.first().unwrap_or(&"").to_string()),
-                Span::raw(
-                    category_names
-                        .get(category_names.len() / 2)
-                        .unwrap_or(&"")
-                        .to_string(),
-                ),
-                Span::raw(category_names.last().unwrap_or(&"").to_string()),
-            ]
-        };
-
-        // Create y-axis labels
-        let y_max = (max_count * 1.1).max(1.0); // Add 10% padding, minimum 1
-        let y_labels = vec![
-            Span::raw("0"),
-            Span::raw(format!("{}", (y_max / 2.0) as u64)),
-            Span::raw(format!("{}", y_max as u64)),
-        ];
-
-        let chart = Chart::new(vec![dataset])
-            .block(
-                Block::default()
-                    .title(if area.width < 50 {
-                        "Items (Bar)"
-                    } else {
-                        "Items Distribution (Bar Chart)"
-                    })
-                    .title_style(
-                        Style::default()
-                            .fg(Color::Cyan)
-                            .add_modifier(Modifier::BOLD),
-                    )
-                    .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Cyan)),
-            )
-            .x_axis(
-                Axis::default()
-                    .title(if area.width >= 80 { "Categories" } else { "" })
-                    .style(Style::default().fg(Color::White))
-                    .bounds([0.0, (category_names.len().max(3) - 1) as f64])
-                    .labels(x_labels),
-            )
-            .y_axis(
-                Axis::default()
-                    .title(if area.width >= 80 { "Count" } else { "" })
-                    .style(Style::default().fg(Color::White))
-                    .bounds([0.0, y_max])
-                    .labels(y_labels),
-            );
-
-        f.render_widget(chart, area);
-    }
-}
-
-fn render_operations_summary(f: &mut Frame, app: &App, area: Rect) {
-    // Two columns — the real queue of this run, split by user land / root.
-    let columns = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([
-            Constraint::Percentage(48), // User operations
-            Constraint::Percentage(4),  // Spacing
-            Constraint::Percentage(48), // System operations
-        ])
-        .split(area);
-
-    let column = |root: bool, title: &'static str, color: Color| -> Vec<ListItem<'static>> {
-        let mut rows = vec![
-            ListItem::new(Line::from(Span::styled(
-                title,
-                Style::default().fg(color).add_modifier(Modifier::BOLD),
-            ))),
-            ListItem::new(Line::from("")),
-        ];
-        let capacity = (area.height as usize).saturating_sub(2);
-        let queue: Vec<&cleansys_core::CleanerItem> = app
-            .categories
-            .iter()
-            .flat_map(|c| &c.items)
-            .filter(|i| i.requires_root == root && (i.selected || i.status.is_some()))
-            .collect();
-        for item in queue.iter().take(capacity.saturating_sub(1).max(1)) {
-            let (glyph, style) = match &item.status {
-                Some(Status::Running) => (
-                    Status::Running.get_animation_frame(app.animation_frame),
-                    Style::default().fg(Color::Yellow),
-                ),
-                Some(Status::Success(_)) => ("✓", Style::default().fg(Color::Green)),
-                Some(Status::Error(_)) => ("✗", Style::default().fg(Color::Red)),
-                Some(Status::Pending) | None => ("•", Style::default().fg(Color::DarkGray)),
-            };
-            let mut spans = vec![
-                Span::styled(format!("{glyph} "), style),
-                Span::styled(item.name.clone(), Style::default().fg(Color::White)),
-            ];
-            if item.bytes_cleaned > 0 {
-                spans.push(Span::styled(
-                    format!("  {}", format_size(item.bytes_cleaned)),
-                    Style::default().fg(Color::Green),
-                ));
-            }
-            if root && !app.is_root {
-                spans.push(Span::styled(" (sudo)", Style::default().fg(Color::Yellow)));
-            }
-            rows.push(ListItem::new(Line::from(spans)));
-        }
-        let hidden = queue
-            .len()
-            .saturating_sub(capacity.saturating_sub(1).max(1));
-        if hidden > 0 {
-            rows.push(ListItem::new(Line::from(Span::styled(
-                format!("… and {hidden} more"),
-                Style::default().fg(Color::DarkGray),
-            ))));
-        }
-        if queue.is_empty() {
-            rows.push(ListItem::new(Line::from(Span::styled(
-                "(none)",
-                Style::default().fg(Color::DarkGray),
-            ))));
-        }
-        rows
-    };
-
-    f.render_widget(
-        List::new(column(false, "👤 USER OPERATIONS", Color::Green)),
-        columns[0],
-    );
-    f.render_widget(
-        List::new(column(true, "🔒 SYSTEM OPERATIONS", Color::Yellow)),
-        columns[2],
-    );
-}
-
-fn render_pie_chart_distribution(f: &mut Frame, app: &App, area: Rect) {
-    let category_distribution = app.get_category_distribution();
-
-    // Only show real data from actual cleaning operations, and only when
-    // there's enough room for tui-piechart to draw something meaningful.
-    if !category_distribution.is_empty() && area.width >= 20 && area.height >= 8 {
-        let chart = create_pie_chart_from_distribution(
-            &category_distribution,
-            "Items Distribution (Count)",
-            false, // Use count-based distribution
-        )
-        .show_percentages(area.width >= 40)
-        .show_legend(area.width >= 50 || area.height >= 16);
-
-        f.render_widget(chart, area);
-    }
-}
-
-fn render_pie_chart_size_distribution(f: &mut Frame, app: &App, area: Rect) {
-    let category_distribution = app.get_category_distribution();
-
-    // Only show real data from actual cleaning operations, and only when
-    // there's enough room for tui-piechart to draw something meaningful.
-    if !category_distribution.is_empty() && area.width >= 20 && area.height >= 8 {
-        let chart = create_pie_chart_from_distribution(
-            &category_distribution,
-            "Items Distribution (Size)",
-            true, // Use size-based distribution
-        )
-        .show_percentages(area.width >= 40)
-        .show_legend(area.width >= 50 || area.height >= 16);
-
-        f.render_widget(chart, area);
-    }
-}
-
-fn render_removed_items_window(f: &mut Frame, app: &mut App, area: Rect) {
-    let title = if app.is_running {
-        "📋 Operation Progress"
-    } else if app.show_progress_screen {
-        "📋 Cleaning Results - Removed Items"
-    } else {
-        "📋 Removed Items Details"
-    };
-
-    let block = Block::default()
-        .title(title)
-        .title_style(
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
-        )
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Yellow));
-
-    let inner_area = block.inner(area);
-
-    let mut display_items = Vec::new();
-
-    // Show operation logs if running, otherwise show removed items
-    if app.is_running && !app.operation_logs.is_empty() {
-        for log_entry in app.operation_logs.iter().rev().take(15) {
-            let (icon, color) = if log_entry.contains("✅") {
-                ("✅", Color::Green)
-            } else if log_entry.contains("❌") {
-                ("❌", Color::Red)
-            } else if log_entry.contains("🔄") {
-                ("🔄", Color::Yellow)
-            } else if log_entry.contains("📊") {
-                ("📊", Color::Cyan)
+    let inner = block.inner(area);
+    let rows = inner.height as usize;
+    let width = inner.width as usize;
+    let start = app.operation_logs.len().saturating_sub(rows);
+    let lines: Vec<Line> = app.operation_logs[start..]
+        .iter()
+        .map(|l| {
+            let color = if l.starts_with('❌') {
+                Color::Red
+            } else if l.starts_with('✅') || l.starts_with('🎉') {
+                Color::Green
             } else {
-                ("ℹ️", Color::White)
+                Color::Gray
             };
-
-            display_items.push(ListItem::new(Line::from(vec![
-                Span::styled(format!("{} ", icon), Style::default().fg(color)),
-                Span::styled(log_entry.clone(), Style::default().fg(Color::White)),
-            ])));
-        }
+            let text: String = l.chars().take(width).collect();
+            Line::from(Span::styled(text, Style::default().fg(color)))
+        })
+        .collect();
+    let body = if lines.is_empty() {
+        vec![Line::from(Span::styled(
+            "No activity yet.",
+            Style::default().fg(Color::DarkGray),
+        ))]
     } else {
-        // Get sample cleaned items for display plus additional entries for demo
-        let filtered_items = app.get_filtered_detailed_items();
-
-        if !filtered_items.is_empty() {
-            for (index, item) in filtered_items.iter().enumerate() {
-                let icon = match item.item_type {
-                    CleanedItemType::File => "📄",
-                    CleanedItemType::Directory => "📁",
-                    CleanedItemType::Log => "📝",
-                };
-
-                // File path and size on one line
-                display_items.push(ListItem::new(Line::from(vec![
-                    Span::styled(format!("{} ", icon), Style::default().fg(Color::Yellow)),
-                    Span::styled(item.path.clone(), Style::default().fg(Color::White)),
-                    Span::raw(" "),
-                    Span::styled(
-                        format!("({})", format_size(item.size)),
-                        Style::default()
-                            .fg(Color::Green)
-                            .add_modifier(Modifier::BOLD),
-                    ),
-                ])));
-
-                // Category and cleaner info on next line (indented)
-                display_items.push(ListItem::new(Line::from(vec![
-                    Span::raw("   "),
-                    Span::styled("📂 ", Style::default().fg(Color::Blue)),
-                    Span::styled(item.category.clone(), Style::default().fg(Color::Blue)),
-                    Span::raw(" • "),
-                    Span::styled("🔧 ", Style::default().fg(Color::Cyan)),
-                    Span::styled(item.cleaner_name.clone(), Style::default().fg(Color::Cyan)),
-                ])));
-
-                // Add spacing between entries
-                if index < filtered_items.len() - 1 {
-                    display_items.push(ListItem::new(Line::from(vec![])));
-                }
-            }
-        } else if !app.is_running && app.show_progress_screen && app.total_bytes_cleaned > 0 {
-            // Show summary when cleaning is complete but no detailed items
-            display_items.push(ListItem::new(Line::from(vec![
-                Span::styled("✅ ", Style::default().fg(Color::Green)),
-                Span::styled(
-                    "Cleaning completed successfully",
-                    Style::default()
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            ])));
-            display_items.push(ListItem::new(Line::from(vec![])));
-
-            display_items.push(ListItem::new(Line::from(vec![
-                Span::styled("📊 ", Style::default().fg(Color::Cyan)),
-                Span::styled("Total space freed: ", Style::default().fg(Color::White)),
-                Span::styled(
-                    format_size(app.total_bytes_cleaned),
-                    Style::default()
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD),
-                ),
-            ])));
-            display_items.push(ListItem::new(Line::from(vec![])));
-
-            // Show which cleaners were executed
-            for category in &app.categories {
-                for item in &category.items {
-                    if item.bytes_cleaned > 0 {
-                        display_items.push(ListItem::new(Line::from(vec![
-                            Span::styled("🔧 ", Style::default().fg(Color::Yellow)),
-                            Span::styled(item.name.clone(), Style::default().fg(Color::White)),
-                            Span::raw(": "),
-                            Span::styled(
-                                format_size(item.bytes_cleaned),
-                                Style::default().fg(Color::Green),
-                            ),
-                        ])));
-                    }
-                }
-            }
-
-            if display_items.len() == 3 {
-                // No items were cleaned with bytes > 0
-                display_items.push(ListItem::new(Line::from(vec![])));
-                display_items.push(ListItem::new(Line::from(vec![
-                    Span::styled("ℹ️ ", Style::default().fg(Color::Blue)),
-                    Span::styled(
-                        "Detailed file list not available in TUI mode",
-                        Style::default().fg(Color::DarkGray),
-                    ),
-                ])));
-            }
-        }
-    }
-
-    let items_list = List::new(display_items)
-        .block(Block::default())
-        .highlight_style(
-            Style::default()
-                .bg(Color::DarkGray)
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol("► ");
-
-    f.render_stateful_widget(items_list, inner_area, &mut app.detailed_list_scroll_state);
-    f.render_widget(block, area);
+        lines
+    };
+    f.render_widget(Paragraph::new(body).block(block), area);
 }
 
 /// Colour a size by how much it is: small = normal, big = warm.
@@ -1294,6 +792,13 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
             "   ~ moderate  ! caution",
             Style::default().fg(Color::DarkGray),
         ));
+        spans.push(Span::styled(
+            format!(
+                "   idle ≥ {} [ ]",
+                cleansys_core::engine::config::min_age_label(app.min_age_days)
+            ),
+            Style::default().fg(Color::Cyan),
+        ));
         Line::from(spans).right_aligned()
     });
 
@@ -1394,73 +899,6 @@ fn render_item_detail(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(widget, area);
 }
 
-fn render_details(f: &mut Frame, app: &App, area: Rect) {
-    let Some((ci, ii)) = app.current_item() else {
-        return;
-    };
-    let item = &app.categories[ci].items[ii];
-
-    let mut text = vec![
-        Line::from(vec![Span::styled(
-            format!("{} Keyboard Controls", item.name),
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        )]),
-        Line::from(vec![Span::raw("")]),
-        Line::from(vec![
-            Span::raw("Description: "),
-            Span::styled(&item.description, Style::default().fg(Color::White)),
-        ]),
-        Line::from(vec![Span::raw("")]),
-        Line::from(vec![
-            Span::raw("Requires root: "),
-            if item.requires_root {
-                Span::styled("Yes", Style::default().fg(Color::Red))
-            } else {
-                Span::styled("No", Style::default().fg(Color::Green))
-            },
-        ]),
-        Line::from(vec![
-            Span::raw("Status: "),
-            match &item.status {
-                Some(Status::Running) => {
-                    let spinner = Status::Running.get_animation_frame(app.animation_frame);
-                    Span::styled(
-                        format!("{} Running...", spinner),
-                        Style::default().fg(Color::Yellow),
-                    )
-                }
-                Some(Status::Success(msg)) => {
-                    Span::styled(format!("✓ {}", msg), Style::default().fg(Color::Green))
-                }
-                Some(Status::Error(msg)) => {
-                    Span::styled(format!("✗ Error: {}", msg), Style::default().fg(Color::Red))
-                }
-                Some(Status::Pending) => {
-                    Span::styled("• Waiting to start", Style::default().fg(Color::DarkGray))
-                }
-                None => Span::raw("Not run"),
-            },
-        ]),
-    ];
-
-    if item.bytes_cleaned > 0 {
-        text.push(Line::from(vec![
-            Span::raw("Space freed: "),
-            Span::styled(
-                format_size(item.bytes_cleaned),
-                Style::default().fg(Color::Green),
-            ),
-        ]));
-    }
-
-    let details = Paragraph::new(text)
-        .block(Block::default().title("Details").borders(Borders::ALL))
-        .wrap(Wrap { trim: true });
-    f.render_widget(details, area);
-}
-
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .borders(Borders::TOP)
@@ -1468,118 +906,7 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
 
     let inner_area = block.inner(area);
 
-    if app.is_running || app.show_progress_screen {
-        // Progress mode footer - clean and simple
-        let footer_chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .constraints([
-                Constraint::Percentage(60), // Status info
-                Constraint::Percentage(40), // Controls
-            ])
-            .split(inner_area);
-
-        // Status information
-        let status_text = vec![Line::from(vec![
-            Span::styled(
-                "Status: ",
-                Style::default()
-                    .fg(Color::White)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            if app.paused {
-                Span::styled(
-                    "PAUSED",
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                )
-            } else if app.is_running {
-                Span::styled(
-                    "CLEANING",
-                    Style::default()
-                        .fg(Color::Green)
-                        .add_modifier(Modifier::BOLD),
-                )
-            } else if app.operation_end_time.is_some() {
-                Span::styled(
-                    "FINISHED",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                )
-            } else {
-                Span::styled(
-                    "READY",
-                    Style::default()
-                        .fg(Color::White)
-                        .add_modifier(Modifier::BOLD),
-                )
-            },
-            Span::raw("  •  "),
-            Span::styled("Total Freed: ", Style::default().fg(Color::White)),
-            Span::styled(
-                format_size(app.total_bytes_cleaned),
-                Style::default()
-                    .fg(Color::Green)
-                    .add_modifier(Modifier::BOLD),
-            ),
-        ])];
-
-        // Controls - different for running vs completed operations
-        let controls_text = if app.is_running {
-            vec![Line::from(vec![
-                Span::styled(
-                    "ESC",
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(": Cancel  "),
-                Span::styled(
-                    "↑/↓",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(": Scroll Items  "),
-                Span::styled(
-                    "q",
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(": Quit"),
-            ])]
-        } else {
-            // Operations completed - show different controls
-            vec![Line::from(vec![
-                Span::styled(
-                    "ESC",
-                    Style::default()
-                        .fg(Color::Yellow)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(": Return to Menu  "),
-                Span::styled(
-                    "↑/↓",
-                    Style::default()
-                        .fg(Color::Cyan)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(": Scroll Items  "),
-                Span::styled(
-                    "q",
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
-                ),
-                Span::raw(": Quit"),
-            ])]
-        };
-
-        let status_para = Paragraph::new(status_text);
-        let controls_para =
-            Paragraph::new(controls_text).alignment(ratatui::layout::Alignment::Right);
-
-        f.render_widget(status_para, footer_chunks[0]);
-        f.render_widget(controls_para, footer_chunks[1]);
-    } else if inner_area.width < 100 {
+    if inner_area.width < 125 {
         // Narrow terminals: selection summary on one line, compact key hints below.
         let n = app
             .categories
@@ -1599,6 +926,7 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
         hints.extend(key("Tab", "Cat", Color::Blue));
         hints.extend(key("r", "Rec", Color::Cyan));
         hints.extend(key("S", "Sched", Color::Cyan));
+        hints.extend(key("L", "Log", Color::Cyan));
         hints.extend(key("?", "Help", Color::Magenta));
         hints.extend(key("q", "Quit", Color::Red));
         let mut status_spans = vec![
@@ -1660,7 +988,7 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             Span::raw("  •  "),
             Span::styled("Selected: ", Style::default().fg(Color::White)),
             Span::styled(
-                // Live count (the cached counter only refreshes on the progress screen).
+                // Live count of ticked cleaners.
                 format!(
                     "{}",
                     app.categories
@@ -1715,6 +1043,13 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             ),
             Span::raw(": Schedule  "),
             Span::styled(
+                "L",
+                Style::default()
+                    .fg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(": Log  "),
+            Span::styled(
                 "?",
                 Style::default()
                     .fg(Color::Magenta)
@@ -1740,6 +1075,13 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
 }
 
 fn render_help(f: &mut Frame, area: Rect) {
+    let h = |t: &'static str| {
+        Line::from(vec![Span::styled(
+            t,
+            Style::default().add_modifier(Modifier::BOLD),
+        )])
+    };
+    let l = |t: &'static str| Line::from(vec![Span::raw(t)]);
     let help_text = vec![
         Line::from(vec![Span::styled(
             "🔍 Cleansys Help",
@@ -1747,125 +1089,34 @@ fn render_help(f: &mut Frame, area: Rect) {
                 .fg(Color::Cyan)
                 .add_modifier(Modifier::BOLD),
         )]),
-        Line::from(vec![Span::raw("")]),
-        Line::from(vec![Span::styled(
-            "📍 Navigation:",
-            Style::default().add_modifier(Modifier::BOLD),
-        )]),
-        Line::from(vec![Span::raw("  ↑/↓: Navigate items")]),
-        Line::from(vec![Span::raw("  Tab/Shift+Tab: Switch categories")]),
-        Line::from(vec![Span::raw("")]),
-        Line::from(vec![Span::styled(
-            "🔧 Actions:",
-            Style::default().add_modifier(Modifier::BOLD),
-        )]),
-        Line::from(vec![Span::raw("  Space: Toggle selection")]),
-        Line::from(vec![Span::raw(
-            "  →: Expand a cleaner's paths (↑/↓ move, Space tick, a/n all/none, ← back)",
-        )]),
-        Line::from(vec![Span::raw(
-            "  [ / ]: Idle days for project build output (fewer / more), then rescans",
-        )]),
-        Line::from(vec![Span::raw(
-            "  Enter: Run selected cleaners (asks for confirmation)",
-        )]),
-        Line::from(vec![Span::raw(
-            "  d: Preview selected cleaners (dry-run, deletes nothing)",
-        )]),
-        Line::from(vec![Span::raw("  a: Select all in current category")]),
-        Line::from(vec![Span::raw("  n: Deselect all in current category")]),
-        Line::from(vec![Span::raw("  A: Select all across every category")]),
-        Line::from(vec![Span::raw("  N: Deselect all across every category")]),
-        Line::from(vec![Span::raw(
-            "  r: Select the recommended set (safe, user-land cleaners)",
-        )]),
-        Line::from(vec![Span::raw(
-            "  S: Schedule automatic cleaning (daily/weekly/monthly)",
-        )]),
-        Line::from(vec![Span::raw(
-            "  c: Cycle chart type (Bar → Count Pie → Size Pie → Bar)",
-        )]),
-        Line::from(vec![Span::raw(
-            "  /: Filter cleaners across all categories (Esc clears)",
-        )]),
-        Line::from(vec![Span::raw(
-            "  e: Hide/show cleaners with nothing to clean   R: Re-scan sizes",
-        )]),
-        Line::from(vec![Span::raw("")]),
-        Line::from(vec![Span::styled(
-            "🎛️ Advanced Controls:",
-            Style::default().add_modifier(Modifier::BOLD),
-        )]),
-        Line::from(vec![Span::raw("  m: Toggle compact mode")]),
-        Line::from(vec![Span::raw(
-            "  v: Cycle view mode (Standard/Compact/Detailed/Performance)",
-        )]),
-        Line::from(vec![Span::raw("  p: Toggle performance statistics")]),
-        Line::from(vec![Span::raw(
-            "  s: Toggle auto-scroll log (during operations)",
-        )]),
-        Line::from(vec![Span::raw("  o: Cycle sort mode")]),
-        Line::from(vec![Span::raw("  f: Cycle filter mode")]),
-        Line::from(vec![Span::raw("  y: Toggle confirmation prompts")]),
-        Line::from(vec![Span::raw("  x: Clear all errors")]),
-        Line::from(vec![Span::raw(
-            "  j/k: Scroll detailed items list (vi-style)",
-        )]),
-        Line::from(vec![Span::raw("  /: Search files/paths in detailed view")]),
-        Line::from(vec![Span::raw(
-            "  ESC: Clear search / Cancel operation / Return to menu",
-        )]),
-        Line::from(vec![Span::raw("  Backspace: Remove search character")]),
-        Line::from(vec![Span::raw("  PgUp/PgDn: Scroll operation log")]),
-        Line::from(vec![Span::raw("  Home/End: Jump to first/last item")]),
-        Line::from(vec![Span::raw("  Ctrl+Space: Pause/Resume operations")]),
-        Line::from(vec![Span::raw("")]),
-        Line::from(vec![Span::styled(
-            "🔍 Search Features:",
-            Style::default().add_modifier(Modifier::BOLD),
-        )]),
-        Line::from(vec![Span::raw(
-            "  Search matches file paths, categories, and cleaner names",
-        )]),
-        Line::from(vec![Span::raw(
-            "  Real-time filtering with highlighted results",
-        )]),
-        Line::from(vec![Span::raw("  Category distribution shown at bottom")]),
-        Line::from(vec![Span::raw("")]),
-        Line::from(vec![Span::styled(
-            "📊 Chart Types (press 'c' to cycle):",
-            Style::default().add_modifier(Modifier::BOLD),
-        )]),
-        Line::from(vec![Span::raw(
-            "  Bar Chart: Traditional vertical bars for comparison",
-        )]),
-        Line::from(vec![Span::raw(
-            "  Pie Count: Circular chart showing item distribution by count",
-        )]),
-        Line::from(vec![Span::raw(
-            "  Pie Size: Circular chart showing space usage by category",
-        )]),
-        Line::from(vec![Span::raw("")]),
-        Line::from(vec![Span::styled(
-            "🔒 System Operations:",
-            Style::default().add_modifier(Modifier::BOLD),
-        )]),
-        Line::from(vec![Span::raw(
-            "  System cleaners require sudo/root privileges",
-        )]),
-        Line::from(vec![Span::raw(
-            "  Run 'sudo cleansys' or provide password when prompted",
-        )]),
-        Line::from(vec![Span::raw(
-            "  Items marked (sudo) will request elevated privileges",
-        )]),
-        Line::from(vec![Span::raw("")]),
-        Line::from(vec![Span::styled(
-            "🔄 Other:",
-            Style::default().add_modifier(Modifier::BOLD),
-        )]),
-        Line::from(vec![Span::raw("  ?: Show/hide help")]),
-        Line::from(vec![Span::raw("  q: Exit application")]),
+        l(""),
+        h("📍 Navigation:"),
+        l("  ↑/↓ (j/k): Navigate cleaners      Home/End: first / last"),
+        l("  Tab/Shift+Tab: Switch categories"),
+        l("  /: Filter cleaners across all categories (Esc clears)"),
+        l("  e: Hide/show cleaners with nothing to clean"),
+        l(""),
+        h("🔧 Selecting:"),
+        l("  Space: Toggle the highlighted cleaner"),
+        l("  →: Expand a cleaner's paths (↑/↓ move, Space tick, a/n all/none, ← back)"),
+        l("  a / n: Select / deselect all in this category    A / N: everywhere"),
+        l("  r: Select the recommended set (safe, user-land cleaners)"),
+        l("  [ / ]: Idle days for project build output (fewer / more), then re-scans"),
+        l(""),
+        h("🧹 Cleaning:"),
+        l("  d: Preview (dry-run) — exact paths and sizes, deletes nothing"),
+        l("  Enter: Run the selected cleaners (asks for confirmation; y toggles that)"),
+        l("  Progress, the outcome and the activity log appear under the list;"),
+        l("  q / Esc cancels a running clean, Esc dismisses the summary, L toggles the log"),
+        l("  R: Re-scan sizes      S: Schedule automatic cleaning"),
+        l(""),
+        h("🔒 System Operations:"),
+        l("  System cleaners need sudo/root: run 'sudo cleansys' or enter your"),
+        l("  password when prompted. Items marked (root) ask for elevation."),
+        l(""),
+        h("🔄 Other:"),
+        l("  ?: Show/hide help"),
+        l("  q: Quit"),
     ];
 
     let help = Paragraph::new(help_text)

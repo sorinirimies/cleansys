@@ -23,8 +23,7 @@ pub mod events;
 /// Text-based interactive menu (non-TUI fallback interface).
 pub mod menu;
 
-/// Pie chart widget for data visualization.
-pub mod pie_chart;
+pub mod run;
 
 /// Rendering logic for the terminal UI.
 pub mod render;

@@ -171,10 +171,10 @@ sidebar collapses into a one-line category bar (Tab / Shift+Tab).
 | `/` | **Filter** across all categories (Enter keeps it, Esc clears) |
 | `e` | Hide / show cleaners with nothing to clean |
 | `d` | Preview — exact paths and sizes, deletes nothing |
-| `Enter` | Run (asks for confirmation; `y` toggles the prompt) |
+| `Enter` | Run (asks for confirmation; `y` toggles the prompt). Progress, the outcome and the log appear **under the list** — the view never changes; `q` / `Esc` cancels, `Esc` dismisses the summary |
 | `R` | Re-scan sizes |
 | `S` | **Schedule** automatic cleaning |
-| `c` `m` `v` `p` `s` | Chart type · compact · view mode · performance stats · auto-scroll log |
+| `L` | Show / hide the **activity log** under the list |
 | `?`, `Esc`, `q` | Help · back/cancel · quit |
 
 Marks next to names: `~` moderate, `!` caution, `(root)` needs your password.

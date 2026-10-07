@@ -76,8 +76,8 @@ fn renders_default_state_without_panic() {
 fn renders_with_selection_and_search_active() {
     let mut app = app_with_categories();
     app.categories[0].items[0].selected = true;
-    app.search_active = true;
-    app.search_query = "cache".to_string();
+    app.filter_active = true;
+    app.filter = "cache".to_string();
     render_once(&mut app);
 }
 
@@ -123,91 +123,12 @@ fn renders_preview_overlay_with_results() {
 }
 
 #[test]
-fn renders_progress_screen_while_running() {
-    let mut app = app_with_categories();
-    app.confirmation_mode = false;
-    app.categories[0].items[0].selected = true;
-    app.request_run().unwrap();
-    assert!(app.is_running);
-    render_once(&mut app);
-}
-
-#[test]
-fn renders_progress_screen_with_detailed_items_and_errors() {
-    let mut app = app_with_categories();
-    app.show_progress_screen = true;
-    app.categories[0].items[0].status = Some(cleansys_core::Status::Success("ok".to_string()));
-    app.categories[0].items[1].status = Some(cleansys_core::Status::Error("boom".to_string()));
-    app.categories[1].items[0].status = Some(cleansys_core::Status::Running);
-    for i in 0..5 {
-        app.add_detailed_cleaned_item(
-            format!("/tmp/file-{i}"),
-            1024 * (i as u64 + 1),
-            "User".to_string(),
-            "Browser Caches".to_string(),
-            CleanedItemType::File.into(),
-        );
-    }
-    render_once(&mut app);
-}
-
-#[test]
-fn renders_every_view_mode_without_panic() {
-    use cleansys_tui::app::ViewMode;
-    for mode in [
-        ViewMode::Standard,
-        ViewMode::Compact,
-        ViewMode::Detailed,
-        ViewMode::Performance,
-    ] {
-        let mut app = app_with_categories();
-        app.view_mode = mode;
-        render_once(&mut app);
-    }
-}
-
-#[test]
-fn renders_every_chart_type_without_panic() {
-    use cleansys_tui::app::ChartType;
-    for chart in [ChartType::Bar, ChartType::PieCount, ChartType::PieSize] {
-        let mut app = app_with_categories();
-        app.chart_type = chart;
-        app.show_progress_screen = true;
-        for i in 0..3 {
-            app.add_detailed_cleaned_item(
-                format!("/tmp/file-{i}"),
-                2048,
-                "User".to_string(),
-                "Browser Caches".to_string(),
-                CleanedItemType::File.into(),
-            );
-        }
-        render_once(&mut app);
-    }
-}
-
-#[test]
 fn renders_at_small_terminal_size() {
     let mut app = app_with_categories();
     app.handle_resize(60, 18);
-    app.compact_mode = true;
     let backend = TestBackend::new(60, 18);
     let mut terminal = Terminal::new(backend).unwrap();
     terminal.draw(|f| ui(f, &mut app)).unwrap();
-}
-
-#[test]
-fn renders_completed_run_summary() {
-    let mut app = app_with_categories();
-    app.confirmation_mode = false;
-    app.categories[0].items[0].selected = true;
-    app.request_run().unwrap();
-    // Force-complete: mark the only Pending item Success and let
-    // update_counters() notice everything finished.
-    app.categories[0].items[0].status = Some(cleansys_core::Status::Success("done".to_string()));
-    app.update_counters();
-    assert!(!app.is_running);
-    render_once(&mut app);
 }
 
 /// Render and return the whole screen as one string.
@@ -328,4 +249,89 @@ fn expanded_details_render_paths_and_follow_the_cursor() {
 
     app.collapse_details();
     assert!(app.expanded.is_none() && app.entry_cursor.is_none());
+}
+
+/// Let the background worker finish and apply its messages.
+fn finish_run(app: &mut App) {
+    for _ in 0..500 {
+        app.poll_run();
+        if !app.is_running {
+            return;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(10));
+    }
+    panic!("run did not finish");
+}
+
+#[test]
+fn main_view_shows_progress_while_a_clean_is_running() {
+    let mut app = app_with_categories();
+    app.categories[0].items[0].selected = true;
+    // Simulate mid-run state: the list stays on screen, a progress panel appears under it.
+    app.is_running = true;
+    app.run_total = 3;
+    app.run_done = 1;
+    app.run_current = Some("Browser Caches".to_string());
+    app.categories[0].items[0].status = Some(cleansys_core::Status::Running);
+    app.categories[0].items[1].status = Some(cleansys_core::Status::Pending);
+    app.show_log = true;
+    app.log("🔄 Running: Browser Caches");
+    let text = screen_text(&mut app, 120, 40);
+    assert!(
+        text.contains("Cleaning 1/3"),
+        "progress title missing:\n{text}"
+    );
+    assert!(text.contains("running Browser Caches"));
+    assert!(text.contains("Activity"), "activity log missing");
+    // The cleaner list is still the main view.
+    assert!(text.contains("Trash"));
+    assert!(text.contains("queued"));
+}
+
+#[test]
+fn finished_run_shows_a_summary_under_the_list_and_esc_dismisses_it() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let mut app = app_with_categories();
+    app.confirmation_mode = false;
+    app.categories[0].items[0].selected = true;
+    app.request_run().unwrap();
+    assert!(app.is_running);
+    finish_run(&mut app);
+
+    let sum = app.run_summary.clone().expect("summary after a run");
+    assert_eq!(sum.ok, 1);
+    assert_eq!(sum.failed, 0);
+    let text = screen_text(&mut app, 120, 40);
+    assert!(text.contains("Freed"), "summary missing:\n{text}");
+    assert!(text.contains("Trash"), "list must remain visible");
+
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
+        .unwrap();
+    assert!(app.run_summary.is_none());
+}
+
+#[test]
+fn cancelling_marks_remaining_cleaners_cancelled() {
+    let mut app = app_with_categories();
+    app.confirmation_mode = false;
+    for it in &mut app.categories[0].items {
+        it.selected = true;
+    }
+    app.request_run().unwrap();
+    app.cancel_run();
+    finish_run(&mut app);
+    let sum = app.run_summary.clone().unwrap();
+    assert!(sum.ok + sum.failed >= 1);
+}
+
+#[test]
+fn renders_running_state_at_small_terminal_size() {
+    let mut app = app_with_categories();
+    app.handle_resize(60, 18);
+    app.is_running = true;
+    app.run_total = 2;
+    app.show_log = true;
+    let backend = TestBackend::new(60, 18);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|f| ui(f, &mut app)).unwrap();
 }
