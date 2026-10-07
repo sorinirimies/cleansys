@@ -50,9 +50,65 @@ fn sandbox() -> &'static Sandbox {
     })
 }
 
+/// A small, fast, deterministic category list: the real project-scan cleaner (confined to
+/// the sandbox) plus two fake user/root cleaners. Scanning the machine's real caches and
+/// system folders made these tests slow and machine-dependent (11 servers scan in parallel).
+fn test_categories() -> Vec<cleansys_core::CleanerCategory> {
+    use cleansys_core::{
+        CleanedItem, CleanerCategory, CleanerItem, CleaningResult, Risk, cleaner_fn,
+    };
+    let fake = |id: &str, name: &str, root: bool, risk: Risk| CleanerItem {
+        id: id.into(),
+        risk,
+        name: name.into(),
+        description: format!("{name} (test)"),
+        requires_root: root,
+        selected: false,
+        function: cleaner_fn(|_| {
+            let mut r = CleaningResult::new();
+            r.add_item(CleanedItem::file(
+                PathBuf::from("/nonexistent/test-item"),
+                1234,
+                "test",
+            ));
+            Ok(r)
+        }),
+        bytes_cleaned: 0,
+        last_result: None,
+        status: None,
+    };
+    let mut real = cleansys_core::load_categories();
+    for c in &mut real {
+        c.items.retain(|i| i.id == "proj-rust");
+    }
+    real.retain(|c| !c.items.is_empty());
+    let mut cats = vec![CleanerCategory {
+        name: "User Land Cleaners".into(),
+        description: "user".into(),
+        items: vec![fake(
+            "core-user-browser-caches",
+            "Browser Caches",
+            false,
+            Risk::Safe,
+        )],
+    }];
+    cats.extend(real);
+    cats.push(CleanerCategory {
+        name: "System Cleaners".into(),
+        description: "system".into(),
+        items: vec![fake(
+            "core-sys-system-logs",
+            "System Logs",
+            true,
+            Risk::Safe,
+        )],
+    });
+    cats
+}
+
 async fn start() -> SocketAddr {
     sandbox();
-    let state = Shared::load();
+    let state = Shared::new(test_categories());
     state.set_root(false);
     state.start_scan();
     let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -124,7 +180,7 @@ async fn post(addr: SocketAddr, path: &str, form: &str) -> Response {
 }
 
 async fn wait_for_scan(addr: SocketAddr) {
-    for _ in 0..300 {
+    for _ in 0..1200 {
         let r = get(addr, "/api/status").await;
         if r.body.contains("\"scanning\":false") {
             return;
