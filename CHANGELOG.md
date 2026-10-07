@@ -16,6 +16,8 @@ All notable changes to this project will be documented in this file.
 - ci(gitea): checkout@v4 in prune job
 - ci: weekly + manual prune of old release assets (GitHub and Gitea)
 - ci: fix run 2098 — tests no longer assume non-root (CI runs as root), rustdoc private link, retry apt downloads
+### 🔧 Chores
+- chore: bump version to 0.7.5
 ### 🧪 Testing
 - test(web): root-badge test shows empty categories (hide=0) so it passes on Linux CI
 - test(web): server tests use a small fake category set instead of scanning the real machine (11 parallel scans timed out on slower/busier hosts); 6s -> 0.15s
