@@ -118,7 +118,7 @@ fn clean_path(
     opts: RunOptions,
     recreate: bool,
 ) -> Result<()> {
-    if !path.exists() {
+    if !path.exists() || (opts.honor_skips && crate::engine::skip::is_skipped(path)) {
         return Ok(());
     }
 
@@ -144,9 +144,9 @@ fn clean_path(
 
     if opts.dry_run {
         let item = if is_dir {
-            CleanedItem::directory(path.to_path_buf(), size, label)
+            CleanedItem::directory(path.to_path_buf(), size, label).skippable()
         } else {
-            CleanedItem::file(path.to_path_buf(), size, label)
+            CleanedItem::file(path.to_path_buf(), size, label).skippable()
         };
         result.add_item(item);
         return Ok(());
@@ -173,9 +173,9 @@ fn clean_path(
     ));
 
     let item = if is_dir {
-        CleanedItem::directory(path.to_path_buf(), size, label)
+        CleanedItem::directory(path.to_path_buf(), size, label).skippable()
     } else {
-        CleanedItem::file(path.to_path_buf(), size, label)
+        CleanedItem::file(path.to_path_buf(), size, label).skippable()
     };
     result.add_item(item);
 

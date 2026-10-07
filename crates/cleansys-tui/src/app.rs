@@ -91,6 +91,15 @@ pub struct App {
     pub categories: Vec<CleanerCategory>,
     pub category_index: usize,
     pub item_list_state: ListState,
+    /// Render-side list state (rows of an expanded cleaner are interleaved, so its
+    /// selection index differs from `item_list_state`); keeps the scroll offset.
+    pub list_view_state: ListState,
+    /// Cleaner whose per-path details are expanded: `(category, item)`.
+    pub expanded: Option<(usize, usize)>,
+    /// Highlighted entry inside the expanded details (`Some` = details have focus).
+    pub entry_cursor: Option<usize>,
+    /// Idle-day threshold for project build output (shown/adjusted with `[` `]`).
+    pub min_age_days: u64,
     pub is_root: bool,
     pub is_running: bool,
     pub operation_start_time: Option<Instant>,
@@ -178,6 +187,10 @@ impl App {
             categories: Vec::new(),
             category_index: 0,
             item_list_state: ListState::default(),
+            list_view_state: ListState::default(),
+            expanded: None,
+            entry_cursor: None,
+            min_age_days: cleansys_core::engine::EngineConfig::load().min_age_days,
             is_root: check_root(),
             is_running: false,
             operation_start_time: None,
@@ -299,6 +312,7 @@ impl App {
         if self.board.is_scanning() {
             return;
         }
+        self.collapse_details();
         self.board = cleansys_core::ScanBoard::new(&self.categories);
         let (rx, total) = cleansys_core::spawn_scan(&self.categories);
         self.board.start(total);
@@ -321,6 +335,84 @@ impl App {
             self.ensure_category_visible();
         }
         changed
+    }
+
+    // ── details (per-path) view ────────────────────────────────────────
+
+    /// Per-path entries of the expanded cleaner.
+    pub fn expanded_entries(&self) -> &[cleansys_core::ScanEntry] {
+        self.expanded
+            .and_then(|(c, i)| self.board.get(c, i))
+            .map_or(&[], |s| s.entries.as_slice())
+    }
+
+    /// Expand the highlighted cleaner's paths and move focus into them.
+    pub fn expand_current(&mut self) {
+        let Some((c, i)) = self.current_item() else {
+            return;
+        };
+        if self.board.get(c, i).is_some_and(|s| !s.entries.is_empty()) {
+            self.expanded = Some((c, i));
+            self.entry_cursor = Some(0);
+        }
+    }
+
+    pub fn collapse_details(&mut self) {
+        self.expanded = None;
+        self.entry_cursor = None;
+    }
+
+    pub fn entry_next(&mut self) {
+        let n = self.expanded_entries().len();
+        if let (Some(cur), true) = (self.entry_cursor, n > 0) {
+            self.entry_cursor = Some((cur + 1).min(n - 1));
+        }
+    }
+
+    pub fn entry_previous(&mut self) {
+        if let Some(cur) = self.entry_cursor {
+            self.entry_cursor = Some(cur.saturating_sub(1));
+        }
+    }
+
+    /// Tick/untick the highlighted path (no-op for paths that can't be skipped).
+    pub fn entry_toggle(&mut self) {
+        let Some(cur) = self.entry_cursor else { return };
+        let target = self
+            .expanded_entries()
+            .get(cur)
+            .filter(|e| e.skippable)
+            .map(|e| e.path.clone());
+        if let Some(path) = target {
+            self.board.toggle_entry(&path);
+        }
+    }
+
+    /// Tick/untick every path of the expanded cleaner.
+    pub fn entry_set_all(&mut self, on: bool) {
+        if let Some((c, i)) = self.expanded {
+            self.board.set_item_entries(c, i, on);
+        }
+    }
+
+    /// Step the idle-day threshold (`[` = fewer days, `]` = more), save it and re-measure.
+    pub fn step_min_age(&mut self, step: i32) {
+        if self.is_running || self.board.is_scanning() {
+            return;
+        }
+        let next = cleansys_core::engine::config::step_min_age(self.min_age_days, step);
+        if next == self.min_age_days {
+            return;
+        }
+        match cleansys_core::engine::EngineConfig::save_min_age_days(next) {
+            Ok(()) => {
+                self.min_age_days = next;
+                self.start_scan();
+            }
+            Err(e) => self
+                .operation_logs
+                .push(format!("❌ Could not save the idle-days setting: {e}")),
+        }
     }
 
     /// `(category, item)` pairs shown in the list right now.
@@ -568,14 +660,17 @@ impl App {
         }
 
         self.preview_results.clear();
+        // Paths unticked in the details view are left out of the preview too.
+        cleansys_core::engine::skip::set_skipped(self.board.skipped_paths());
         for (name, function) in selected {
-            match function(cleansys_core::RunOptions::preview()) {
+            match function(cleansys_core::RunOptions::preview().with_skips()) {
                 Ok(result) => self.preview_results.push((name, result)),
                 Err(e) => self
                     .operation_logs
                     .push(format!("⚠️  Preview failed for {name}: {e}")),
             }
         }
+        cleansys_core::engine::skip::clear_skipped();
         self.preview_open = true;
     }
 
@@ -900,7 +995,10 @@ impl App {
                         Err(anyhow::anyhow!("Waiting for sudo authentication"))
                     } else {
                         self.operation_logs.push(format!("🔄 Executing: {}", name));
-                        function(cleansys_core::RunOptions::execute())
+                        cleansys_core::engine::skip::set_skipped(self.board.skipped_paths());
+                        let r = function(cleansys_core::RunOptions::execute().with_skips());
+                        cleansys_core::engine::skip::clear_skipped();
+                        r
                     };
 
                 // Process result
@@ -1118,6 +1216,23 @@ impl App {
             return Ok(false);
         }
 
+        // Details focus: ↑/↓ move between paths, Space ticks one, a/n all/none,
+        // ←/Esc/q leave. Everything else is ignored while inside the details.
+        if self.entry_cursor.is_some() && !self.show_help && !self.is_running {
+            match key.code {
+                KeyCode::Down | KeyCode::Char('j') => self.entry_next(),
+                KeyCode::Up | KeyCode::Char('k') => self.entry_previous(),
+                KeyCode::Char(' ') => self.entry_toggle(),
+                KeyCode::Char('a') => self.entry_set_all(true),
+                KeyCode::Char('n') => self.entry_set_all(false),
+                KeyCode::Left | KeyCode::Right | KeyCode::Esc | KeyCode::Char('q') => {
+                    self.collapse_details();
+                }
+                _ => {}
+            }
+            return Ok(false);
+        }
+
         match (key.code, key.modifiers) {
             // Quit
             (KeyCode::Char('q'), _) => {
@@ -1159,6 +1274,23 @@ impl App {
             (KeyCode::BackTab, _) => {
                 if !self.show_help {
                     self.previous_category();
+                }
+            }
+            // Expand the highlighted cleaner's per-path details
+            (KeyCode::Right, _) => {
+                if !self.show_help && !self.is_running {
+                    self.expand_current();
+                }
+            }
+            // Idle-day selector for project build output
+            (KeyCode::Char('['), _) => {
+                if !self.show_help {
+                    self.step_min_age(-1);
+                }
+            }
+            (KeyCode::Char(']'), _) => {
+                if !self.show_help {
+                    self.step_min_age(1);
                 }
             }
             // Selection

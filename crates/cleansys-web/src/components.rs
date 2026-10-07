@@ -115,7 +115,7 @@ pub async fn side_nav(
                 </a>
             }
             if !root.is_empty() {
-                <div class="section">"System · root" <small>"needs sudo cleansys-web"</small></div>
+                <div class="section">"System · root" <small>"asks for your password"</small></div>
                 for c in &root {
                     <a class=(if c.index == active && q.trim().is_empty() { "cat active" } else { "cat" }) href=(nav_href(c.index, &q, hide))>
                         <span class="name">(c.name.trim_end_matches(cleansys_core::model::ROOT_SUFFIX).to_string())</span>
@@ -157,14 +157,26 @@ pub async fn item_row(
     back: String,
     show_category: Option<String>,
     scanning_now: bool,
+    open: bool,
+    more_href: String,
 ) -> Result<impl View> {
     let size = item.scan.as_ref();
+    let has_entries = size.is_some_and(|s| !s.entries.is_empty());
+    let hidden_entries = size.map_or(0, |s| s.items.saturating_sub(s.entries.len()));
+    let any_skippable = size.is_some_and(|s| s.entries.iter().any(|e| e.skippable));
+    let ticked_note = match item.entry_state {
+        cleansys_core::EntryState::Partial => format!(" · {} of it selected", fmt(item.sel_bytes)),
+        cleansys_core::EntryState::Nothing => " · nothing selected".to_string(),
+        _ => String::new(),
+    };
+    let back_url = back.clone();
     let class = format!(
         "item{}{}",
         if item.selected { " sel" } else { "" },
         if item.selectable { "" } else { " off" }
     );
     Ok(view! {
+        <div class="itemwrap">
         <form class="item" method="post" action="/toggle">
             <input type="hidden" name="id" value=(item.id.clone())>
             <input type="hidden" name="back" value=(back)>
@@ -199,6 +211,44 @@ pub async fn item_row(
                 <noscript><button type="submit">"Toggle"</button></noscript>
             </label>
         </form>
+        if has_entries {
+            <a class="more" href=(more_href) aria-expanded=(if open { "true" } else { "false" })>
+                if open { "▾ Hide details" } else { "▸ Details" }
+                <span class="dim">" · " (size.map_or(0, |s| s.items)) " item(s)" (ticked_note.clone())</span>
+            </a>
+        }
+        if open && has_entries {
+            <div class="entries">
+                if any_skippable {
+                    <form class="bulk" method="post" action="/entries">
+                        <input type="hidden" name="id" value=(item.id.clone())>
+                        <input type="hidden" name="back" value=(back_url.clone())>
+                        <button name="on" value="1" type="submit">"Select all"</button>
+                        <button name="on" value="0" type="submit">"Select none"</button>
+                    </form>
+                } else {
+                    <p class="dim">"These are removed together — individual entries can't be unticked."</p>
+                }
+                for (n, e) in size.map(|s| s.entries.iter().enumerate()).into_iter().flatten() {
+                    <form class="entry" method="post" action="/toggle-entry">
+                        <input type="hidden" name="path" value=(e.path.clone())>
+                        <input type="hidden" name="back" value=(back_url.clone())>
+                        <label class=(if e.skippable { "e" } else { "e off" })>
+                            <input type="checkbox" checked=(item.entry_on.get(n).copied().unwrap_or(true)) disabled=(!e.skippable) onchange="this.form.submit()" aria-label=(e.path.clone())>
+                            <span class="p" title=(e.path.clone())>
+                                <b>(e.label.clone())</b>
+                                <small>(e.path.clone())</small>
+                            </span>
+                            <span class="n">(fmt(e.bytes))</span>
+                        </label>
+                    </form>
+                }
+                if hidden_entries > 0 {
+                    <p class="dim">"… and " (hidden_entries) " smaller item(s) not listed"</p>
+                }
+            </div>
+        }
+        </div>
     })
 }
 
@@ -234,6 +284,19 @@ pub async fn action_bar(
                     <button name="op" value="recommended" title="Tick only the safe, user-land cleaners that have something to free"><span class="ico">"✨"</span><span class="lbl">"✨ Recommended"</span></button>
                     <button name="op" value="none" title="Untick everything"><span class="ico">"☐"</span><span class="lbl">"Select none"</span></button>
                     <button name="op" value="rescan" title="Measure what every cleaner can free again"><span class="ico">"⟳"</span><span class="lbl">"⟳ Rescan"</span></button>
+                </form>
+                <form method="post" action="/min-age" class="age" title="Project build output (target/, node_modules, …) is only offered when its project was untouched this long">
+                    <input type="hidden" name="back" value=(back.clone())>
+                    <label>"Idle ≥ "
+                        <select name="days" onchange="this.form.submit()" aria-label="Minimum project idle days">
+                            for d in cleansys_core::engine::config::MIN_AGE_CHOICES.iter() {
+                                <option value=(d.to_string()) selected=(*d == snap.min_age_days)>(cleansys_core::engine::config::min_age_label(*d))</option>
+                            }
+                            if !cleansys_core::engine::config::MIN_AGE_CHOICES.contains(&snap.min_age_days) {
+                                <option value=(snap.min_age_days.to_string()) selected=(true)>(cleansys_core::engine::config::min_age_label(snap.min_age_days))</option>
+                            }
+                        </select>
+                    </label>
                 </form>
                 <a class="btn" href=(if can_run { "/preview" } else { "#" }) aria-disabled=(if can_run { "false" } else { "true" }) title="Show exactly what would be removed (deletes nothing)"><span class="ico">"🔍"</span><span class="lbl">"🔍 Preview"</span></a>
                 <a class="btn primary" href=(if can_run { "/confirm" } else { "#" }) aria-disabled=(if can_run { "false" } else { "true" })>

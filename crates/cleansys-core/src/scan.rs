@@ -6,12 +6,27 @@
 //! and answers the questions both front-ends ask (sizes per category, which
 //! cleaners to list, what is hidden because it is empty, ...).
 
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
 use std::sync::mpsc::{channel, Receiver};
 use std::sync::{Arc, Mutex};
 
 use crate::cleaners::cleaned_item::{CleaningResult, RunOptions};
 use crate::model::CleanerCategory;
+
+/// Most entries kept per cleaner (the biggest ones) so memory stays bounded
+/// even for cleaners that match thousands of files.
+pub const MAX_ENTRIES: usize = 300;
+
+/// One path a cleaner would remove.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ScanEntry {
+    pub path: String,
+    pub bytes: u64,
+    /// Short label, e.g. `Rust build: myproj`.
+    pub label: String,
+    /// May be unticked individually (see [`crate::engine::skip`]).
+    pub skippable: bool,
+}
 
 /// What a scan learned about one cleaner.
 #[derive(Debug, Clone, Default, PartialEq, Eq)]
@@ -24,17 +39,34 @@ pub struct ScanInfo {
     pub top_path: Option<String>,
     /// Set when the scan failed.
     pub error: Option<String>,
+    /// The biggest paths it would remove (at most [`MAX_ENTRIES`]), largest first.
+    pub entries: Vec<ScanEntry>,
 }
 
 impl ScanInfo {
     pub fn from_result(result: Result<CleaningResult, String>) -> Self {
         match result {
-            Ok(r) => Self {
-                bytes: r.total_bytes,
-                items: r.item_count(),
-                top_path: r.items.iter().max_by_key(|i| i.size).map(|i| i.path_str()),
-                error: None,
-            },
+            Ok(r) => {
+                let mut entries: Vec<ScanEntry> = r
+                    .items
+                    .iter()
+                    .map(|i| ScanEntry {
+                        path: i.path_str(),
+                        bytes: i.size,
+                        label: i.label.clone(),
+                        skippable: i.skippable,
+                    })
+                    .collect();
+                entries.sort_by(|a, b| b.bytes.cmp(&a.bytes).then_with(|| a.path.cmp(&b.path)));
+                entries.truncate(MAX_ENTRIES);
+                Self {
+                    bytes: r.total_bytes,
+                    items: r.item_count(),
+                    top_path: entries.first().map(|e| e.path.clone()),
+                    error: None,
+                    entries,
+                }
+            }
             Err(e) => Self {
                 error: Some(e),
                 ..Self::default()
@@ -51,6 +83,18 @@ pub struct ScanBoard {
     pub pending: usize,
     /// Scan jobs started in the current scan.
     pub total: usize,
+    /// Entry paths the user unticked in the details view.
+    skipped: HashSet<String>,
+}
+
+/// Tick state of a cleaner's entries.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum EntryState {
+    /// No individually-selectable entries.
+    NoEntries,
+    All,
+    Partial,
+    Nothing,
 }
 
 impl ScanBoard {
@@ -62,11 +106,88 @@ impl ScanBoard {
                 .collect(),
             pending: 0,
             total: 0,
+            skipped: HashSet::new(),
         }
+    }
+
+    // ── per-entry selection ────────────────────────────────────────
+
+    /// Is this entry ticked (i.e. not skipped)?
+    pub fn entry_selected(&self, path: &str) -> bool {
+        !self.skipped.contains(path)
+    }
+
+    /// Flip one entry. Returns its new ticked state.
+    pub fn toggle_entry(&mut self, path: &str) -> bool {
+        if !self.skipped.remove(path) {
+            self.skipped.insert(path.to_string());
+            return false;
+        }
+        true
+    }
+
+    /// Tick or untick every skippable entry of one cleaner.
+    pub fn set_item_entries(&mut self, cat: usize, item: usize, on: bool) {
+        let paths: Vec<String> = self
+            .get(cat, item)
+            .map(|i| {
+                i.entries
+                    .iter()
+                    .filter(|e| e.skippable)
+                    .map(|e| e.path.clone())
+                    .collect()
+            })
+            .unwrap_or_default();
+        for p in paths {
+            if on {
+                self.skipped.remove(&p);
+            } else {
+                self.skipped.insert(p);
+            }
+        }
+    }
+
+    /// Paths to hand to [`crate::engine::skip::set_skipped`] for a run/preview.
+    pub fn skipped_paths(&self) -> Vec<std::path::PathBuf> {
+        self.skipped.iter().map(std::path::PathBuf::from).collect()
+    }
+
+    /// Tick state of one cleaner's skippable entries.
+    pub fn entry_state(&self, cat: usize, item: usize) -> EntryState {
+        let Some(info) = self.get(cat, item) else {
+            return EntryState::NoEntries;
+        };
+        let mut total = 0usize;
+        let mut off = 0usize;
+        for e in info.entries.iter().filter(|e| e.skippable) {
+            total += 1;
+            off += usize::from(self.skipped.contains(&e.path));
+        }
+        match (total, off) {
+            (0, _) => EntryState::NoEntries,
+            (_, 0) => EntryState::All,
+            (t, o) if o == t => EntryState::Nothing,
+            _ => EntryState::Partial,
+        }
+    }
+
+    /// Bytes a ticked cleaner would still free after unticked entries are removed.
+    pub fn item_selected_bytes(&self, cat: usize, item: usize) -> u64 {
+        let Some(info) = self.get(cat, item) else {
+            return 0;
+        };
+        let skipped: u64 = info
+            .entries
+            .iter()
+            .filter(|e| e.skippable && self.skipped.contains(&e.path))
+            .map(|e| e.bytes)
+            .sum();
+        info.bytes.saturating_sub(skipped)
     }
 
     /// Forget all results and mark `total` jobs as pending.
     pub fn start(&mut self, total: usize) {
+        self.skipped.clear();
         for row in &mut self.info {
             row.iter_mut().for_each(|s| *s = None);
         }
@@ -133,8 +254,7 @@ impl ScanBoard {
                     .filter(|(_, i)| i.selected)
                     .map(move |(ii, _)| (ci, ii))
             })
-            .filter_map(|(c, i)| self.get(c, i))
-            .map(|s| s.bytes)
+            .map(|(c, i)| self.item_selected_bytes(c, i))
             .sum()
     }
 
@@ -400,5 +520,42 @@ mod tests {
         assert!(board.is_hidden_empty(&c, 0, 1, true));
         c[0].items[1].selected = true;
         assert!(!board.is_hidden_empty(&c, 0, 1, true));
+    }
+
+    #[test]
+    fn entry_selection_adjusts_bytes_and_state() {
+        let cats = vec![CleanerCategory {
+            name: "c".into(),
+            description: String::new(),
+            items: vec![item("a", 0)],
+        }];
+        let mut b = ScanBoard::new(&cats);
+        let e = |p: &str, bytes| ScanEntry {
+            path: p.into(),
+            bytes,
+            label: String::new(),
+            skippable: true,
+        };
+        b.start(1);
+        b.record(
+            0,
+            0,
+            ScanInfo {
+                bytes: 100,
+                items: 2,
+                entries: vec![e("/x/big", 70), e("/x/small", 30)],
+                ..ScanInfo::default()
+            },
+        );
+        assert_eq!(b.entry_state(0, 0), EntryState::All);
+        assert_eq!(b.item_selected_bytes(0, 0), 100);
+        assert!(!b.toggle_entry("/x/big"));
+        assert_eq!(b.entry_state(0, 0), EntryState::Partial);
+        assert_eq!(b.item_selected_bytes(0, 0), 30);
+        assert_eq!(b.skipped_paths().len(), 1);
+        b.set_item_entries(0, 0, false);
+        assert_eq!(b.entry_state(0, 0), EntryState::Nothing);
+        b.set_item_entries(0, 0, true);
+        assert_eq!(b.item_selected_bytes(0, 0), 100);
     }
 }

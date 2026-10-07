@@ -7,7 +7,7 @@ user-land / root separation, scheduler and safety rules as the terminal UI and t
 ```sh
 cargo run -p cleansys-web                 # http://127.0.0.1:3000 (opens your browser)
 cleansys-web --port 8080 --no-open
-sudo cleansys-web                         # also unlocks the system (root) cleaners
+sudo cleansys-web                         # optional: no password prompt for system (root) cleaners
 ```
 
 Needs **Rust 1.98+** (Topcoat). No JavaScript bundle is required — every action is a plain HTML

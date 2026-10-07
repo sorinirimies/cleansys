@@ -78,6 +78,46 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             state.show_log = !state.show_log;
             Task::none()
         }
+        Message::ToggleExpand(c, i) => {
+            if let Some(pos) = state.expanded.iter().position(|e| *e == (c, i)) {
+                state.expanded.remove(pos);
+            } else {
+                state.expanded.push((c, i));
+            }
+            Task::none()
+        }
+        Message::ToggleEntry(path) => {
+            if !state.is_running {
+                state.board.toggle_entry(&path);
+            }
+            Task::none()
+        }
+        Message::SetEntries(c, i, on) => {
+            if !state.is_running {
+                state.board.set_item_entries(c, i, on);
+            }
+            Task::none()
+        }
+        Message::SetMinAge(days) => {
+            if state.is_running || state.previewing || days == state.min_age_days {
+                return Task::none();
+            }
+            match cleansys_core::engine::EngineConfig::save_min_age_days(days) {
+                Ok(()) => {
+                    state.min_age_days = days;
+                    state.expanded.clear();
+                    state.push_log(format!(
+                        "Project build output: only projects idle for {}",
+                        cleansys_core::engine::config::min_age_label(days)
+                    ));
+                    start_scan(state)
+                }
+                Err(e) => {
+                    state.push_log(format!("\u{274c} Could not save the setting: {e}"));
+                    Task::none()
+                }
+            }
+        }
         Message::ScanAll => start_scan(state),
         Message::ScanItemFinished(cat_idx, item_idx, result) => {
             let info = cleansys_core::ScanInfo::from_result(result);
@@ -217,6 +257,7 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             if state.operations_completed >= state.operations_total {
                 state.previewing = false;
                 state.preview_open = true;
+                cleansys_core::engine::skip::clear_skipped();
             }
 
             Task::none()
@@ -337,6 +378,7 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
 
             if !still_running {
                 state.is_running = false;
+                cleansys_core::engine::skip::clear_skipped();
                 let summary = format!(
                     "Cleaning complete \u{2014} total freed: {}",
                     format_size(state.total_bytes_cleaned)
@@ -462,6 +504,8 @@ fn start_pending_operations(state: &mut CleanSysGui) -> Task<Message> {
     state.operations_total = ops.len();
     state.operations_completed = 0;
     state.mark_selected_pending();
+    // Paths unticked in the details view are left alone by this run.
+    cleansys_core::engine::skip::set_skipped(state.board.skipped_paths());
 
     let mut tasks = Vec::with_capacity(ops.len());
     for (cat_idx, item_idx) in ops {
@@ -478,7 +522,7 @@ fn start_pending_operations(state: &mut CleanSysGui) -> Task<Message> {
         state.push_log(format!("\u{1f504} Running: {}", name));
 
         tasks.push(Task::perform(
-            blocking(move || function(RunOptions::execute())),
+            blocking(move || function(RunOptions::execute().with_skips())),
             move |result| {
                 Message::OperationFinished(cat_idx, item_idx, result.map_err(|e| e.to_string()))
             },
@@ -502,6 +546,7 @@ fn request_preview(state: &mut CleanSysGui) -> Task<Message> {
     }
 
     state.previewing = true;
+    cleansys_core::engine::skip::set_skipped(state.board.skipped_paths());
     state.preview_results.clear();
     state.operations_total = selected.len();
     state.operations_completed = 0;
@@ -522,7 +567,7 @@ fn request_preview(state: &mut CleanSysGui) -> Task<Message> {
         let function = item.function.clone();
 
         tasks.push(Task::perform(
-            blocking(move || function(RunOptions::preview())),
+            blocking(move || function(RunOptions::preview().with_skips())),
             move |result| {
                 Message::PreviewFinished(cat_idx, item_idx, result.map_err(|e| e.to_string()))
             },
@@ -547,6 +592,29 @@ mod tests {
 
         let _ = update(&mut state, Message::ToggleItem(0, 0));
         assert!(!state.categories[0].items[0].selected);
+    }
+
+    #[test]
+    fn expand_toggles_and_entry_toggle_flips_the_skip_set() {
+        let mut state = CleanSysGui::new();
+        let _ = update(&mut state, Message::ToggleExpand(0, 0));
+        assert_eq!(state.expanded, vec![(0, 0)]);
+        let _ = update(&mut state, Message::ToggleExpand(0, 0));
+        assert!(state.expanded.is_empty());
+
+        assert!(state.board.entry_selected("/x/y"));
+        let _ = update(&mut state, Message::ToggleEntry("/x/y".into()));
+        assert!(!state.board.entry_selected("/x/y"));
+        let _ = update(&mut state, Message::ToggleEntry("/x/y".into()));
+        assert!(state.board.entry_selected("/x/y"));
+    }
+
+    #[test]
+    fn min_age_unchanged_is_a_no_op() {
+        let mut state = CleanSysGui::new();
+        let same = state.min_age_days;
+        let _ = update(&mut state, Message::SetMinAge(same));
+        assert_eq!(state.min_age_days, same);
     }
 
     #[test]

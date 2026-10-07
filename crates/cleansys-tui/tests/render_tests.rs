@@ -274,3 +274,58 @@ fn totals_show_a_spinner_instead_of_numbers_while_the_scan_is_running() {
     assert!(text.contains("to free") && text.contains("can be freed"));
     assert!(!text.contains("measuring"));
 }
+
+fn seed_entries(app: &mut App) {
+    use cleansys_core::{ScanBoard, ScanEntry, ScanInfo};
+    let e = |p: &str, bytes| ScanEntry {
+        path: p.into(),
+        bytes,
+        label: "Rust build: demo".into(),
+        skippable: true,
+    };
+    app.board = ScanBoard::new(&app.categories);
+    app.board.start(1);
+    app.board.record(
+        0,
+        0,
+        ScanInfo {
+            bytes: 300,
+            items: 2,
+            top_path: Some("/p/a/target".into()),
+            entries: vec![e("/p/a/target", 200), e("/p/b/target", 100)],
+            ..ScanInfo::default()
+        },
+    );
+}
+
+#[test]
+fn expanded_details_render_paths_and_follow_the_cursor() {
+    let mut app = app_with_categories();
+    seed_entries(&mut app);
+    app.expand_current();
+    assert_eq!(app.entry_cursor, Some(0));
+
+    let backend = TestBackend::new(120, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|f| ui(f, &mut app)).unwrap();
+    let text: String = terminal
+        .backend()
+        .buffer()
+        .content()
+        .iter()
+        .map(|c| c.symbol())
+        .collect();
+    assert!(text.contains("/p/a/target"), "entry path not rendered");
+    assert!(text.contains("/p/b/target"));
+
+    // Moving the cursor and unticking an entry updates the board.
+    app.entry_next();
+    assert_eq!(app.entry_cursor, Some(1));
+    app.entry_toggle();
+    assert!(!app.board.entry_selected("/p/b/target"));
+    assert!(app.board.entry_selected("/p/a/target"));
+    terminal.draw(|f| ui(f, &mut app)).unwrap();
+
+    app.collapse_details();
+    assert!(app.expanded.is_none() && app.entry_cursor.is_none());
+}

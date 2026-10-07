@@ -217,6 +217,10 @@ pub(crate) fn remove_path(
         debug!("excluded by user pattern: {path:?}");
         return Ok(());
     }
+    if opts.honor_skips && super::skip::is_skipped(path) {
+        debug!("unticked in the details view: {path:?}");
+        return Ok(());
+    }
 
     let is_symlink = meta.file_type().is_symlink();
     let is_dir = meta.is_dir() && !is_symlink;
@@ -227,9 +231,9 @@ pub(crate) fn remove_path(
 
     let make_item = || {
         if is_dir {
-            CleanedItem::directory(path.to_path_buf(), size, label)
+            CleanedItem::directory(path.to_path_buf(), size, label).skippable()
         } else {
-            CleanedItem::file(path.to_path_buf(), size, label)
+            CleanedItem::file(path.to_path_buf(), size, label).skippable()
         }
     };
 

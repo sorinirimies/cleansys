@@ -52,6 +52,10 @@ pub struct CleanSysGui {
     pub hide_empty: bool,
     /// Whether the activity log drawer is open.
     pub show_log: bool,
+    /// Cleaners whose details (per-path list) are expanded: `(category, item)`.
+    pub expanded: Vec<(usize, usize)>,
+    /// Idle-day threshold for project build artifacts (day selector).
+    pub min_age_days: u64,
     /// Whether the automatic-cleaning (schedule) dialog is visible.
     pub schedule_open: bool,
     /// Schedule being edited in the dialog.
@@ -113,6 +117,8 @@ impl CleanSysGui {
             board,
             hide_empty: true,
             show_log: false,
+            expanded: Vec::new(),
+            min_age_days: cleansys_core::engine::EngineConfig::load().min_age_days,
             schedule_open: false,
             schedule_draft: cleansys_core::engine::schedule::Schedule::default(),
             schedule_installed: None,

@@ -431,3 +431,84 @@ async fn totals_show_a_spinner_while_the_scan_is_running_and_numbers_after() {
         "numbers appear once ready"
     );
 }
+
+#[tokio::test]
+async fn auth_page_explains_when_password_entry_is_unavailable() {
+    let addr = start().await;
+    let r = get(addr, "/auth").await;
+    assert_eq!(r.status, 200);
+    assert!(r.body.contains("Password entry is disabled"), "{}", r.body);
+    assert!(!r.body.contains("type=\"password\""));
+}
+
+#[tokio::test]
+async fn auth_post_is_rejected_when_elevation_is_off() {
+    let addr = start().await;
+    let r = post(addr, "/auth", "password=hunter2").await;
+    assert_eq!(r.status, 303);
+    let loc = r.header("location").unwrap_or_default();
+    assert!(loc.starts_with("/auth?msg="), "{loc}");
+}
+
+#[tokio::test]
+async fn foreign_origin_post_is_forbidden() {
+    let addr = start().await;
+    let mut stream = TcpStream::connect(addr).await.unwrap();
+    let req = format!(
+        "POST /select HTTP/1.1\r\nHost: {addr}\r\nOrigin: http://evil.example\r\nConnection: close\r\nContent-Type: application/x-www-form-urlencoded\r\nContent-Length: 7\r\n\r\nop=none"
+    );
+    stream.write_all(req.as_bytes()).await.unwrap();
+    let mut raw = Vec::new();
+    stream.read_to_end(&mut raw).await.unwrap();
+    let text = String::from_utf8_lossy(&raw);
+    assert!(text.starts_with("HTTP/1.1 403"), "{text}");
+}
+
+#[tokio::test]
+async fn details_expand_lists_entries_and_entry_toggle_changes_the_selected_size() {
+    let addr = start().await;
+    wait_for_scan(addr).await;
+    // Collapsed: no entry list, but a "Details" link.
+    let r = get(addr, "/?cat=1").await;
+    assert!(r.body.contains("Details"), "{}", r.body);
+    assert!(!r.body.contains("action=\"/toggle-entry\""));
+
+    // Expanded: the demo project's target dir is listed with a checkbox form.
+    let r = get(addr, "/?cat=1&open=proj-rust").await;
+    assert!(r.body.contains("demo-rust/target"), "{}", r.body);
+    assert!(r.body.contains("action=\"/toggle-entry\""));
+
+    // Tick the cleaner, then untick the only entry: nothing left to free.
+    post(addr, "/toggle", "id=proj-rust&back=%2F").await;
+    let before = get(addr, "/api/status").await;
+    let path = format!("{}/target", sandbox().project.display());
+    let enc: String = path.bytes().map(|b| format!("%{b:02X}")).collect();
+    let r = post(
+        addr,
+        "/toggle-entry",
+        &format!("path={enc}&back=%2F%3Fcat%3D1%26open%3Dproj-rust"),
+    )
+    .await;
+    assert_eq!(r.status, 303);
+    assert_eq!(
+        r.header("location").as_deref(),
+        Some("/?cat=1&open=proj-rust")
+    );
+    let after = get(addr, "/api/status").await;
+    assert_ne!(before.body, after.body, "selected size should change");
+}
+
+#[tokio::test]
+async fn min_age_post_redirects_back_without_the_open_cleaner() {
+    let addr = start().await;
+    let r = post(
+        addr,
+        "/min-age",
+        "days=0&back=%2F%3Fcat%3D1%26open%3Dproj-rust",
+    )
+    .await;
+    assert_eq!(r.status, 303);
+    assert_eq!(r.header("location").as_deref(), Some("/?cat=1"));
+    let home = get(addr, "/").await;
+    assert!(home.body.contains("Minimum project idle days"));
+}

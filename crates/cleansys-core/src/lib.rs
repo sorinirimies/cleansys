@@ -47,7 +47,7 @@ pub use cleaners::cleaned_item::{
 };
 pub use cleaners::{system_cleaners, user_cleaners};
 pub use model::{load_categories, select_recommended, CleanerCategory, CleanerItem, Risk, Status};
-pub use scan::{spawn_scan, ScanBoard, ScanInfo};
+pub use scan::{spawn_scan, EntryState, ScanBoard, ScanEntry, ScanInfo};
 pub use settings::{load_settings, save_settings, Settings};
 pub use theme::{theme_by_index, theme_index_by_name, AppTheme, Rgb, THEME_COUNT, THEME_NAMES};
 pub use utils::{

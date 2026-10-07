@@ -141,7 +141,12 @@ fn run_one(job: &Job, opts: RunOptions) -> Outcome {
         items: Vec::new(),
         status: OutcomeStatus::Ok,
     };
-    if job.requires_root && !opts.dry_run && !check_root() {
+    // A cached sudo password (GUI/TUI/web prompt) lets root cleaners run via `sudo -S`.
+    if job.requires_root
+        && !opts.dry_run
+        && !check_root()
+        && crate::auth::cached_sudo_password().is_none()
+    {
         out.status = OutcomeStatus::Skipped("needs root (re-run with sudo)".into());
         return out;
     }

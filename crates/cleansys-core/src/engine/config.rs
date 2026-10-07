@@ -60,7 +60,43 @@ impl Default for EngineConfig {
     }
 }
 
+/// Idle-day choices offered by the day selector in every front-end.
+pub const MIN_AGE_CHOICES: [u64; 8] = [0, 1, 3, 7, 14, 30, 60, 90];
+
+/// The next (`step > 0`) or previous (`step < 0`) choice after `current`,
+/// clamped at both ends. Values not in the list snap to the nearest step.
+pub fn step_min_age(current: u64, step: i32) -> u64 {
+    let idx = MIN_AGE_CHOICES
+        .iter()
+        .position(|d| *d >= current)
+        .unwrap_or(MIN_AGE_CHOICES.len() - 1);
+    let exact = MIN_AGE_CHOICES[idx] == current;
+    let next = match step.signum() {
+        1 if exact => idx + 1,
+        1 => idx,
+        -1 => idx.saturating_sub(1),
+        _ => idx,
+    };
+    MIN_AGE_CHOICES[next.min(MIN_AGE_CHOICES.len() - 1)]
+}
+
+/// Human label: `0` → "any age", `7` → "7 days".
+pub fn min_age_label(days: u64) -> String {
+    match days {
+        0 => "any age".to_string(),
+        1 => "1 day".to_string(),
+        d => format!("{d} days"),
+    }
+}
+
 impl EngineConfig {
+    /// Persist a new idle-day threshold (load → set → save).
+    pub fn save_min_age_days(days: u64) -> Result<()> {
+        let mut cfg = Self::load();
+        cfg.min_age_days = days;
+        cfg.save()
+    }
+
     pub fn path() -> Result<PathBuf> {
         Ok(crate::settings::settings_dir()?.join("engine.json"))
     }
@@ -128,4 +164,21 @@ fn dir_identity(p: &std::path::Path) -> String {
     std::fs::canonicalize(p)
         .map(|c| c.to_string_lossy().to_lowercase())
         .unwrap_or_default()
+}
+
+#[cfg(test)]
+mod min_age_step_tests {
+    use super::*;
+
+    #[test]
+    fn steps_through_the_choices_and_clamps() {
+        assert_eq!(step_min_age(14, 1), 30);
+        assert_eq!(step_min_age(14, -1), 7);
+        assert_eq!(step_min_age(0, -1), 0);
+        assert_eq!(step_min_age(90, 1), 90);
+        assert_eq!(step_min_age(10, 1), 14, "off-grid values snap upward");
+        assert_eq!(step_min_age(10, -1), 7);
+        assert_eq!(min_age_label(0), "any age");
+        assert_eq!(min_age_label(7), "7 days");
+    }
 }

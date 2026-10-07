@@ -76,13 +76,13 @@ running.
 ```bash
 cleansys-web                     # http://127.0.0.1:3000, opens your browser
 cleansys-web --port 8080 --no-open --theme "Tokyo Night"
-sudo cleansys-web                # also enables the System · root cleaners
+sudo cleansys-web                # optional: run as root (no password prompt needed)
 ```
 
 - **Pages**: `/` cleaners (sidebar, search, hide-empty, risk badges, sizes) · `/preview` dry run · `/confirm` → `/progress` real clean · `/schedule` automatic cleaning.
 - **JSON**: `/api/categories` · `/api/status` · `/api/themes` · `/api/health`.
 - **Responsive**: ≥ 980 px sidebar · ≥ 700 px narrower sidebar · below that a category drop-down, icon-only buttons and a full-width *Clean* button.
-- **Safe by construction**: binds to `127.0.0.1` (warns loudly otherwise), rejects unknown `Host` headers (DNS-rebinding), uses Topcoat's built-in cross-origin protection for every state-changing route, only redirects to same-site paths, and applies the same protected-path / `caution` / running-app rules as the other front-ends. Root cleaners are shown but disabled unless the server itself runs as root.
+- **Safe by construction**: binds to `127.0.0.1` (warns loudly otherwise), rejects unknown `Host` headers (DNS-rebinding), uses Topcoat's built-in cross-origin protection for every state-changing route, only redirects to same-site paths, and applies the same protected-path / `caution` / running-app rules as the other front-ends. Root cleaners can be ticked; on a loopback bind, running them asks for your sudo password in the browser (kept in memory only for that clean, then wiped). On a non-loopback bind they stay disabled unless the server itself runs as root.
 
 ### Command line
 
@@ -161,6 +161,8 @@ sidebar collapses into a one-line category bar (Tab / Shift+Tab).
 |-----|--------|
 | `↑/↓`, `Tab` / `Shift+Tab` | Move through cleaners / categories (empty categories are skipped) |
 | `Space` | Tick / untick |
+| `→` | **Expand** a cleaner to see every path it would remove; `↑/↓` move, `Space` ticks one path, `a` / `n` all / none, `←` / `Esc` back |
+| `[` / `]` | **Idle days** for project build output (`target/`, `node_modules`, …) — fewer / more; saved, then re-scans |
 | `r` | **Recommended** — tick the safe, user-land cleaners that have something to free |
 | `a` / `n`, `A` / `N` | Tick / untick everything listed, in this category / everywhere |
 | `/` | **Filter** across all categories (Enter keeps it, Esc clears) |
@@ -179,6 +181,7 @@ Marks next to names: `~` moderate, `!` caution, `(root)` needs your password.
 - **Sidebar** (wide) / drop-down (narrow) of categories with live sizes; **USER LAND** above **SYSTEM · ROOT**.
 - **Search box** filters every cleaner; **Hide empty cleaners** keeps the list short once the scan is done.
 - **Action bar** is always visible: selection summary + progress, *Recommended*, *Preview*, *Rescan*, *Activity* log, and the big **Clean N · X GB** button.
+- **Details**: each cleaner has a *▸ Details* button listing every path with a checkbox — untick the projects you want to keep. The **Idle ≥** drop-down in the action bar sets how long a project must be untouched before its build output is offered.
 - ⏰ **Schedule** opens the automatic-cleaning dialog. 43 themes (Catppuccin, Dracula, Nord, Tokyo Night…), remembered across restarts.
 - Scans and runs happen on background threads — the window never freezes.
 

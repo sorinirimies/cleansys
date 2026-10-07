@@ -12,6 +12,10 @@ pub struct CleanedItem {
     /// Short human-readable label (e.g. "Firefox cache", "npm cache") shown
     /// alongside the path in the TUI/GUI detailed views.
     pub label: String,
+    /// Whether the user may exclude this exact path from a run (see
+    /// [`crate::engine::skip`]). Only items removed through the shared removal
+    /// helpers are skippable; command-driven cleaners are all-or-nothing.
+    pub skippable: bool,
 }
 
 /// Type of cleaned item
@@ -35,7 +39,15 @@ impl CleanedItem {
             size,
             item_type,
             label: label.into(),
+            skippable: false,
         }
+    }
+
+    /// Mark this item as individually skippable.
+    #[must_use]
+    pub fn skippable(mut self) -> Self {
+        self.skippable = true;
+        self
     }
 
     /// Create a file item
@@ -126,14 +138,25 @@ pub struct RunOptions {
     /// When `true`, measure and report what would be cleaned without
     /// actually deleting anything or running any mutating external command.
     pub dry_run: bool,
+    /// When `true`, paths in [`crate::engine::skip`] (unticked in the details
+    /// view) are left alone. Scans never set this, so they always see everything.
+    pub honor_skips: bool,
 }
 
 impl RunOptions {
+    /// Leave the user's unticked paths alone (see [`crate::engine::skip`]).
+    #[must_use]
+    pub const fn with_skips(mut self) -> Self {
+        self.honor_skips = true;
+        self
+    }
+
     /// Actually perform the cleaning (skips interactive prompts).
     pub const fn execute() -> Self {
         Self {
             skip_confirmation: true,
             dry_run: false,
+            honor_skips: false,
         }
     }
 
@@ -143,6 +166,7 @@ impl RunOptions {
         Self {
             skip_confirmation: false,
             dry_run: false,
+            honor_skips: false,
         }
     }
 
@@ -151,6 +175,7 @@ impl RunOptions {
         Self {
             skip_confirmation: true,
             dry_run: true,
+            honor_skips: false,
         }
     }
 }

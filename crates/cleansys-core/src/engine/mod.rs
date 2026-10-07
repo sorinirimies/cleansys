@@ -21,6 +21,7 @@ pub mod registry;
 pub mod running;
 pub mod safety;
 pub mod schedule;
+pub mod skip;
 pub mod spec;
 
 pub use config::EngineConfig;

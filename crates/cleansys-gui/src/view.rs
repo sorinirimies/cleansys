@@ -1,6 +1,6 @@
 //! View (rendering) logic for the CleanSys Iced GUI.
 
-use cleansys_core::{format_size, Status};
+use cleansys_core::{format_size, EntryState, Status};
 use iced::widget::{
     button, checkbox, column, container, pick_list, responsive, row, rule, scrollable, text,
     text_input, tooltip, Space,
@@ -531,14 +531,26 @@ fn item_row<'a>(
         .into(),
         None => match info {
             Some(s) if s.error.is_some() => text("scan failed").size(12).color(c.red).into(),
-            Some(s) if s.bytes > 0 => column![
-                text(format_size(s.bytes))
-                    .size(16)
-                    .color(size_color(&c, s.bytes)),
-                text(format!("{} item(s)", s.items)).size(11).color(c.muted),
-            ]
-            .align_x(Alignment::End)
-            .into(),
+            Some(s) if s.bytes > 0 => {
+                let mut col = column![
+                    text(format_size(s.bytes))
+                        .size(16)
+                        .color(size_color(&c, s.bytes)),
+                    text(format!("{} item(s)", s.items)).size(11).color(c.muted),
+                ]
+                .align_x(Alignment::End);
+                if state.board.entry_state(cat_idx, item_idx) == EntryState::Partial {
+                    col = col.push(
+                        text(format!(
+                            "{} selected",
+                            format_size(state.board.item_selected_bytes(cat_idx, item_idx))
+                        ))
+                        .size(11)
+                        .color(c.accent),
+                    );
+                }
+                col.into()
+            }
             Some(_) => text("nothing to clean").size(12).color(c.muted).into(),
             None => text(if state.board.is_scanning() {
                 "scanning…"
@@ -551,13 +563,81 @@ fn item_row<'a>(
         },
     };
 
-    let mut left = column![row![name_check, badges]
+    let has_entries = info.is_some_and(|s| !s.entries.is_empty());
+    let open = state.expanded.contains(&(cat_idx, item_idx));
+    let mut name_row = row![name_check, badges]
         .spacing(10)
-        .align_y(Alignment::Center)]
-    .spacing(3);
+        .align_y(Alignment::Center);
+    if has_entries {
+        name_row = name_row.push(
+            button(text(if open { "▾ Details" } else { "▸ Details" }).size(11))
+                .padding([2, 8])
+                .style(button::text)
+                .on_press(Message::ToggleExpand(cat_idx, item_idx)),
+        );
+    }
+    let mut left = column![name_row].spacing(3);
     left = left.push(text(item.description.clone()).size(12).color(c.muted));
     if let Some(top) = info.and_then(|s| s.top_path.as_ref()) {
         left = left.push(text(format!("📁 {top}")).size(11).color(c.text_secondary));
+    }
+
+    // Expanded details: every path this cleaner would remove, each tickable.
+    if let (true, Some(scan)) = (open, info) {
+        let any_skippable = scan.entries.iter().any(|e| e.skippable);
+        let mut list = column![].spacing(2);
+        if any_skippable {
+            list = list.push(
+                row![
+                    button(text("Select all").size(11))
+                        .padding([2, 8])
+                        .style(button::secondary)
+                        .on_press(Message::SetEntries(cat_idx, item_idx, true)),
+                    button(text("Select none").size(11))
+                        .padding([2, 8])
+                        .style(button::secondary)
+                        .on_press(Message::SetEntries(cat_idx, item_idx, false)),
+                    text("ticked paths are cleaned when this cleaner runs")
+                        .size(11)
+                        .color(c.muted),
+                ]
+                .spacing(8)
+                .align_y(Alignment::Center),
+            );
+        } else {
+            list = list.push(
+                text("These are removed together — individual paths can't be unticked.")
+                    .size(11)
+                    .color(c.muted),
+            );
+        }
+        for e in &scan.entries {
+            let on = state.board.entry_selected(&e.path);
+            let path = e.path.clone();
+            let mut cb = checkbox(on)
+                .label(format!("{} — {}", e.label, format_size(e.bytes)))
+                .size(14)
+                .text_size(12);
+            if e.skippable {
+                cb = cb.on_toggle(move |_| Message::ToggleEntry(path.clone()));
+            }
+            list = list.push(column![cb, text(e.path.clone()).size(10).color(c.muted)].spacing(0));
+        }
+        if scan.items > scan.entries.len() {
+            list = list.push(
+                text(format!(
+                    "… and {} smaller item(s) not listed",
+                    scan.items - scan.entries.len()
+                ))
+                .size(11)
+                .color(c.muted),
+            );
+        }
+        left = left.push(
+            container(scrollable(list.padding([0, 10])).height(Length::Shrink))
+                .max_height(320)
+                .padding([4, 0]),
+        );
     }
 
     // Per-path breakdown of the last *real* run.
@@ -761,6 +841,38 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
         Message::RequestPreview,
         !busy && selected > 0,
     );
+    let age_opts: Vec<Choice<u64>> = {
+        let mut v: Vec<u64> = cleansys_core::engine::config::MIN_AGE_CHOICES.to_vec();
+        if !v.contains(&state.min_age_days) {
+            v.push(state.min_age_days);
+            v.sort_unstable();
+        }
+        v.into_iter()
+            .map(|d| choice(d, cleansys_core::engine::config::min_age_label(d)))
+            .collect()
+    };
+    let age_sel = age_opts
+        .iter()
+        .find(|o| o.value == state.min_age_days)
+        .cloned();
+    let age: Element<'a, Message> = tooltip(
+        row![
+            text("Idle ≥").size(12).color(c.muted),
+            pick_list(age_opts, age_sel, |o: Choice<u64>| Message::SetMinAge(o.value))
+                .text_size(12)
+                .padding([4, 8]),
+        ]
+        .spacing(6)
+        .align_y(Alignment::Center),
+        container(
+            text("Project build output (target/, node_modules, …) is only offered when its project was untouched this long")
+                .size(12),
+        )
+        .padding(6)
+        .style(container::rounded_box),
+        tooltip::Position::Top,
+    )
+    .into();
     let hide = checkbox(state.hide_empty)
         .label(if compact {
             "Hide empty"
@@ -784,6 +896,7 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
     let content: Element<'a, Message> = match layout {
         Layout::Wide => row![
             summary,
+            age,
             hide,
             log_btn,
             rescan,
@@ -799,6 +912,7 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
             row![summary, clean].spacing(12).align_y(Alignment::Center),
             row![
                 hide,
+                age,
                 Space::new().width(Length::Fill),
                 log_btn,
                 rescan,
@@ -814,7 +928,9 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
         Layout::Narrow => column![
             summary,
             row![recommended, none, preview, rescan, log_btn].spacing(6),
-            row![hide, Space::new().width(Length::Fill)].align_y(Alignment::Center),
+            row![hide, age, Space::new().width(Length::Fill)]
+                .spacing(10)
+                .align_y(Alignment::Center),
             clean.width(Length::Fill),
         ]
         .spacing(8)
@@ -1591,6 +1707,7 @@ mod tests {
                 items: 3,
                 top_path: Some("/tmp/x".into()),
                 error: None,
+                entries: Vec::new(),
             },
         );
         state.board.record(

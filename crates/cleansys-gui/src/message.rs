@@ -58,6 +58,14 @@ pub enum Message {
     ScanItemFinished(usize, usize, Result<cleansys_core::CleaningResult, String>),
     /// Toggle hiding cleaners that have nothing to clean.
     ToggleHideEmpty,
+    /// Expand/collapse one cleaner's per-path details.
+    ToggleExpand(usize, usize),
+    /// Tick/untick one path in a cleaner's details (by absolute path).
+    ToggleEntry(String),
+    /// Tick/untick every path of one cleaner.
+    SetEntries(usize, usize, bool),
+    /// Day selector: only offer project build output idle at least this many days.
+    SetMinAge(u64),
     /// Show/hide the activity log drawer.
     ToggleLog,
     /// Tick exactly the recommended cleaners (safe, user-land unless root).

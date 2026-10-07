@@ -70,6 +70,21 @@ label.item input[type=checkbox] { width:18px; height:18px; accent-color:var(--ac
 .size.big b { color:var(--err); }
 .size.mid b { color:var(--warn); }
 .size.none { color:var(--dim); }
+.itemwrap { display:flex; flex-direction:column; }
+a.more { font-size:12px; color:var(--fg2); text-decoration:none; padding:3px 12px 0; align-self:flex-start; }
+a.more:hover { color:var(--accent); }
+.entries { margin:4px 0 4px 18px; padding:8px 10px; border-left:2px solid var(--line); display:flex; flex-direction:column; gap:3px; max-height:420px; overflow:auto; }
+.entries .bulk { display:flex; gap:6px; margin-bottom:4px; }
+.entries form { margin:0; }
+label.e { display:grid; grid-template-columns:auto minmax(0,1fr) auto; gap:10px; align-items:center; padding:4px 6px; border-radius:6px; cursor:pointer; }
+label.e:hover { background:var(--sel); }
+label.e.off { opacity:.55; cursor:default; }
+label.e .p { min-width:0; display:flex; flex-direction:column; }
+label.e .p b { font-weight:500; font-size:13px; }
+label.e .p small { color:var(--dim); font-size:11px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+label.e .n { font-variant-numeric:tabular-nums; font-size:12px; color:var(--fg2); }
+.bar form.age { margin:0; font-size:12px; color:var(--dim); }
+.bar form.age select { font-size:12px; }
 .empty { padding:28px; text-align:center; color:var(--dim); background:var(--panel); border:1px dashed var(--line); border-radius:10px; }
 
 /* ── action bar ── */

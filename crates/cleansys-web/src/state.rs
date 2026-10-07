@@ -64,6 +64,12 @@ pub struct ItemView {
     pub scan: Option<ScanInfo>,
     /// Can this cleaner be ticked here (root cleaners need a root server)?
     pub selectable: bool,
+    /// Per-entry tick state, aligned with `scan.entries`.
+    pub entry_on: Vec<bool>,
+    /// Tick state of the skippable entries (for the "3/12" badge).
+    pub entry_state: cleansys_core::EntryState,
+    /// Bytes still freed after unticked entries are left out.
+    pub sel_bytes: u64,
 }
 
 /// One category as the page sees it.
@@ -92,7 +98,20 @@ pub struct Snapshot {
     pub selected_bytes: u64,
     pub run: RunState,
     pub is_root: bool,
+    /// The in-browser sudo password prompt is available (loopback server, not root).
+    pub can_elevate: bool,
+    /// The user has entered a valid sudo password this session.
+    pub sudo_ok: bool,
+    /// Ticked root cleaners exist and the server is not yet allowed to run them.
+    pub needs_auth: bool,
+    /// Idle-day threshold for project build artifacts.
+    pub min_age_days: u64,
 }
+
+/// Wrong-password attempts allowed before a cool-down.
+const MAX_AUTH_FAILS: u32 = 3;
+/// How long further attempts are refused after [`MAX_AUTH_FAILS`] failures.
+const AUTH_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(30);
 
 pub struct Inner {
     categories: Vec<CleanerCategory>,
@@ -100,6 +119,10 @@ pub struct Inner {
     scan_rx: Option<Receiver<(usize, usize, ScanInfo)>>,
     run: RunState,
     is_root: bool,
+    elevation_allowed: bool,
+    sudo_ok: bool,
+    auth_fails: u32,
+    auth_locked_until: Option<std::time::Instant>,
 }
 
 /// Cheaply clonable handle to the shared state.
@@ -121,6 +144,10 @@ impl Shared {
             scan_rx: None,
             run: RunState::default(),
             is_root: check_root(),
+            elevation_allowed: false,
+            sudo_ok: false,
+            auth_fails: 0,
+            auth_locked_until: None,
         })))
     }
 
@@ -136,6 +163,83 @@ impl Shared {
     /// Force the root flag (tests).
     pub fn set_root(&self, root: bool) {
         self.lock().is_root = root;
+    }
+
+    /// Flip one entry in the details view.
+    pub fn toggle_entry(&self, path: &str) {
+        self.lock().board.toggle_entry(path);
+    }
+
+    /// Tick/untick every entry of the cleaner with this id.
+    pub fn set_entries(&self, id: &str, on: bool) {
+        let mut g = self.lock();
+        let pos = g
+            .categories
+            .iter()
+            .enumerate()
+            .find_map(|(ci, c)| c.items.iter().position(|i| i.id == id).map(|ii| (ci, ii)));
+        if let Some((ci, ii)) = pos {
+            g.board.set_item_entries(ci, ii, on);
+        }
+    }
+
+    /// Change the idle-day threshold, persist it and re-measure.
+    pub fn set_min_age(&self, days: u64) -> Result<(), String> {
+        cleansys_core::engine::EngineConfig::save_min_age_days(days).map_err(|e| e.to_string())?;
+        let mut g = self.lock();
+        if g.run.phase != Phase::Running {
+            start_scan_locked(&mut g);
+        }
+        Ok(())
+    }
+
+    /// Allow (or forbid) the in-browser sudo password prompt. Only enable this for a
+    /// loopback-bound server: the password crosses plain HTTP.
+    pub fn allow_elevation(&self, allowed: bool) {
+        self.lock().elevation_allowed = allowed;
+    }
+
+    /// Whether the sudo prompt can be used (allowed, and the server isn't root already).
+    pub fn can_elevate(&self) -> bool {
+        let g = self.lock();
+        g.elevation_allowed && !g.is_root
+    }
+
+    /// Validate `password` with `sudo -S -v` and, on success, let root cleaners run until
+    /// the current run finishes. Blocking — call from a blocking thread.
+    ///
+    /// `Ok(true)` = accepted, `Ok(false)` = wrong password, `Err` = unavailable / locked out.
+    pub fn authenticate(&self, password: &str) -> Result<bool, String> {
+        {
+            let mut g = self.lock();
+            if !g.elevation_allowed || g.is_root {
+                return Err("password entry is not available on this server".into());
+            }
+            if let Some(until) = g.auth_locked_until {
+                if std::time::Instant::now() < until {
+                    return Err("too many wrong passwords — wait a moment and retry".into());
+                }
+                g.auth_locked_until = None;
+                g.auth_fails = 0;
+            }
+        }
+        let ok = cleansys_core::authenticate_sudo(password).map_err(|e| format!("sudo: {e}"))?;
+        let mut g = self.lock();
+        if ok {
+            g.sudo_ok = true;
+            g.auth_fails = 0;
+        } else {
+            g.auth_fails += 1;
+            if g.auth_fails >= MAX_AUTH_FAILS {
+                g.auth_locked_until = Some(std::time::Instant::now() + AUTH_COOLDOWN);
+            }
+        }
+        Ok(ok)
+    }
+
+    /// Force the sudo-authenticated flag (tests).
+    pub fn set_sudo_ok(&self, ok: bool) {
+        self.lock().sudo_ok = ok;
     }
 
     // ── scanning ───────────────────────────────────────────────────
@@ -163,13 +267,14 @@ impl Shared {
 
     // ── selection ──────────────────────────────────────────────────
 
-    /// Flip one cleaner by id. Root cleaners are ignored unless the server is root.
+    /// Flip one cleaner by id. Root cleaners are ignored unless the server is root or
+    /// the sudo prompt is available.
     pub fn toggle(&self, id: &str) -> bool {
         let mut g = self.lock();
-        let is_root = g.is_root;
+        let can_root = g.is_root || g.elevation_allowed;
         for item in g.categories.iter_mut().flat_map(|c| c.items.iter_mut()) {
             if item.id == id {
-                if item.requires_root && !is_root {
+                if item.requires_root && !can_root {
                     return false;
                 }
                 item.selected = !item.selected;
@@ -202,10 +307,10 @@ impl Shared {
     /// Tick (or untick) every selectable cleaner in one category.
     pub fn set_category(&self, category: usize, on: bool) {
         let mut g = self.lock();
-        let is_root = g.is_root;
+        let can_root = g.is_root || g.elevation_allowed;
         if let Some(c) = g.categories.get_mut(category) {
             for item in &mut c.items {
-                if !item.requires_root || is_root {
+                if !item.requires_root || can_root {
                     item.selected = on;
                 }
             }
@@ -239,7 +344,19 @@ impl Shared {
                     requires_root: it.requires_root,
                     selected: it.selected,
                     scan: g.board.get(ci, ii).cloned(),
-                    selectable: !it.requires_root || g.is_root,
+                    entry_on: g
+                        .board
+                        .get(ci, ii)
+                        .map(|s| {
+                            s.entries
+                                .iter()
+                                .map(|e| g.board.entry_selected(&e.path))
+                                .collect()
+                        })
+                        .unwrap_or_default(),
+                    entry_state: g.board.entry_state(ci, ii),
+                    sel_bytes: g.board.item_selected_bytes(ci, ii),
+                    selectable: !it.requires_root || g.is_root || g.elevation_allowed,
                 });
             }
         }
@@ -260,6 +377,10 @@ impl Shared {
             selected_bytes: g.board.selected_bytes(&g.categories),
             run: g.run.clone(),
             is_root: g.is_root,
+            can_elevate: g.elevation_allowed && !g.is_root,
+            sudo_ok: g.sudo_ok,
+            needs_auth: needs_auth_locked(&g),
+            min_age_days: cleansys_core::engine::EngineConfig::load().min_age_days,
         }
     }
 
@@ -278,29 +399,47 @@ impl Shared {
 
     // ── preview / run ──────────────────────────────────────────────
 
-    /// The ticked cleaners as jobs (root ones only when the server is root).
+    /// The ticked cleaners as jobs, for a dry-run preview. Root cleaners are included
+    /// when the server is root or the sudo prompt is available (previews only read).
     pub fn selected_jobs(&self) -> Vec<Job> {
-        jobs_locked(&self.lock())
+        let g = self.lock();
+        jobs_locked(&g, g.is_root || g.elevation_allowed)
     }
 
     /// Dry-run the ticked cleaners (blocking — call from a blocking thread).
     pub fn preview(&self) -> Vec<Outcome> {
         let jobs = self.selected_jobs();
-        headless::execute(&jobs, RunOptions::preview())
+        let (skipped, running) = {
+            let g = self.lock();
+            (g.board.skipped_paths(), g.run.phase == Phase::Running)
+        };
+        if running {
+            // The running clean owns the (process-wide) skip set.
+            return headless::execute(&jobs, RunOptions::preview());
+        }
+        // Unticked entries are left out of the preview too, so it matches the run.
+        cleansys_core::engine::skip::set_skipped(skipped);
+        let out = headless::execute(&jobs, RunOptions::preview().with_skips());
+        cleansys_core::engine::skip::clear_skipped();
+        out
     }
 
     /// Start cleaning the ticked cleaners on a background thread.
-    /// Err = nothing to do / already running.
+    /// Err = nothing to do / already running / [`NEEDS_AUTH`].
     pub fn start_run(&self) -> Result<usize, &'static str> {
         let jobs = {
             let mut g = self.lock();
             if g.run.phase == Phase::Running {
                 return Err("a clean is already running");
             }
-            let jobs = jobs_locked(&g);
+            if needs_auth_locked(&g) {
+                return Err(NEEDS_AUTH);
+            }
+            let jobs = jobs_locked(&g, g.is_root || g.sudo_ok);
             if jobs.is_empty() {
                 return Err("nothing selected");
             }
+            cleansys_core::engine::skip::set_skipped(g.board.skipped_paths());
             g.run = RunState {
                 phase: Phase::Running,
                 total: jobs.len(),
@@ -313,8 +452,11 @@ impl Shared {
         std::thread::spawn(move || {
             for job in jobs {
                 this.lock().run.current = Some(job.name.clone());
-                let outcome =
-                    headless::execute(std::slice::from_ref(&job), RunOptions::execute()).pop();
+                let outcome = headless::execute(
+                    std::slice::from_ref(&job),
+                    RunOptions::execute().with_skips(),
+                )
+                .pop();
                 let mut g = this.lock();
                 if let Some(o) = outcome {
                     let (status, detail) = match &o.status {
@@ -333,9 +475,15 @@ impl Shared {
                 }
                 g.run.done += 1;
             }
+            cleansys_core::engine::skip::clear_skipped();
             let mut g = this.lock();
             g.run.current = None;
             g.run.phase = Phase::Done;
+            // Never keep the sudo password around once the run is over.
+            if g.sudo_ok {
+                g.sudo_ok = false;
+                cleansys_core::clear_cached_sudo_password();
+            }
             // Untick what was cleaned and re-measure so the lists are current.
             for item in g.categories.iter_mut().flat_map(|c| c.items.iter_mut()) {
                 item.selected = false;
@@ -354,11 +502,24 @@ impl Shared {
     }
 }
 
-fn jobs_locked(g: &Inner) -> Vec<Job> {
+/// `start_run` error: a ticked root cleaner needs the sudo password first.
+pub const NEEDS_AUTH: &str = "sudo authentication required";
+
+/// Ticked root cleaners exist but the server is neither root nor sudo-authenticated.
+fn needs_auth_locked(g: &Inner) -> bool {
+    !g.is_root
+        && !g.sudo_ok
+        && g.categories
+            .iter()
+            .flat_map(|c| &c.items)
+            .any(|i| i.selected && i.requires_root)
+}
+
+fn jobs_locked(g: &Inner, include_root: bool) -> Vec<Job> {
     let mut jobs = Vec::new();
     for c in &g.categories {
         for it in &c.items {
-            if it.selected && (!it.requires_root || g.is_root) {
+            if it.selected && (!it.requires_root || include_root) {
                 jobs.push(Job {
                     id: it.id.clone(),
                     name: it.name.clone(),
@@ -468,6 +629,29 @@ mod tests {
         assert_eq!(s.snapshot().selected_count, 1);
         s.select_none();
         assert_eq!(s.snapshot().selected_count, 0);
+    }
+
+    #[test]
+    fn elevation_makes_root_cleaners_tickable_but_gates_the_run() {
+        let s = shared();
+        s.allow_elevation(true);
+        assert!(s.can_elevate());
+        assert!(s.snapshot().items.iter().all(|i| i.selectable));
+        assert!(s.toggle("s1"));
+        let snap = s.snapshot();
+        assert!(snap.needs_auth && !snap.sudo_ok);
+        assert_eq!(s.start_run(), Err(NEEDS_AUTH), "no run before the password");
+        assert_eq!(s.selected_jobs().len(), 1, "previews are read-only");
+
+        s.set_sudo_ok(true);
+        assert!(!s.snapshot().needs_auth);
+    }
+
+    #[test]
+    fn authenticate_refused_when_elevation_not_allowed() {
+        let s = shared();
+        assert!(s.authenticate("pw").is_err());
+        assert!(!s.snapshot().sudo_ok);
     }
 
     #[test]

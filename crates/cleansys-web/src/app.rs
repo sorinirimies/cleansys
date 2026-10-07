@@ -94,6 +94,9 @@ pub async fn serve(opts: ServerOptions) -> std::io::Result<()> {
 
     let listener = tokio::net::TcpListener::bind((opts.host.as_str(), opts.port)).await?;
     let addr = listener.local_addr()?;
+    // The sudo password prompt is only offered when the password can't leave this machine.
+    let elevation = addr.ip().is_loopback() && cleansys_core::utils::supports_sudo_prompt();
+    state.allow_elevation(elevation);
     println!("cleansys-web listening on http://{addr}");
     if !addr.ip().is_loopback() {
         eprintln!(
@@ -102,7 +105,12 @@ pub async fn serve(opts: ServerOptions) -> std::io::Result<()> {
     }
     if !cleansys_core::check_root() {
         println!(
-            "cleansys-web: running as a normal user — system (root) cleaners are listed but disabled. Use `sudo cleansys-web` to enable them."
+            "cleansys-web: running as a normal user — system (root) cleaners ask for your sudo password when you run them{}.",
+            if elevation {
+                ""
+            } else {
+                " (disabled: not bound to loopback — use `sudo cleansys-web`)"
+            }
         );
     }
     if opts.open_browser {

@@ -19,7 +19,7 @@ use topcoat::{
 
 use crate::{
     components::{action_bar, cat_pick, document, item_row, side_nav, top_bar},
-    state::{LineStatus, Phase, Shared, Snapshot},
+    state::{LineStatus, NEEDS_AUTH, Phase, Shared, Snapshot},
     theme,
     util::{fmt, nav_href, safe_back, size_class},
 };
@@ -47,6 +47,8 @@ pub struct HomeParams {
     /// `0` shows cleaners that have nothing to clean.
     pub hide: Option<String>,
     pub theme: Option<String>,
+    /// Id of the cleaner whose details are expanded.
+    pub open: Option<String>,
 }
 
 #[page("/")]
@@ -74,7 +76,13 @@ async fn home(cx: &Cx) -> Result<impl View> {
             .map_or(0, |c| c.index);
     }
     let searching = !q.trim().is_empty();
-    let back = nav_href(active, &q, hide);
+    let nav = nav_href(active, &q, hide);
+    let open_id = p.open.clone().filter(|o| !o.is_empty());
+    // `back` keeps the expanded cleaner open across the toggle redirects.
+    let back = match &open_id {
+        Some(o) => format!("{nav}&open={}", crate::util::pct(o)),
+        None => nav.clone(),
+    };
     // The header badge shows the scope you are in: ROOT while a system category is open.
     let root_scope =
         snap.is_root || (!searching && snap.categories.get(active).is_some_and(|c| c.root));
@@ -145,7 +153,7 @@ async fn home(cx: &Cx) -> Result<impl View> {
                     } else {
                         <div class="rows">
                             for i in &rows {
-                                item_row(item: &snap.items[*i], back: back.clone(), show_category: if searching { snap.categories.get(snap.items[*i].category).map(|c| c.name.clone()) } else { None }, scanning_now: snap.scanning)
+                                item_row(item: &snap.items[*i], back: back.clone(), open: open_id.as_deref() == Some(snap.items[*i].id.as_str()), more_href: if open_id.as_deref() == Some(snap.items[*i].id.as_str()) { nav.clone() } else { format!("{nav}&open={}", crate::util::pct(&snap.items[*i].id)) }, show_category: if searching { snap.categories.get(snap.items[*i].category).map(|c| c.name.clone()) } else { None }, scanning_now: snap.scanning)
                             }
                         </div>
                     }
@@ -188,6 +196,48 @@ struct ToggleForm {
 async fn toggle(cx: &Cx, Form(f): Form<ToggleForm>) -> Result<SeeOther> {
     shared(cx).toggle(&f.id);
     Ok(see_other(safe_back(f.back.as_deref().unwrap_or("/"))))
+}
+
+#[derive(Deserialize)]
+struct EntryForm {
+    path: String,
+    back: Option<String>,
+}
+
+#[route(POST "/toggle-entry")]
+async fn toggle_entry(cx: &Cx, Form(f): Form<EntryForm>) -> Result<SeeOther> {
+    shared(cx).toggle_entry(&f.path);
+    Ok(see_other(safe_back(f.back.as_deref().unwrap_or("/"))))
+}
+
+#[derive(Deserialize)]
+struct EntriesForm {
+    id: String,
+    on: String,
+    back: Option<String>,
+}
+
+#[route(POST "/entries")]
+async fn set_entries(cx: &Cx, Form(f): Form<EntriesForm>) -> Result<SeeOther> {
+    shared(cx).set_entries(&f.id, f.on == "1");
+    Ok(see_other(safe_back(f.back.as_deref().unwrap_or("/"))))
+}
+
+#[derive(Deserialize)]
+struct MinAgeForm {
+    days: u64,
+    back: Option<String>,
+}
+
+#[route(POST "/min-age")]
+async fn set_min_age(cx: &Cx, Form(f): Form<MinAgeForm>) -> Result<SeeOther> {
+    // Reject absurd values; the selector only offers the fixed steps.
+    let days = f.days.min(3650);
+    let _ = shared(cx).set_min_age(days);
+    // The old expanded view refers to a scan that was just replaced: drop `open`.
+    let back = safe_back(f.back.as_deref().unwrap_or("/"));
+    let back = back.split("&open=").next().unwrap_or("/").to_string();
+    Ok(see_other(back))
 }
 
 #[derive(Deserialize)]
@@ -302,13 +352,24 @@ async fn confirm(cx: &Cx) -> Result<impl View> {
                     } else if risky {
                         <p class="warn">"Some cleaners are slow to rebuild or re-download."</p>
                     }
-                    <form method="post" action="/run">
-                        <button class="danger" type="submit">"🧹 Yes, clean now"</button>
-                        " "
-                        <a class="btn" href="/preview">"🔍 Preview first"</a>
-                        " "
-                        <a class="btn" href="/">"Cancel"</a>
-                    </form>
+                    if snap.needs_auth {
+                        <p class="warn">"🔒 System (root) cleaners are ticked — your sudo password is needed to run them."</p>
+                        <p>
+                            <a class="btn danger" href="/auth">"🔒 Enter sudo password"</a>
+                            " "
+                            <a class="btn" href="/preview">"🔍 Preview first"</a>
+                            " "
+                            <a class="btn" href="/">"Cancel"</a>
+                        </p>
+                    } else {
+                        <form method="post" action="/run">
+                            <button class="danger" type="submit">"🧹 Yes, clean now"</button>
+                            " "
+                            <a class="btn" href="/preview">"🔍 Preview first"</a>
+                            " "
+                            <a class="btn" href="/">"Cancel"</a>
+                        </form>
+                    }
                 }
             </div>
         )
@@ -319,8 +380,70 @@ async fn confirm(cx: &Cx) -> Result<impl View> {
 async fn run_clean(cx: &Cx) -> Result<SeeOther> {
     match shared(cx).start_run() {
         Ok(_) => Ok(see_other("/progress")),
+        Err(NEEDS_AUTH) => Ok(see_other("/auth")),
         Err(_) => Ok(see_other("/")),
     }
+}
+
+// ── sudo password ────────────────────────────────────────────────────
+
+#[query_params(error = redirect("/auth"))]
+pub struct AuthParams {
+    pub msg: Option<String>,
+}
+
+#[page("/auth")]
+async fn auth_page(cx: &Cx) -> Result<impl View> {
+    let params = query_params::<AuthParams>(cx)?;
+    let st = shared(cx);
+    let theme_idx = theme_for(None);
+    let snap = st.snapshot();
+    Ok(view! {
+        document(refresh: 0, theme: theme_idx, title: "Sudo password — CleanSys".to_string(),
+            <header class="top"><h1>"🔒 Sudo password"</h1><span class="grow"></span><a class="btn" href="/">"← Back"</a></header>
+            if let Some(m) = &params.msg { <div class="banner">(m.clone())</div> }
+            <div class="card">
+                if snap.is_root {
+                    <p class="ok">"Already running as root — no password needed."</p>
+                } else if !snap.can_elevate {
+                    <p class="warn">"Password entry is disabled on this server (it is only offered on a loopback address)."</p>
+                    <p class="dim">"Restart with " <code>"sudo cleansys-web"</code> " to run system cleaners."</p>
+                } else if snap.sudo_ok {
+                    <p class="ok">"Authenticated. The password is forgotten as soon as the clean finishes."</p>
+                    <a class="btn primary" href="/confirm">"Continue"</a>
+                } else {
+                    <p>"System (root) cleaners need administrator rights. The password is checked with " <code>"sudo"</code> ", kept in memory only for this clean, and wiped afterwards."</p>
+                    <form class="stack" method="post" action="/auth" autocomplete="off">
+                        <label>"Password" <input type="password" name="password" autofocus=(true) required=(true) autocomplete="current-password"></label>
+                        <button class="primary" type="submit">"Authenticate"</button>
+                    </form>
+                    <p class="dim">"Sent over plain HTTP to this machine only (127.0.0.1)."</p>
+                }
+            </div>
+        )
+    })
+}
+
+#[derive(Deserialize)]
+struct AuthForm {
+    password: String,
+}
+
+#[route(POST "/auth")]
+async fn auth_submit(cx: &Cx, Form(f): Form<AuthForm>) -> Result<SeeOther> {
+    let st = shared(cx);
+    // `sudo -S -v` blocks on a child process: keep it off the async executor.
+    let result = tokio::task::spawn_blocking(move || st.authenticate(&f.password))
+        .await
+        .unwrap_or_else(|_| Err("authentication task failed".into()));
+    Ok(match result {
+        Ok(true) => see_other("/confirm"),
+        Ok(false) => see_other(format!(
+            "/auth?msg={}",
+            crate::util::pct("Incorrect password. Please try again.")
+        )),
+        Err(e) => see_other(format!("/auth?msg={}", crate::util::pct(&e))),
+    })
 }
 
 #[page("/progress")]

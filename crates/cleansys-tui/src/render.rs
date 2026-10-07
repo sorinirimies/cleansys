@@ -1036,6 +1036,66 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(list, area);
 }
 
+/// Per-path rows shown under an expanded cleaner (`☑ label  path  size`).
+fn entry_rows(app: &App, ci: usize, ii: usize, width: usize) -> Vec<ListItem<'static>> {
+    let Some(info) = app.board.get(ci, ii) else {
+        return Vec::new();
+    };
+    let any_skippable = info.entries.iter().any(|e| e.skippable);
+    let mut rows = Vec::with_capacity(info.entries.len() + 2);
+    for e in &info.entries {
+        let on = app.board.entry_selected(&e.path);
+        let (mark, style) = match (e.skippable, on) {
+            (true, true) => ("[x]", Style::default().fg(Color::Green)),
+            (true, false) => ("[ ]", Style::default().fg(Color::White)),
+            (false, _) => (" · ", Style::default().fg(Color::DarkGray)),
+        };
+        let size = format_size(e.bytes);
+        let head = format!("    {mark} {}", e.label);
+        let used = head.chars().count() + size.chars().count() + 4;
+        let room = width.saturating_sub(used);
+        let path = shorten_left(&e.path, room);
+        let left = vec![
+            Span::styled(head, style),
+            Span::raw("  "),
+            Span::styled(path, Style::default().fg(Color::DarkGray)),
+        ];
+        rows.push(ListItem::new(row_line(
+            left,
+            Span::styled(size, size_style(e.bytes)),
+            width,
+        )));
+    }
+    let hidden = info.items.saturating_sub(info.entries.len());
+    let hint = if any_skippable {
+        "    ↑/↓ move · Space tick · a all · n none · ←/Esc back"
+    } else {
+        "    removed together — paths can't be unticked · ←/Esc back"
+    };
+    rows.push(ListItem::new(Line::from(Span::styled(
+        if hidden > 0 {
+            format!("{hint}  (+{hidden} smaller not listed)")
+        } else {
+            hint.to_string()
+        },
+        Style::default().fg(Color::DarkGray),
+    ))));
+    rows
+}
+
+/// Keep the tail of `s` (the interesting part of a path) within `max` chars.
+fn shorten_left(s: &str, max: usize) -> String {
+    let n = s.chars().count();
+    if n <= max {
+        return s.to_string();
+    }
+    if max <= 1 {
+        return String::new();
+    }
+    let tail: String = s.chars().skip(n - (max - 1)).collect();
+    format!("…{tail}")
+}
+
 /// The list of cleaners (+ optional category bar and detail box).
 fn render_cleaner_pane(f: &mut Frame, app: &mut App, area: Rect, show_category_bar: bool) {
     let show_detail = area.height >= 18;
@@ -1113,7 +1173,7 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
     let visible = app.view_items();
     let filtering = !app.filter.trim().is_empty();
 
-    let items: Vec<ListItem> = visible
+    let mut items: Vec<ListItem> = visible
         .iter()
         .map(|&(ci, ii)| {
             let item = &app.categories[ci].items[ii];
@@ -1252,6 +1312,22 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
         return;
     }
 
+    // Interleave the expanded cleaner's per-path rows right under it.
+    let mut display_sel = app.item_list_state.selected();
+    if let Some((ec, ei)) = app.expanded {
+        if let Some(p) = visible.iter().position(|&v| v == (ec, ei)) {
+            let rows = entry_rows(app, ec, ei, inner_w);
+            let n = rows.len();
+            items.splice(p + 1..p + 1, rows);
+            display_sel = match (app.entry_cursor, display_sel) {
+                (Some(k), _) => Some(p + 1 + k.min(n.saturating_sub(1))),
+                (None, Some(s)) if s > p => Some(s + n),
+                (None, s) => s,
+            };
+        }
+    }
+    app.list_view_state.select(display_sel);
+
     let items_list = List::new(items)
         .block(block)
         .highlight_style(
@@ -1261,7 +1337,7 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
         )
         .highlight_symbol("> ");
 
-    f.render_stateful_widget(items_list, area, &mut app.item_list_state);
+    f.render_stateful_widget(items_list, area, &mut app.list_view_state);
 }
 
 /// Description + scan details of the highlighted cleaner.
@@ -1534,6 +1610,14 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
                     .add_modifier(Modifier::BOLD),
             ),
         ];
+        status_spans.push(Span::raw("  •  "));
+        status_spans.push(Span::styled(
+            format!(
+                "Idle ≥ {} ([ ])",
+                cleansys_core::engine::config::min_age_label(app.min_age_days)
+            ),
+            Style::default().fg(Color::Cyan),
+        ));
         status_spans.extend(to_free_spans(app));
         let status = Line::from(status_spans);
         let lines = if inner_area.height >= 2 {
@@ -1676,6 +1760,12 @@ fn render_help(f: &mut Frame, area: Rect) {
             Style::default().add_modifier(Modifier::BOLD),
         )]),
         Line::from(vec![Span::raw("  Space: Toggle selection")]),
+        Line::from(vec![Span::raw(
+            "  →: Expand a cleaner's paths (↑/↓ move, Space tick, a/n all/none, ← back)",
+        )]),
+        Line::from(vec![Span::raw(
+            "  [ / ]: Idle days for project build output (fewer / more), then rescans",
+        )]),
         Line::from(vec![Span::raw(
             "  Enter: Run selected cleaners (asks for confirmation)",
         )]),
