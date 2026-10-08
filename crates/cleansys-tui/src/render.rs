@@ -9,7 +9,7 @@ use ratatui::{
 use tui_checkbox::symbols as checkbox_symbols;
 use tui_spinner::{FluxFrames, FluxSpinner};
 
-use crate::app::App;
+use crate::app::{App, InfoTab, InputKind, SettingsRow};
 use cleansys_core::{format_size, Status};
 
 pub fn ui(f: &mut Frame, app: &mut App) {
@@ -63,6 +63,8 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         render_admin_notice(f, f.area());
     } else if app.awaiting_run_confirmation {
         render_confirm_run(f, app, f.area());
+    } else if app.info_open {
+        render_info(f, app, f.area());
     } else if app.schedule_open {
         render_schedule(f, app, f.area());
     } else if app.preview_open {
@@ -81,6 +83,10 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
                     .fg(Color::Cyan)
                     .add_modifier(Modifier::BOLD),
             ),
+            Span::styled(
+                format!(" {}", cleansys_core::appinfo::version_label()),
+                Style::default().fg(Color::Yellow),
+            ),
             Span::raw(" - System Cleaner"),
             if app.terminal_width < 60 || app.terminal_height < 20 {
                 Span::styled(
@@ -96,6 +102,10 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
         lines.push(Line::from(vec![
             Span::styled("?", Style::default().add_modifier(Modifier::BOLD)),
             Span::raw(" help | "),
+            Span::styled("o", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" settings | "),
+            Span::styled("i", Style::default().add_modifier(Modifier::BOLD)),
+            Span::raw(" about | "),
             Span::styled("q", Style::default().add_modifier(Modifier::BOLD)),
             Span::raw(" quit"),
         ]));
@@ -111,14 +121,22 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
                         .fg(Color::Cyan)
                         .add_modifier(Modifier::BOLD),
                 ),
+                Span::styled(
+                    format!(" {}", cleansys_core::appinfo::version_label()),
+                    Style::default().fg(Color::Yellow),
+                ),
                 Span::raw(" - Modern System Cleaner for Linux, macOS & Windows"),
             ]),
             Line::from(vec![
                 Span::raw("Press "),
                 Span::styled("?", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(" for help, "),
+                Span::raw(" help · "),
+                Span::styled("o", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(" settings · "),
+                Span::styled("i", Style::default().add_modifier(Modifier::BOLD)),
+                Span::raw(" about · "),
                 Span::styled("q", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(" to quit"),
+                Span::raw(" quit"),
             ]),
         ]
     };
@@ -1096,6 +1114,10 @@ fn render_help(f: &mut Frame, area: Rect) {
         l("  /: Filter cleaners across all categories (Esc clears)"),
         l("  e: Hide/show cleaners with nothing to clean"),
         l(""),
+        h("⚙ Settings & info:"),
+        l("  o: Settings (idle days, scan depth, folders, exclusions, confirm, hide empty)"),
+        l("  i: About — version, developer, GitHub (Enter opens a link)    Tab: switch tab"),
+        l(""),
         h("🔧 Selecting:"),
         l("  Space: Toggle the highlighted cleaner"),
         l("  →: Expand a cleaner's paths (↑/↓ move, Space tick, a/n all/none, ← back)"),
@@ -1451,4 +1473,251 @@ fn render_admin_notice(f: &mut Frame, area: Rect) {
 
     f.render_widget(Clear, popup);
     f.render_widget(popup_widget, popup);
+}
+
+// ── Settings / About overlay ──────────────────────────────────────────────
+
+fn tab_line(app: &App) -> Line<'static> {
+    let tab = |label: &'static str, active: bool| {
+        if active {
+            Span::styled(
+                format!(" {label} "),
+                Style::default()
+                    .fg(Color::Black)
+                    .bg(Color::Cyan)
+                    .add_modifier(Modifier::BOLD),
+            )
+        } else {
+            Span::styled(format!(" {label} "), Style::default().fg(Color::Gray))
+        }
+    };
+    Line::from(vec![
+        tab("Settings (o)", app.info_tab == InfoTab::Settings),
+        Span::raw(" "),
+        tab("About (i)", app.info_tab == InfoTab::About),
+        Span::styled("   Tab: switch", Style::default().fg(Color::DarkGray)),
+    ])
+}
+
+fn render_info(f: &mut Frame, app: &mut App, area: Rect) {
+    let popup = centered_popup(area, 82, 88);
+    f.render_widget(Clear, popup);
+    let block = Block::default()
+        .title(format!(" {} ", cleansys_core::appinfo::title()))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Cyan));
+    let inner = block.inner(popup);
+    f.render_widget(block, popup);
+
+    let chunks = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(2), // tabs
+            Constraint::Min(3),    // body
+            Constraint::Length(2), // message + hint
+        ])
+        .split(inner);
+    f.render_widget(
+        Paragraph::new(vec![tab_line(app), Line::raw("")]),
+        chunks[0],
+    );
+
+    match app.info_tab {
+        InfoTab::Settings => render_settings_tab(f, app, chunks[1]),
+        InfoTab::About => render_about_tab(f, app, chunks[1]),
+    }
+
+    let hint = match (app.info_tab, app.settings_input.is_some()) {
+        (_, true) => "Enter: add · Esc: cancel",
+        (InfoTab::Settings, false) => {
+            "↑/↓ move · ←/→ change · Space toggle/add · d remove · Tab About · Esc close"
+        }
+        (InfoTab::About, false) => {
+            "↑/↓ move · Enter: open link in your browser · Tab Settings · Esc close"
+        }
+    };
+    let msg_style = Style::default().fg(Color::Yellow);
+    let lines = vec![
+        Line::from(Span::styled(app.settings_message.clone(), msg_style)),
+        Line::from(Span::styled(hint, Style::default().fg(Color::DarkGray))),
+    ];
+    f.render_widget(Paragraph::new(lines), chunks[2]);
+}
+
+fn value_span(text: String, focused: bool) -> Span<'static> {
+    if focused {
+        Span::styled(
+            format!("◂ {text} ▸"),
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        )
+    } else {
+        Span::styled(text, Style::default().fg(Color::Cyan))
+    }
+}
+
+fn switch_span(on: bool) -> Span<'static> {
+    if on {
+        Span::styled("[x] on ", Style::default().fg(Color::Green))
+    } else {
+        Span::styled("[ ] off", Style::default().fg(Color::DarkGray))
+    }
+}
+
+fn render_settings_tab(f: &mut Frame, app: &mut App, area: Rect) {
+    // minus the two columns of the "> " highlight symbol
+    let width = (area.width as usize).saturating_sub(2);
+    let rows = app.settings_rows();
+    let mut items: Vec<ListItem> = Vec::new();
+    let mut display_of: Vec<usize> = Vec::new(); // selectable index -> list index
+    let header = |t: &'static str| {
+        ListItem::new(Line::from(Span::styled(
+            t,
+            Style::default()
+                .fg(Color::Yellow)
+                .add_modifier(Modifier::BOLD),
+        )))
+    };
+    let roots = app.engine_cfg.roots_for_editing();
+    let mut last_group = "";
+    for (idx, row) in rows.iter().enumerate() {
+        let group = match row {
+            SettingsRow::IdleDays | SettingsRow::ScanDepth => "Scanning",
+            SettingsRow::HideEmpty | SettingsRow::Confirm => "Behaviour",
+            SettingsRow::Root(_) | SettingsRow::AddRoot => {
+                "Project folders scanned for build output"
+            }
+            SettingsRow::Exclude(_) | SettingsRow::AddExclude => "Never delete (glob patterns)",
+        };
+        if group != last_group {
+            if !items.is_empty() {
+                items.push(ListItem::new(Line::raw("")));
+            }
+            items.push(header(group));
+            last_group = group;
+        }
+        let focused = idx == app.settings_cursor;
+        let label = |t: &str| format!("  {t}");
+        let line = match row {
+            SettingsRow::IdleDays => row_line(
+                vec![Span::raw(label("Project idle for at least"))],
+                value_span(
+                    cleansys_core::engine::config::min_age_label(app.engine_cfg.min_age_days),
+                    focused,
+                ),
+                width,
+            ),
+            SettingsRow::ScanDepth => row_line(
+                vec![Span::raw(label("Scan depth (folders below each root)"))],
+                value_span(app.engine_cfg.max_depth.to_string(), focused),
+                width,
+            ),
+            SettingsRow::HideEmpty => row_line(
+                vec![Span::raw(label("Hide cleaners with nothing to clean"))],
+                switch_span(app.hide_empty),
+                width,
+            ),
+            SettingsRow::Confirm => row_line(
+                vec![Span::raw(label("Ask before cleaning"))],
+                switch_span(app.confirmation_mode),
+                width,
+            ),
+            SettingsRow::Root(i) => Line::from(vec![
+                Span::raw("  "),
+                Span::styled(
+                    roots.get(*i).cloned().unwrap_or_default(),
+                    Style::default().fg(Color::White),
+                ),
+            ]),
+            SettingsRow::Exclude(i) => Line::from(vec![
+                Span::raw("  "),
+                Span::styled(
+                    app.engine_cfg.exclude.get(*i).cloned().unwrap_or_default(),
+                    Style::default().fg(Color::White),
+                ),
+            ]),
+            SettingsRow::AddRoot | SettingsRow::AddExclude => {
+                let kind = if *row == SettingsRow::AddRoot {
+                    InputKind::Root
+                } else {
+                    InputKind::Exclude
+                };
+                match &app.settings_input {
+                    Some(inp) if inp.kind == kind => Line::from(vec![
+                        Span::styled("  ＋ ", Style::default().fg(Color::Green)),
+                        Span::styled(format!("{}▏", inp.text), Style::default().fg(Color::White)),
+                    ]),
+                    _ => Line::from(Span::styled(
+                        if kind == InputKind::Root {
+                            "  ＋ Add a folder…"
+                        } else {
+                            "  ＋ Add a pattern…"
+                        },
+                        Style::default().fg(Color::Green),
+                    )),
+                }
+            }
+        };
+        display_of.push(items.len());
+        items.push(ListItem::new(line));
+    }
+    app.list_info_state
+        .select(display_of.get(app.settings_cursor).copied());
+    let list = List::new(items)
+        .highlight_style(
+            Style::default()
+                .add_modifier(Modifier::BOLD)
+                .bg(Color::DarkGray),
+        )
+        .highlight_symbol("> ");
+    f.render_stateful_widget(list, area, &mut app.list_info_state);
+}
+
+fn render_about_tab(f: &mut Frame, app: &mut App, area: Rect) {
+    let width = (area.width as usize).saturating_sub(2);
+    let rows = cleansys_core::appinfo::about_rows();
+    let mut items: Vec<ListItem> = Vec::new();
+    items.push(ListItem::new(Line::from(vec![Span::styled(
+        format!("  {}", cleansys_core::appinfo::title()),
+        Style::default()
+            .fg(Color::Cyan)
+            .add_modifier(Modifier::BOLD),
+    )])));
+    items.push(ListItem::new(Line::from(Span::styled(
+        format!("  {}", cleansys_core::appinfo::TAGLINE),
+        Style::default().fg(Color::Gray),
+    ))));
+    items.push(ListItem::new(Line::raw("")));
+    let first_row = items.len();
+    for (label, value) in &rows {
+        let is_link = cleansys_core::appinfo::is_link(value);
+        let style = if is_link {
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::UNDERLINED)
+        } else {
+            Style::default().fg(Color::White)
+        };
+        let room = width.saturating_sub(18);
+        let shown = shorten_left(value, room);
+        items.push(ListItem::new(Line::from(vec![
+            Span::styled(
+                format!("  {label:<14}"),
+                Style::default().fg(Color::DarkGray),
+            ),
+            Span::styled(shown, style),
+        ])));
+    }
+    app.list_info_state.select(Some(
+        first_row + app.about_cursor.min(rows.len().saturating_sub(1)),
+    ));
+    let list = List::new(items)
+        .highlight_style(
+            Style::default()
+                .add_modifier(Modifier::BOLD)
+                .bg(Color::DarkGray),
+        )
+        .highlight_symbol("> ");
+    f.render_stateful_widget(list, area, &mut app.list_info_state);
 }

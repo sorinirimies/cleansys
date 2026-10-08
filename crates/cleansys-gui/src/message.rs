@@ -58,6 +58,24 @@ pub enum Message {
     ScanItemFinished(usize, usize, Result<cleansys_core::CleaningResult, String>),
     /// Toggle hiding cleaners that have nothing to clean.
     ToggleHideEmpty,
+    /// Open the Settings / About dialog on a tab.
+    OpenSettings(crate::state::SettingsTab),
+    /// Close the Settings / About dialog.
+    CloseSettings,
+    /// Switch tab inside the dialog.
+    SettingsTabSelected(crate::state::SettingsTab),
+    /// Scan depth chosen in the settings.
+    SetMaxDepth(usize),
+    /// Toggle "ask before cleaning".
+    ToggleConfirm,
+    NewRootChanged(String),
+    AddRoot,
+    RemoveRoot(usize),
+    NewExcludeChanged(String),
+    AddExclude,
+    RemoveExclude(usize),
+    /// Open a link from the About tab in the browser.
+    OpenUrl(String),
     /// Expand/collapse one cleaner's per-path details.
     ToggleExpand(usize, usize),
     /// Tick/untick one path in a cleaner's details (by absolute path).

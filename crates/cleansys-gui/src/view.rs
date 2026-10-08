@@ -9,7 +9,7 @@ use iced::{Alignment, Color, Element, Length};
 
 use crate::icons;
 use crate::message::Message;
-use crate::state::CleanSysGui;
+use crate::state::{CleanSysGui, SettingsTab};
 use crate::theme::ThemeColors;
 use crate::theme_selector::theme_selector;
 
@@ -28,6 +28,9 @@ pub fn view(state: &CleanSysGui) -> Element<'_, Message> {
     }
     if state.schedule_open {
         return schedule_dialog(state, &c);
+    }
+    if state.settings_open {
+        return settings_dialog(state, &c);
     }
     if state.preview_open {
         return preview_dialog(state, &c);
@@ -165,10 +168,30 @@ fn header<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> Elemen
         .style(button::secondary)
         .on_press_maybe((!(state.is_running)).then_some(Message::OpenSchedule));
 
+    let (settings_label, about_label) = if layout == Layout::Narrow {
+        ("⚙", "ℹ")
+    } else {
+        ("⚙ Settings", "ℹ About")
+    };
+    let settings_btn = button(text(settings_label).size(13))
+        .padding([8, 12])
+        .style(button::secondary)
+        .on_press_maybe(
+            (!state.is_running).then_some(Message::OpenSettings(SettingsTab::Settings)),
+        );
+    let about_btn = button(text(about_label).size(13))
+        .padding([8, 12])
+        .style(button::secondary)
+        .on_press(Message::OpenSettings(SettingsTab::About));
+
     let title = row![
         text("🧹 CleanSys")
             .size(if layout == Layout::Narrow { 20 } else { 24 })
             .color(c.text_primary),
+        // The version is always visible.
+        text(cleansys_core::appinfo::version_label())
+            .size(12)
+            .color(c.muted),
         root_badge
     ]
     .spacing(10)
@@ -176,7 +199,15 @@ fn header<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> Elemen
 
     let content: Element<'a, Message> = match layout {
         Layout::Narrow => column![
-            row![title, Space::new().width(Length::Fill), schedule].align_y(Alignment::Center),
+            row![
+                title,
+                Space::new().width(Length::Fill),
+                schedule,
+                settings_btn,
+                about_btn
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center),
             row![search, clear].spacing(6).align_y(Alignment::Center),
         ]
         .spacing(8)
@@ -187,6 +218,8 @@ fn header<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> Elemen
             search,
             clear,
             schedule,
+            settings_btn,
+            about_btn,
             theme_selector(state.theme_index),
         ]
         .spacing(10)
@@ -1683,6 +1716,21 @@ mod tests {
     }
 
     #[test]
+    fn view_does_not_panic_for_settings_and_about_dialogs() {
+        use crate::state::SettingsTab;
+        for tab in [SettingsTab::Settings, SettingsTab::About] {
+            let mut state = CleanSysGui::new();
+            state.engine_cfg.scan_roots = vec!["/work/a".into()];
+            state.engine_cfg.exclude = vec!["~/keep/**".into()];
+            state.engine_cfg.max_depth = 7; // not one of the fixed steps
+            state.engine_cfg.min_age_days = 10; // likewise
+            state.settings_message = "hello".into();
+            state.open_settings(tab);
+            let _ = view(&state);
+        }
+    }
+
+    #[test]
     fn layout_breakpoints() {
         assert_eq!(Layout::for_width(1400.0), Layout::Wide);
         assert_eq!(Layout::for_width(980.0), Layout::Wide);
@@ -1728,4 +1776,265 @@ mod tests {
             let _ = main_layout(&state, &c, w);
         }
     }
+}
+
+// ── Settings / About dialog ───────────────────────────────────────────────────
+
+/// One labelled row of the settings form.
+fn setting_row<'a>(
+    c: &ThemeColors,
+    label: &'a str,
+    control: impl Into<Element<'a, Message>>,
+) -> Element<'a, Message> {
+    row![
+        text(label)
+            .size(13)
+            .color(c.text_secondary)
+            .width(Length::Fixed(230.0)),
+        control.into(),
+    ]
+    .spacing(10)
+    .align_y(Alignment::Center)
+    .into()
+}
+
+fn settings_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> {
+    let c = *c;
+    let tab_btn = |label: &'static str, tab: SettingsTab| {
+        button(text(label).size(13))
+            .padding([6, 14])
+            .style(if state.settings_tab == tab {
+                button::primary
+            } else {
+                button::secondary
+            })
+            .on_press(Message::SettingsTabSelected(tab))
+    };
+    let tabs = row![
+        tab_btn("⚙ Settings", SettingsTab::Settings),
+        tab_btn("ℹ About", SettingsTab::About),
+        Space::new().width(Length::Fill),
+        text(cleansys_core::appinfo::title())
+            .size(13)
+            .color(c.muted),
+    ]
+    .spacing(8)
+    .align_y(Alignment::Center);
+
+    let body: Element<'a, Message> = match state.settings_tab {
+        SettingsTab::Settings => settings_tab_body(state, &c),
+        SettingsTab::About => about_tab_body(&c),
+    };
+
+    let footer = row![
+        text(state.settings_message.clone())
+            .size(12)
+            .color(c.accent)
+            .width(Length::Fill),
+        button(text("Close"))
+            .padding([8, 16])
+            .style(button::secondary)
+            .on_press(Message::CloseSettings),
+    ]
+    .spacing(10)
+    .align_y(Alignment::Center);
+
+    let content = column![
+        tabs,
+        rule::horizontal(1),
+        scrollable(body).height(Length::Fill),
+        rule::horizontal(1),
+        footer,
+    ]
+    .spacing(12)
+    .padding(24)
+    .width(Length::Fill)
+    .height(Length::Fill);
+
+    let card = container(content)
+        .padding(8)
+        .height(Length::Fill)
+        .style(surface_style(c));
+    modal_backdrop(card.into(), c)
+}
+
+fn settings_tab_body<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> {
+    let c = *c;
+    let cfg = &state.engine_cfg;
+
+    let age_opts: Vec<Choice<u64>> = {
+        let mut v: Vec<u64> = cleansys_core::engine::config::MIN_AGE_CHOICES.to_vec();
+        if !v.contains(&cfg.min_age_days) {
+            v.push(cfg.min_age_days);
+            v.sort_unstable();
+        }
+        v.into_iter()
+            .map(|d| choice(d, cleansys_core::engine::config::min_age_label(d)))
+            .collect()
+    };
+    let age_sel = age_opts
+        .iter()
+        .find(|o| o.value == cfg.min_age_days)
+        .cloned();
+    let depth_opts: Vec<Choice<usize>> = {
+        let mut v: Vec<usize> = cleansys_core::engine::config::MAX_DEPTH_CHOICES.to_vec();
+        if !v.contains(&cfg.max_depth) {
+            v.push(cfg.max_depth);
+            v.sort_unstable();
+        }
+        v.into_iter().map(|d| choice(d, d.to_string())).collect()
+    };
+    let depth_sel = depth_opts
+        .iter()
+        .find(|o| o.value == cfg.max_depth)
+        .cloned();
+
+    let heading = |t: &'static str| text(t).size(15).color(c.text_primary);
+    let mut col = column![
+        heading("Scanning"),
+        setting_row(
+            &c,
+            "Project idle for at least",
+            pick_list(age_opts, age_sel, |o: Choice<u64>| Message::SetMinAge(o.value))
+                .text_size(13.0)
+                .width(Length::Fixed(160.0)),
+        ),
+        setting_row(
+            &c,
+            "Scan depth (folders below a root)",
+            pick_list(depth_opts, depth_sel, |o: Choice<usize>| Message::SetMaxDepth(
+                o.value
+            ))
+            .text_size(13.0)
+            .width(Length::Fixed(100.0)),
+        ),
+        text("Build output (target/, node_modules, …) is only offered once its project has been untouched this long.")
+            .size(11)
+            .color(c.muted),
+        heading("Behaviour"),
+        checkbox(state.hide_empty)
+            .label("Hide cleaners with nothing to clean")
+            .size(15)
+            .text_size(13)
+            .on_toggle(|_| Message::ToggleHideEmpty),
+        checkbox(state.confirm_before_run)
+            .label("Ask before cleaning")
+            .size(15)
+            .text_size(13)
+            .on_toggle(|_| Message::ToggleConfirm),
+        heading("Project folders scanned for build output"),
+    ]
+    .spacing(10);
+
+    for (i, root) in cfg.roots_for_editing().into_iter().enumerate() {
+        col = col.push(
+            row![
+                text(root)
+                    .size(13)
+                    .color(c.text_primary)
+                    .width(Length::Fill),
+                button(text("Remove").size(12))
+                    .padding([4, 10])
+                    .style(button::secondary)
+                    .on_press(Message::RemoveRoot(i)),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
+        );
+    }
+    col = col.push(
+        row![
+            text_input("Add a folder, e.g. ~/code", &state.new_root)
+                .on_input(Message::NewRootChanged)
+                .on_submit(Message::AddRoot)
+                .padding(6)
+                .size(13)
+                .width(Length::Fill),
+            button(text("Add").size(12))
+                .padding([6, 14])
+                .style(button::primary)
+                .on_press(Message::AddRoot),
+        ]
+        .spacing(10)
+        .align_y(Alignment::Center),
+    );
+
+    col = col.push(heading("Never delete (glob patterns)"));
+    for (i, pat) in cfg.exclude.iter().enumerate() {
+        col = col.push(
+            row![
+                text(pat.clone())
+                    .size(13)
+                    .color(c.text_primary)
+                    .width(Length::Fill),
+                button(text("Remove").size(12))
+                    .padding([4, 10])
+                    .style(button::secondary)
+                    .on_press(Message::RemoveExclude(i)),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
+        );
+    }
+    col = col.push(
+        row![
+            text_input(
+                "Add a path or pattern, e.g. ~/work/keep/**",
+                &state.new_exclude
+            )
+            .on_input(Message::NewExcludeChanged)
+            .on_submit(Message::AddExclude)
+            .padding(6)
+            .size(13)
+            .width(Length::Fill),
+            button(text("Add").size(12))
+                .padding([6, 14])
+                .style(button::primary)
+                .on_press(Message::AddExclude),
+        ]
+        .spacing(10)
+        .align_y(Alignment::Center),
+    );
+    col.padding(iced::Padding {
+        right: 12.0,
+        ..Default::default()
+    })
+    .into()
+}
+
+fn about_tab_body<'a>(c: &ThemeColors) -> Element<'a, Message> {
+    let c = *c;
+    let mut col = column![
+        text(format!("🧹 {}", cleansys_core::appinfo::title()))
+            .size(26)
+            .color(c.text_primary),
+        text(cleansys_core::appinfo::TAGLINE)
+            .size(13)
+            .color(c.muted),
+    ]
+    .spacing(6);
+    col = col.push(Space::new().height(Length::Fixed(8.0)));
+    for (label, value) in cleansys_core::appinfo::about_rows() {
+        let control: Element<'a, Message> = if cleansys_core::appinfo::is_link(&value) {
+            button(text(value.clone()).size(13))
+                .padding([2, 8])
+                .style(button::text)
+                .on_press(Message::OpenUrl(value))
+                .into()
+        } else {
+            text(value).size(13).color(c.text_primary).into()
+        };
+        col = col.push(
+            row![
+                text(label)
+                    .size(13)
+                    .color(c.text_secondary)
+                    .width(Length::Fixed(120.0)),
+                control,
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
+        );
+    }
+    col.into()
 }

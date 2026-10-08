@@ -195,6 +195,9 @@ fn setup_logger(verbose: bool) {
 }
 
 fn load_cleaners(app: &mut App) {
+    // Saved preferences (hide empty, ask before cleaning); from here on changes are written back.
+    app.apply_settings(&cleansys_core::load_settings().unwrap_or_default());
+    app.persist = true;
     app.categories = cleansys_core::load_categories();
     // Measure what every cleaner can free, in the background.
     app.start_scan();

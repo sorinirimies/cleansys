@@ -106,6 +106,8 @@ pub struct Snapshot {
     pub needs_auth: bool,
     /// Idle-day threshold for project build artifacts.
     pub min_age_days: u64,
+    /// Ask on /confirm before cleaning (Settings).
+    pub confirm_before_run: bool,
 }
 
 /// Wrong-password attempts allowed before a cool-down.
@@ -181,6 +183,25 @@ impl Shared {
         if let Some((ci, ii)) = pos {
             g.board.set_item_entries(ci, ii, on);
         }
+    }
+
+    /// Load → change → save the engine settings, then re-measure when `rescan`.
+    /// The closure's error (bad input) is returned and nothing is changed.
+    pub fn edit_engine(
+        &self,
+        rescan: bool,
+        change: impl FnOnce(&mut cleansys_core::engine::EngineConfig) -> Result<(), String>,
+    ) -> Result<(), String> {
+        let mut cfg = cleansys_core::engine::EngineConfig::load();
+        change(&mut cfg)?;
+        cfg.save().map_err(|e| e.to_string())?;
+        if rescan {
+            let mut g = self.lock();
+            if g.run.phase != Phase::Running {
+                start_scan_locked(&mut g);
+            }
+        }
+        Ok(())
     }
 
     /// Change the idle-day threshold, persist it and re-measure.
@@ -381,6 +402,9 @@ impl Shared {
             sudo_ok: g.sudo_ok,
             needs_auth: needs_auth_locked(&g),
             min_age_days: cleansys_core::engine::EngineConfig::load().min_age_days,
+            confirm_before_run: cleansys_core::load_settings()
+                .unwrap_or_default()
+                .confirm_before_run(),
         }
     }
 

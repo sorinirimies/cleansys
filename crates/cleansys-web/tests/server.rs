@@ -568,3 +568,98 @@ async fn min_age_post_redirects_back_without_the_open_cleaner() {
     let home = get(addr, "/").await;
     assert!(home.body.contains("Minimum project idle days"));
 }
+
+#[tokio::test]
+async fn every_page_shows_the_version_and_links_to_settings_and_about() {
+    let addr = start().await;
+    let ver = cleansys_core::appinfo::version_label();
+    for path in ["/", "/settings", "/about", "/schedule"] {
+        let r = get(addr, path).await;
+        assert_eq!(r.status, 200, "{path}");
+        assert!(r.body.contains(&ver), "{path} lacks {ver}");
+        assert!(
+            r.body.contains(cleansys_core::appinfo::GITHUB_PROFILE),
+            "{path} lacks the GitHub link"
+        );
+    }
+    let home = get(addr, "/").await;
+    assert!(home.body.contains("href=\"/settings\"") && home.body.contains("href=\"/about\""));
+}
+
+#[tokio::test]
+async fn about_page_lists_developer_and_links() {
+    let addr = start().await;
+    let r = get(addr, "/about").await;
+    for needle in [
+        cleansys_core::appinfo::AUTHOR,
+        cleansys_core::appinfo::GITHUB_PROFILE,
+        cleansys_core::appinfo::REPO_URL,
+        "License",
+        "Platform",
+        "rel=\"noopener noreferrer\"",
+    ] {
+        assert!(r.body.contains(needle), "missing {needle}");
+    }
+}
+
+#[tokio::test]
+async fn settings_page_shows_every_section() {
+    let addr = start().await;
+    let r = get(addr, "/settings").await;
+    for needle in [
+        "Scanning",
+        "Project idle for at least",
+        "Scan depth",
+        "Hide cleaners with nothing to clean",
+        "Ask before cleaning",
+        "Project folders scanned",
+        "Never delete",
+        "action=\"/settings/root-add\"",
+        "action=\"/settings/exclude-add\"",
+    ] {
+        assert!(r.body.contains(needle), "missing {needle}");
+    }
+}
+
+#[tokio::test]
+async fn settings_forms_validate_and_report_back() {
+    let addr = start().await;
+    // Invalid input is refused with a message and changes nothing.
+    let r = post(
+        addr,
+        "/settings/root-add",
+        "path=%2Fdefinitely%2Fnot%2Fa%2Fdir",
+    )
+    .await;
+    assert_eq!(r.status, 303);
+    let loc = r.header("location").unwrap_or_default();
+    assert!(loc.starts_with("/settings?msg="), "{loc}");
+    let r = post(addr, "/settings/exclude-add", "pattern=%5B").await;
+    assert!(
+        r.header("location")
+            .unwrap_or_default()
+            .contains("not%20a%20valid")
+    );
+    let r = post(addr, "/settings/root-remove", "idx=999").await;
+    assert!(
+        r.header("location")
+            .unwrap_or_default()
+            .contains("no%20such")
+    );
+    let r = post(addr, "/settings/exclude-remove", "idx=999").await;
+    assert!(
+        r.header("location")
+            .unwrap_or_default()
+            .contains("no%20such")
+    );
+    // Re-saving today's values is harmless (these tests share one sandbox config).
+    let r = post(addr, "/settings/depth", "depth=6").await;
+    assert_eq!(r.status, 303);
+    let r = post(addr, "/settings/prefs", "hide_empty=1&confirm=1").await;
+    assert_eq!(
+        r.header("location").as_deref(),
+        Some("/settings?msg=Saved.")
+    );
+    let page = get(addr, "/settings?msg=Saved.").await;
+    assert!(page.body.contains("Saved."));
+}

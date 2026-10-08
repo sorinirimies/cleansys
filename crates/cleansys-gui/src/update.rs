@@ -72,6 +72,98 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
         Message::ToggleHideEmpty => {
             state.hide_empty = !state.hide_empty;
             state.ensure_active_visible();
+            state.save_selections(); // also persists the preference
+            Task::none()
+        }
+        Message::OpenSettings(tab) => {
+            if !state.is_running {
+                state.open_settings(tab);
+            }
+            Task::none()
+        }
+        Message::CloseSettings => {
+            state.settings_open = false;
+            Task::none()
+        }
+        Message::SettingsTabSelected(tab) => {
+            state.settings_tab = tab;
+            state.settings_message.clear();
+            Task::none()
+        }
+        Message::SetMaxDepth(d) => {
+            if state.is_running || d == state.engine_cfg.max_depth {
+                return Task::none();
+            }
+            state.engine_cfg.max_depth = d;
+            if state.save_engine() {
+                return start_scan(state);
+            }
+            Task::none()
+        }
+        Message::ToggleConfirm => {
+            state.confirm_before_run = !state.confirm_before_run;
+            state.save_selections();
+            Task::none()
+        }
+        Message::NewRootChanged(v) => {
+            state.new_root = v;
+            Task::none()
+        }
+        Message::NewExcludeChanged(v) => {
+            state.new_exclude = v;
+            Task::none()
+        }
+        Message::AddRoot => {
+            match state.engine_cfg.add_scan_root(&state.new_root) {
+                Ok(()) => {
+                    state.new_root.clear();
+                    state.settings_message = "Folder added.".into();
+                    if state.save_engine() {
+                        return start_scan(state);
+                    }
+                }
+                Err(e) => state.settings_message = e,
+            }
+            Task::none()
+        }
+        Message::RemoveRoot(i) => {
+            match state.engine_cfg.remove_scan_root(i) {
+                Ok(()) => {
+                    state.settings_message = "Folder removed.".into();
+                    if state.save_engine() {
+                        return start_scan(state);
+                    }
+                }
+                Err(e) => state.settings_message = e,
+            }
+            Task::none()
+        }
+        Message::AddExclude => {
+            match state.engine_cfg.add_exclude(&state.new_exclude) {
+                Ok(()) => {
+                    state.new_exclude.clear();
+                    state.settings_message = "Pattern added.".into();
+                    state.save_engine();
+                }
+                Err(e) => state.settings_message = e,
+            }
+            Task::none()
+        }
+        Message::RemoveExclude(i) => {
+            match state.engine_cfg.remove_exclude(i) {
+                Ok(()) => {
+                    state.settings_message = "Pattern removed.".into();
+                    state.save_engine();
+                }
+                Err(e) => state.settings_message = e,
+            }
+            Task::none()
+        }
+        Message::OpenUrl(url) => {
+            state.settings_message = match cleansys_core::appinfo::open_url(&url) {
+                Ok(()) => format!("Opened {url}"),
+                Err(e) => format!("Could not open a browser: {e}"),
+            };
             Task::none()
         }
         Message::ToggleLog => {
@@ -102,7 +194,13 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             if state.is_running || state.previewing || days == state.min_age_days {
                 return Task::none();
             }
-            match cleansys_core::engine::EngineConfig::save_min_age_days(days) {
+            state.engine_cfg.min_age_days = days;
+            let saved = if cfg!(test) {
+                Ok(())
+            } else {
+                cleansys_core::engine::EngineConfig::save_min_age_days(days)
+            };
+            match saved {
                 Ok(()) => {
                     state.min_age_days = days;
                     state.expanded.clear();
@@ -214,9 +312,12 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
                     );
                 }
                 Task::none()
-            } else {
+            } else if state.confirm_before_run {
                 state.confirm_run_pending = true;
                 Task::none()
+            } else {
+                // "Ask before cleaning" is off in the settings: go straight to the run.
+                run_selected(state)
             }
         }
 
@@ -615,6 +716,115 @@ mod tests {
         let same = state.min_age_days;
         let _ = update(&mut state, Message::SetMinAge(same));
         assert_eq!(state.min_age_days, same);
+    }
+
+    fn noop_item(state: &mut CleanSysGui) {
+        // Never run a real cleaner from a unit test.
+        state.categories[0].items[0].function =
+            cleansys_core::cleaner_fn(|_| Ok(cleansys_core::CleaningResult::new()));
+        state.categories[0].items[0].selected = true;
+    }
+
+    #[test]
+    fn settings_dialog_opens_closes_and_switches_tabs() {
+        use crate::state::SettingsTab;
+        let mut state = CleanSysGui::new();
+        let _ = update(&mut state, Message::OpenSettings(SettingsTab::About));
+        assert!(state.settings_open && state.settings_tab == SettingsTab::About);
+        let _ = update(
+            &mut state,
+            Message::SettingsTabSelected(SettingsTab::Settings),
+        );
+        assert_eq!(state.settings_tab, SettingsTab::Settings);
+        let _ = update(&mut state, Message::CloseSettings);
+        assert!(!state.settings_open);
+    }
+
+    #[test]
+    fn settings_dialog_does_not_open_while_cleaning() {
+        use crate::state::SettingsTab;
+        let mut state = CleanSysGui::new();
+        state.is_running = true;
+        let _ = update(&mut state, Message::OpenSettings(SettingsTab::Settings));
+        assert!(!state.settings_open);
+    }
+
+    #[test]
+    fn folders_and_patterns_are_validated_added_and_removed() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().to_string_lossy().into_owned();
+        let mut state = CleanSysGui::new();
+        state.engine_cfg.scan_roots = vec!["/work/a".into()];
+        state.engine_cfg.exclude.clear();
+
+        let _ = update(
+            &mut state,
+            Message::NewRootChanged("/not/a/real/dir".into()),
+        );
+        let _ = update(&mut state, Message::AddRoot);
+        assert_eq!(state.engine_cfg.scan_roots.len(), 1);
+        assert!(!state.settings_message.is_empty());
+
+        let _ = update(&mut state, Message::NewRootChanged(path.clone()));
+        let _ = update(&mut state, Message::AddRoot);
+        assert_eq!(
+            state.engine_cfg.scan_roots,
+            vec!["/work/a".to_string(), path]
+        );
+        assert!(state.new_root.is_empty(), "field clears after adding");
+        let _ = update(&mut state, Message::RemoveRoot(0));
+        assert_eq!(state.engine_cfg.scan_roots.len(), 1);
+
+        let _ = update(&mut state, Message::NewExcludeChanged("~/keep/**".into()));
+        let _ = update(&mut state, Message::AddExclude);
+        assert_eq!(state.engine_cfg.exclude, vec!["~/keep/**".to_string()]);
+        let _ = update(&mut state, Message::NewExcludeChanged("[".into()));
+        let _ = update(&mut state, Message::AddExclude);
+        assert_eq!(state.engine_cfg.exclude.len(), 1, "invalid glob refused");
+        let _ = update(&mut state, Message::RemoveExclude(0));
+        assert!(state.engine_cfg.exclude.is_empty());
+    }
+
+    #[test]
+    fn scan_depth_changes_the_working_config() {
+        let mut state = CleanSysGui::new();
+        state.engine_cfg.max_depth = 6;
+        let _ = update(&mut state, Message::SetMaxDepth(8));
+        assert_eq!(state.engine_cfg.max_depth, 8);
+    }
+
+    #[test]
+    fn ask_before_cleaning_controls_the_confirmation_dialog() {
+        let mut state = CleanSysGui::new();
+        noop_item(&mut state);
+        assert!(state.confirm_before_run, "on by default");
+        let _ = update(&mut state, Message::RequestRun);
+        assert!(state.confirm_run_pending && !state.is_running);
+
+        // Switch it off: Run goes straight to cleaning.
+        let mut state = CleanSysGui::new();
+        noop_item(&mut state);
+        let _ = update(&mut state, Message::ToggleConfirm);
+        assert!(!state.confirm_before_run);
+        let _ = update(&mut state, Message::RequestRun);
+        assert!(!state.confirm_run_pending);
+        assert!(state.is_running);
+    }
+
+    #[test]
+    fn preferences_round_trip_through_current_settings() {
+        let mut state = CleanSysGui::new();
+        state.hide_empty = false;
+        state.confirm_before_run = false;
+        let s = state.current_settings();
+        assert!(!s.hide_empty() && !s.confirm_before_run());
+    }
+
+    #[test]
+    fn open_url_refuses_anything_but_web_links() {
+        let mut state = CleanSysGui::new();
+        let _ = update(&mut state, Message::OpenUrl("file:///etc/passwd".into()));
+        assert!(state.settings_message.contains("Could not open"));
     }
 
     #[test]

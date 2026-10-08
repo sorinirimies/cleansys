@@ -17,6 +17,7 @@ form, and pages refresh themselves while a scan or a clean is running.
 |---|---|
 | `/` | cleaners (`?cat=2&q=gradle&hide=0&theme=Nord`) |
 | `/auth` | sudo password prompt (loopback binds only) |
+| `/settings` · `/about` | settings (idle days, scan depth, folders, exclusions, preferences) · version, developer, GitHub |
 | `/preview` · `/confirm` · `/progress` | dry-run, confirmation, live progress of a clean |
 | `/schedule` | automatic cleaning (systemd/cron, launchd, Task Scheduler) |
 | `/api/categories` · `/api/status` · `/api/themes` · `/api/health` | JSON |

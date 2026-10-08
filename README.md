@@ -24,6 +24,7 @@ from a **terminal UI**, a **desktop GUI**, a **local web UI** or the **command l
 - **~190 cleaners** — browsers, chat/media apps, IDEs, Gradle/Android, Cargo, npm, Docker, Hugging Face/Ollama, Claude/Codex session data, OS logs and more. See [What it cleans](#-what-it-cleans).
 - **Project build output** — finds `target/`, `build/`, `node_modules/`, `.venv/`… next to a marker file (`Cargo.toml`, `build.gradle.kts`, `package.json`…) and, by default, only in projects you haven't touched for 14 days.
 - **Pick exactly what goes** — expand any cleaner to see every path it would remove (each project's `target/`, each cache folder…) and untick the ones you want to keep, in the TUI, GUI and web UI. See [Details & fine-grained selection](#details--fine-grained-selection).
+- **Settings & About in every front-end** — idle days, scan depth, scan folders, never-delete patterns, *hide empty* and *ask before cleaning* are all editable in the app (`o` in the TUI, ⚙ in the GUI, `/settings` on the web), and an **About** tab shows the version, the developer's GitHub and links. The version is always visible. See [Settings & About](#settings--about).
 - **Idle-days selector** — choose in the app how long a project must be untouched before its build output is offered (any age … 90 days).
 - **User land vs. root, kept separate** — everything that needs your password lives in its own *System · root* section; nothing asks for sudo until you run it.
 - **Risk levels** — `safe`, `moderate` (slow to rebuild, marked `~`) and `caution` (model weights, chat history, marked `!`; never part of bulk/unattended runs).
@@ -60,6 +61,9 @@ the sidebar becomes a drop-down on narrow windows.
 <td><b>Schedule</b><br><img src="demo/previews/web-schedule.png" width="430"></td>
 </tr><tr>
 <td><b>Details — pick exactly which paths go</b> (and the <i>Idle ≥</i> day selector in the bar)<br><img src="demo/previews/web-details.png" width="430"></td>
+<td><b>Settings</b><br><img src="demo/previews/web-settings.png" width="430"></td>
+</tr><tr>
+<td><b>About</b> — version, developer, GitHub<br><img src="demo/previews/web-about.png" width="430"></td>
 <td></td>
 </tr></table>
 
@@ -71,6 +75,7 @@ the sidebar becomes a drop-down on narrow windows.
 |---|---|
 | **Run it for real** — pick paths (`→`), confirm, live progress and the activity log *under the list*, summary, automatic re-scan<br><img src="demo/previews/tui-clean.gif" width="440"> | **Schedule it** — `S`<br><img src="demo/previews/tui-schedule.gif" width="440"> |
 | **User land vs root** — root cleaners ask for your password only when run<br><img src="demo/previews/tui-system-root.gif" width="440"> | **Narrow terminals** — the sidebar collapses to a category bar<br><img src="demo/previews/tui-narrow.gif" width="440"> |
+| **Settings & About** — `o` / `i`<br><img src="demo/previews/tui-settings.gif" width="440"> | |
 | **Details** — `→` opens a cleaner: every path with its size, `Space` unticks one<br><img src="demo/previews/tui-details.png" width="440"> | **Done** — the outcome, freed space and activity log stay in the main view; `Esc` dismisses<br><img src="demo/previews/tui-clean-done.png" width="440"> |
 
 ### Web UI
@@ -86,6 +91,7 @@ sudo cleansys-web                # optional: run as root (no password prompt nee
 ```
 
 - **Details**: *▸ Details* under a cleaner lists every path with a checkbox (*Select all* / *Select none*); the **Idle ≥** drop-down in the action bar sets the project idle-days threshold.
+- **Settings & About**: `/settings` (idle days, scan depth, folders, exclusions, preferences) and `/about` (version, developer, GitHub); the version is on every page.
 - **Pages**: `/` cleaners (sidebar, search, hide-empty, risk badges, sizes) · `/preview` dry run · `/confirm` → `/progress` real clean · `/schedule` automatic cleaning.
 - **JSON**: `/api/categories` · `/api/status` · `/api/themes` · `/api/health`.
 - **Responsive**: ≥ 980 px sidebar · ≥ 700 px narrower sidebar · below that a category drop-down, icon-only buttons and a full-width *Clean* button.
@@ -179,6 +185,7 @@ sidebar collapses into a one-line category bar (Tab / Shift+Tab).
 | `R` | Re-scan sizes |
 | `S` | **Schedule** automatic cleaning |
 | `L` | Show / hide the **activity log** under the list |
+| `o` / `i` | **Settings** / **About** overlay (`Tab` switches; see [Settings & About](#settings--about)) |
 | `?`, `Esc`, `q` | Help · back/cancel · quit |
 
 Marks next to names: `~` moderate, `!` caution, `(root)` needs your password.
@@ -192,6 +199,31 @@ Marks next to names: `~` moderate, `!` caution, `(root)` needs your password.
 - ⏰ **Schedule** opens the automatic-cleaning dialog. 43 themes (Catppuccin, Dracula, Nord, Tokyo Night…), remembered across restarts.
 - Scans and runs happen on background threads — the window never freezes.
 - **Details & day selector** — see [below](#details--fine-grained-selection).
+
+### Settings & About
+
+Every front-end has the same two screens, so you never have to edit `engine.json` by hand:
+
+| | Settings | About |
+|---|---|---|
+| **TUI** | `o` — `↑/↓` move, `←/→` change a value, `Space` flip a switch / add an entry, `d` remove | `i` — `Enter` opens the highlighted link in your browser; `Tab` switches tabs, `Esc` closes |
+| **GUI** | **⚙ Settings** in the header | **ℹ About** in the header (links are buttons) |
+| **Web** | **⚙ Settings** → `/settings` | **ℹ About** → `/about` |
+
+**Settings**
+
+| Setting | What it does | Stored in |
+|---|---|---|
+| Project idle for at least | how long a project must be untouched before its build output is offered | `engine.json` (`min_age_days`) |
+| Scan depth | how many folders below each root are searched for projects | `engine.json` (`max_depth`) |
+| Project folders | the roots scanned for build output (add / remove; `~` and `$VAR` work) | `engine.json` (`scan_roots`) |
+| Never delete | glob patterns that are never touched | `engine.json` (`exclude`) |
+| Hide cleaners with nothing to clean | tidy list after a scan | `settings.json` |
+| Ask before cleaning | the confirmation step (the web UI then posts straight to *Run*) | `settings.json` |
+
+Changing a scan setting saves it and re-measures. Invalid input (a folder that doesn't exist, a bad glob) is refused with a message.
+
+**About** shows the version, developer ([Sorin Albu-Irimies](https://github.com/sorinirimies)), GitHub profile, repository, bug tracker, downloads, license, platform and the paths of the two config files. The version (`vX.Y.Z`) is also shown in the TUI title bar, the GUI header and on every web page.
 
 ### Details & fine-grained selection
 

@@ -134,7 +134,7 @@ check-release: check-all build-release
 # Everything runs against a synthetic HOME built by demo/fixture.nu (sparse files, no
 # real paths; nothing of yours is touched) and uses the release binaries.
 
-TAPES := "tui-overview tui-system-root tui-schedule tui-narrow tui-clean cli web-api"
+TAPES := "tui-overview tui-system-root tui-schedule tui-narrow tui-clean tui-settings cli web-api"
 
 # Build the release binaries the tapes and screenshot scripts run.
 _demo-build:

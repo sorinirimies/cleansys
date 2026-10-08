@@ -8,7 +8,7 @@
 # or Chromium; override with BROWSER=/path/to/it). GIFs are assembled with ffmpeg.
 #
 # Output (demo/previews/): web-wide.png web-medium.png web-narrow.png web-preview.png
-#                          web-schedule.png web-details.png web-flow.gif web-responsive.gif
+#                          web-schedule.png web-settings.png web-about.png web-details.png web-flow.gif web-responsive.gif
 #
 # Requires: nushell, ffmpeg, a Chromium-based browser, and a release build of cleansys-web.
 
@@ -116,6 +116,8 @@ def main [] {
     shoot-narrow $browser $"($base)/" 420 900 ($out | path join "web-narrow.png")
     shoot $browser $"($base)/preview" 1100 900 ($out | path join "web-preview.png")
     shoot $browser $"($base)/schedule" 1100 900 ($out | path join "web-schedule.png")
+    shoot $browser $"($base)/settings" 1100 800 ($out | path join "web-settings.png")
+    shoot $browser $"($base)/about" 1100 640 ($out | path join "web-about.png")
     make-gif [
         ($out | path join "web-wide.png")
         ($out | path join "web-medium.png")

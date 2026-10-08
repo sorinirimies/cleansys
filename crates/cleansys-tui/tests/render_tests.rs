@@ -350,3 +350,73 @@ fn wide_footer_keeps_every_key_hint_visible() {
         assert!(text.contains(hint), "footer lost `{hint}`:\n{text}");
     }
 }
+
+#[test]
+fn title_always_shows_the_version() {
+    let mut app = app_with_categories();
+    let ver = cleansys_core::appinfo::version_label();
+    for (w, h) in [(160, 40), (70, 24)] {
+        let text = screen_text(&mut app, w, h);
+        assert!(
+            text.contains(&ver),
+            "{w}x{h}: version {ver} missing in\n{text}"
+        );
+    }
+}
+
+#[test]
+fn settings_overlay_renders_every_section() {
+    use cleansys_tui::app::InfoTab;
+    let mut app = app_with_categories();
+    app.open_info(InfoTab::Settings);
+    app.engine_cfg.scan_roots = vec!["/work/projects".into()];
+    app.engine_cfg.exclude = vec!["~/keep/**".into()];
+    let text = screen_text(&mut app, 120, 44);
+    for needle in [
+        "Settings (o)",
+        "About (i)",
+        "Scanning",
+        "Project idle for at least",
+        "Scan depth",
+        "Hide cleaners with nothing to clean",
+        "Ask before cleaning",
+        "/work/projects",
+        "Add a folder",
+        "~/keep/**",
+        "Add a pattern",
+    ] {
+        assert!(text.contains(needle), "missing `{needle}`:\n{text}");
+    }
+}
+
+#[test]
+fn about_overlay_shows_developer_github_and_version() {
+    use cleansys_tui::app::InfoTab;
+    let mut app = app_with_categories();
+    app.open_info(InfoTab::About);
+    let text = screen_text(&mut app, 120, 44);
+    for needle in [
+        cleansys_core::appinfo::AUTHOR,
+        cleansys_core::appinfo::GITHUB_PROFILE,
+        cleansys_core::appinfo::TAGLINE,
+        "Report a bug",
+        "License",
+    ] {
+        assert!(text.contains(needle), "missing `{needle}`:\n{text}");
+    }
+    assert!(text.contains(&cleansys_core::appinfo::title()));
+}
+
+#[test]
+fn input_field_is_shown_while_adding_a_folder() {
+    use cleansys_tui::app::{InfoTab, InputKind, SettingsInput};
+    let mut app = app_with_categories();
+    app.open_info(InfoTab::Settings);
+    app.settings_input = Some(SettingsInput {
+        kind: InputKind::Root,
+        text: "/my/new/folder".into(),
+    });
+    let text = screen_text(&mut app, 120, 44);
+    assert!(text.contains("/my/new/folder"), "{text}");
+    assert!(text.contains("Enter: add"));
+}

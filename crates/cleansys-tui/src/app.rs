@@ -20,6 +20,40 @@ pub enum ScheduleField {
     Backend,
 }
 
+/// Tabs of the Settings / About overlay.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InfoTab {
+    Settings,
+    About,
+}
+
+/// One selectable row of the Settings tab.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SettingsRow {
+    IdleDays,
+    ScanDepth,
+    HideEmpty,
+    Confirm,
+    Root(usize),
+    AddRoot,
+    Exclude(usize),
+    AddExclude,
+}
+
+/// What a text entry in the Settings tab is for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InputKind {
+    Root,
+    Exclude,
+}
+
+/// A text field being edited in the Settings tab.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SettingsInput {
+    pub kind: InputKind,
+    pub text: String,
+}
+
 /// Outcome of the last finished clean, shown under the cleaner list (like the GUI's
 /// "✓ Freed X" headline and the web UI's "Done" summary).
 #[derive(Debug, Clone, Default)]
@@ -58,6 +92,26 @@ pub struct App {
     pub entry_cursor: Option<usize>,
     /// Idle-day threshold for project build output (shown/adjusted with `[` `]`).
     pub min_age_days: u64,
+    /// Working copy of the engine settings edited in the Settings tab.
+    pub engine_cfg: cleansys_core::engine::EngineConfig,
+    /// Write settings to disk when they change. Off by default so tests and embedders
+    /// never touch the user's real config; `main` turns it on.
+    pub persist: bool,
+    /// Whether the Settings / About overlay is open, and which tab.
+    pub info_open: bool,
+    pub info_tab: InfoTab,
+    /// Highlighted row in the Settings tab (index into [`App::settings_rows`]).
+    pub settings_cursor: usize,
+    /// Highlighted row in the About tab.
+    pub about_cursor: usize,
+    /// Render-side list state of the overlay (keeps the scroll offset).
+    pub list_info_state: ListState,
+    /// A setting changed while a scan was running: scan again when it finishes.
+    pub rescan_pending: bool,
+    /// Text field being edited in the Settings tab, if any.
+    pub settings_input: Option<SettingsInput>,
+    /// Feedback line in the overlay (errors, confirmations).
+    pub settings_message: String,
     pub is_root: bool,
     pub is_running: bool,
     pub operation_start_time: Option<Instant>,
@@ -144,6 +198,16 @@ impl App {
             expanded: None,
             entry_cursor: None,
             min_age_days: cleansys_core::engine::EngineConfig::load().min_age_days,
+            engine_cfg: cleansys_core::engine::EngineConfig::load(),
+            persist: false,
+            info_open: false,
+            info_tab: InfoTab::Settings,
+            settings_cursor: 0,
+            about_cursor: 0,
+            list_info_state: ListState::default(),
+            settings_input: None,
+            rescan_pending: false,
+            settings_message: String::new(),
             is_root: check_root(),
             is_running: false,
             operation_start_time: None,
@@ -193,6 +257,8 @@ impl App {
     /// Start measuring every cleaner in the background (read-only).
     pub fn start_scan(&mut self) {
         if self.board.is_scanning() {
+            // A setting changed mid-scan: measure again as soon as this one finishes.
+            self.rescan_pending = true;
             return;
         }
         self.collapse_details();
@@ -215,6 +281,9 @@ impl App {
         }
         if finished {
             self.scan_rx = None;
+            if std::mem::take(&mut self.rescan_pending) {
+                self.start_scan();
+            }
             self.ensure_category_visible();
         }
         changed
@@ -280,20 +349,230 @@ impl App {
 
     /// Step the idle-day threshold (`[` = fewer days, `]` = more), save it and re-measure.
     pub fn step_min_age(&mut self, step: i32) {
-        if self.is_running || self.board.is_scanning() {
+        if self.is_running {
             return;
         }
-        let next = cleansys_core::engine::config::step_min_age(self.min_age_days, step);
-        if next == self.min_age_days {
+        let next = cleansys_core::engine::config::step_min_age(self.engine_cfg.min_age_days, step);
+        if next == self.engine_cfg.min_age_days {
             return;
         }
-        match cleansys_core::engine::EngineConfig::save_min_age_days(next) {
-            Ok(()) => {
-                self.min_age_days = next;
-                self.start_scan();
+        self.min_age_days = next;
+        self.engine_cfg.min_age_days = next;
+        if self.save_engine() {
+            self.start_scan();
+        }
+    }
+
+    /// Persist the working engine settings (no-op unless [`App::persist`]). `false` = failed.
+    fn save_engine(&mut self) -> bool {
+        if !self.persist {
+            return true;
+        }
+        // Edit on top of what is on disk so a change made elsewhere (CLI, GUI) is not lost.
+        let mine = self.engine_cfg.clone();
+        match cleansys_core::engine::EngineConfig::update(|c| {
+            c.scan_roots = mine.scan_roots;
+            c.max_depth = mine.max_depth;
+            c.min_age_days = mine.min_age_days;
+            c.exclude = mine.exclude;
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                self.settings_message = format!("Could not save: {e}");
+                self.log(format!("❌ Could not save settings: {e}"));
+                false
             }
-            Err(e) => self.log(format!("❌ Could not save the idle-days setting: {e}")),
         }
+    }
+
+    /// Persist the UI preferences (no-op unless [`App::persist`]).
+    fn save_prefs(&mut self) {
+        if !self.persist {
+            return;
+        }
+        let (hide, confirm) = (self.hide_empty, self.confirmation_mode);
+        if let Err(e) = cleansys_core::update_settings(|s| {
+            s.hide_empty = Some(hide);
+            s.confirm_before_run = Some(confirm);
+        }) {
+            self.log(format!("❌ Could not save preferences: {e}"));
+        }
+    }
+
+    /// Apply saved UI preferences (called once at start-up).
+    pub fn apply_settings(&mut self, s: &cleansys_core::Settings) {
+        self.hide_empty = s.hide_empty();
+        self.confirmation_mode = s.confirm_before_run();
+    }
+
+    // ── settings / about overlay ───────────────────────────────────────
+
+    pub fn open_info(&mut self, tab: InfoTab) {
+        self.engine_cfg = cleansys_core::engine::EngineConfig::load();
+        self.min_age_days = self.engine_cfg.min_age_days;
+        self.info_tab = tab;
+        self.info_open = true;
+        self.settings_input = None;
+        self.settings_message.clear();
+        self.settings_cursor = 0;
+        self.about_cursor = 0;
+    }
+
+    pub fn close_info(&mut self) {
+        self.info_open = false;
+        self.settings_input = None;
+    }
+
+    pub fn switch_info_tab(&mut self) {
+        self.info_tab = match self.info_tab {
+            InfoTab::Settings => InfoTab::About,
+            InfoTab::About => InfoTab::Settings,
+        };
+        self.settings_input = None;
+        self.settings_message.clear();
+    }
+
+    /// Selectable rows of the Settings tab, in display order.
+    pub fn settings_rows(&self) -> Vec<SettingsRow> {
+        let mut rows = vec![
+            SettingsRow::IdleDays,
+            SettingsRow::ScanDepth,
+            SettingsRow::HideEmpty,
+            SettingsRow::Confirm,
+        ];
+        rows.extend((0..self.engine_cfg.roots_for_editing().len()).map(SettingsRow::Root));
+        rows.push(SettingsRow::AddRoot);
+        rows.extend((0..self.engine_cfg.exclude.len()).map(SettingsRow::Exclude));
+        rows.push(SettingsRow::AddExclude);
+        rows
+    }
+
+    pub fn current_settings_row(&self) -> Option<SettingsRow> {
+        self.settings_rows().get(self.settings_cursor).copied()
+    }
+
+    /// Move the highlight in the active tab.
+    pub fn info_move(&mut self, delta: i32) {
+        let len = match self.info_tab {
+            InfoTab::Settings => self.settings_rows().len(),
+            InfoTab::About => cleansys_core::appinfo::about_rows().len(),
+        };
+        if len == 0 {
+            return;
+        }
+        let cursor = match self.info_tab {
+            InfoTab::Settings => &mut self.settings_cursor,
+            InfoTab::About => &mut self.about_cursor,
+        };
+        *cursor = (*cursor as i32 + delta).rem_euclid(len as i32) as usize;
+    }
+
+    /// ←/→ on the highlighted row: change a value.
+    pub fn settings_adjust(&mut self, dir: i32) {
+        match self.current_settings_row() {
+            Some(SettingsRow::IdleDays) => self.step_min_age(dir),
+            Some(SettingsRow::ScanDepth) => {
+                if self.is_running {
+                    return;
+                }
+                let next =
+                    cleansys_core::engine::config::step_max_depth(self.engine_cfg.max_depth, dir);
+                if next != self.engine_cfg.max_depth {
+                    self.engine_cfg.max_depth = next;
+                    if self.save_engine() {
+                        self.start_scan();
+                    }
+                }
+            }
+            Some(SettingsRow::HideEmpty) => {
+                self.toggle_hide_empty();
+            }
+            Some(SettingsRow::Confirm) => self.toggle_confirmation_mode(),
+            _ => {}
+        }
+    }
+
+    /// Space/Enter on the highlighted row: toggle a switch, or start typing a new entry.
+    pub fn settings_activate(&mut self) {
+        match self.current_settings_row() {
+            Some(SettingsRow::HideEmpty) => self.toggle_hide_empty(),
+            Some(SettingsRow::Confirm) => self.toggle_confirmation_mode(),
+            Some(SettingsRow::AddRoot) => {
+                self.settings_message.clear();
+                self.settings_input = Some(SettingsInput {
+                    kind: InputKind::Root,
+                    text: String::new(),
+                });
+            }
+            Some(SettingsRow::AddExclude) => {
+                self.settings_message.clear();
+                self.settings_input = Some(SettingsInput {
+                    kind: InputKind::Exclude,
+                    text: String::new(),
+                });
+            }
+            _ => {}
+        }
+    }
+
+    /// `d` / Delete on a folder or exclusion row.
+    pub fn settings_remove(&mut self) {
+        let row = self.current_settings_row();
+        let result = match row {
+            Some(SettingsRow::Root(i)) => self.engine_cfg.remove_scan_root(i),
+            Some(SettingsRow::Exclude(i)) => self.engine_cfg.remove_exclude(i),
+            _ => return,
+        };
+        match result {
+            Ok(()) => {
+                self.settings_message = "Removed.".into();
+                self.settings_cursor = self.settings_cursor.min(self.settings_rows().len() - 1);
+                if self.save_engine() && matches!(row, Some(SettingsRow::Root(_))) {
+                    self.start_scan();
+                }
+            }
+            Err(e) => self.settings_message = e,
+        }
+    }
+
+    /// Keys while a text field is open.
+    pub fn settings_input_key(&mut self, code: KeyCode) {
+        let Some(input) = self.settings_input.as_mut() else {
+            return;
+        };
+        match code {
+            KeyCode::Esc => self.settings_input = None,
+            KeyCode::Backspace => {
+                input.text.pop();
+            }
+            KeyCode::Char(c) => input.text.push(c),
+            KeyCode::Enter => {
+                let (kind, text) = (input.kind, input.text.clone());
+                let result = match kind {
+                    InputKind::Root => self.engine_cfg.add_scan_root(&text),
+                    InputKind::Exclude => self.engine_cfg.add_exclude(&text),
+                };
+                match result {
+                    Ok(()) => {
+                        self.settings_input = None;
+                        self.settings_message = "Added.".into();
+                        if self.save_engine() && kind == InputKind::Root {
+                            self.start_scan();
+                        }
+                    }
+                    Err(e) => self.settings_message = e,
+                }
+            }
+            _ => {}
+        }
+    }
+
+    /// The link on the highlighted About row, if it is one.
+    pub fn about_selected_link(&self) -> Option<String> {
+        cleansys_core::appinfo::about_rows()
+            .get(self.about_cursor)
+            .map(|(_, v)| v.clone())
+            .filter(|v| cleansys_core::appinfo::is_link(v))
     }
 
     /// `(category, item)` pairs shown in the list right now.
@@ -336,6 +615,7 @@ impl App {
         self.hide_empty = !self.hide_empty;
         self.ensure_category_visible();
         self.item_list_state.select(Some(0));
+        self.save_prefs();
     }
 
     pub fn start_filter(&mut self) {
@@ -1037,6 +1317,12 @@ impl App {
             return Ok(false);
         }
 
+        // Settings / About overlay
+        if self.info_open {
+            self.handle_info_key(key.code);
+            return Ok(false);
+        }
+
         // Filter box has focus: every key is text (or navigation)
         if self.filter_active && !self.show_help {
             self.handle_filter_key(key.code);
@@ -1190,6 +1476,17 @@ impl App {
                     self.open_schedule();
                 }
             }
+            // Settings / About
+            (KeyCode::Char('o'), _) => {
+                if !self.show_help && !self.is_running {
+                    self.open_info(InfoTab::Settings);
+                }
+            }
+            (KeyCode::Char('i'), _) => {
+                if !self.show_help && !self.is_running {
+                    self.open_info(InfoTab::About);
+                }
+            }
             // Help dialog
             (KeyCode::Char('?' | 'h'), _) => {
                 self.toggle_help();
@@ -1261,6 +1558,49 @@ impl App {
         Ok(false)
     }
 
+    fn handle_info_key(&mut self, code: KeyCode) {
+        if self.settings_input.is_some() {
+            self.settings_input_key(code);
+            return;
+        }
+        match code {
+            KeyCode::Esc | KeyCode::Char('q') => self.close_info(),
+            KeyCode::Tab | KeyCode::BackTab => self.switch_info_tab(),
+            KeyCode::Char('o') if self.info_tab == InfoTab::About => self.switch_info_tab(),
+            KeyCode::Char('i') if self.info_tab == InfoTab::Settings => self.switch_info_tab(),
+            KeyCode::Down | KeyCode::Char('j') => self.info_move(1),
+            KeyCode::Up | KeyCode::Char('k') => self.info_move(-1),
+            _ => match self.info_tab {
+                InfoTab::Settings => match code {
+                    KeyCode::Left => self.settings_adjust(-1),
+                    KeyCode::Right => self.settings_adjust(1),
+                    KeyCode::Char(' ') | KeyCode::Enter => self.settings_activate(),
+                    KeyCode::Char('d') | KeyCode::Delete | KeyCode::Backspace => {
+                        self.settings_remove();
+                    }
+                    _ => {}
+                },
+                InfoTab::About => {
+                    if matches!(
+                        code,
+                        KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Char('g')
+                    ) {
+                        match self.about_selected_link() {
+                            Some(url) => {
+                                self.settings_message = match cleansys_core::appinfo::open_url(&url)
+                                {
+                                    Ok(()) => format!("Opened {url}"),
+                                    Err(e) => format!("Could not open a browser: {e}"),
+                                };
+                            }
+                            None => self.settings_message.clear(),
+                        }
+                    }
+                }
+            },
+        }
+    }
+
     pub fn handle_resize(&mut self, width: u16, height: u16) {
         self.terminal_width = width;
         self.terminal_height = height;
@@ -1268,5 +1608,6 @@ impl App {
 
     pub fn toggle_confirmation_mode(&mut self) {
         self.confirmation_mode = !self.confirmation_mode;
+        self.save_prefs();
     }
 }

@@ -4,6 +4,13 @@ use cleansys_core::{CleanerCategory, Status};
 
 use crate::theme::ThemeColors;
 
+/// Tabs of the Settings / About dialog.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SettingsTab {
+    Settings,
+    About,
+}
+
 /// Top-level state for the CleanSys GUI application.
 pub struct CleanSysGui {
     /// Cleaner categories and items (shared domain model from `cleansys-core`).
@@ -56,6 +63,18 @@ pub struct CleanSysGui {
     pub expanded: Vec<(usize, usize)>,
     /// Idle-day threshold for project build artifacts (day selector).
     pub min_age_days: u64,
+    /// Whether the Settings / About dialog is visible, and which tab.
+    pub settings_open: bool,
+    pub settings_tab: SettingsTab,
+    /// Working copy of the engine settings edited in the dialog.
+    pub engine_cfg: cleansys_core::engine::EngineConfig,
+    /// Text of the "add folder" / "add pattern" fields.
+    pub new_root: String,
+    pub new_exclude: String,
+    /// Feedback line in the dialog (validation errors, confirmations).
+    pub settings_message: String,
+    /// Ask before running a clean.
+    pub confirm_before_run: bool,
     /// Whether the automatic-cleaning (schedule) dialog is visible.
     pub schedule_open: bool,
     /// Schedule being edited in the dialog.
@@ -115,7 +134,14 @@ impl CleanSysGui {
             needs_admin_notice: false,
             search: String::new(),
             board,
-            hide_empty: true,
+            hide_empty: settings.hide_empty(),
+            confirm_before_run: settings.confirm_before_run(),
+            settings_open: false,
+            settings_tab: SettingsTab::Settings,
+            engine_cfg: cleansys_core::engine::EngineConfig::load(),
+            new_root: String::new(),
+            new_exclude: String::new(),
+            settings_message: String::new(),
             show_log: false,
             expanded: Vec::new(),
             min_age_days: cleansys_core::engine::EngineConfig::load().min_age_days,
@@ -354,6 +380,8 @@ impl CleanSysGui {
         cleansys_core::Settings {
             theme_name: Some(self.current_theme_name().to_string()),
             selected_cleaners,
+            hide_empty: Some(self.hide_empty),
+            confirm_before_run: Some(self.confirm_before_run),
         }
     }
 
@@ -369,6 +397,39 @@ impl CleanSysGui {
         if let Err(e) = cleansys_core::save_settings(&self.current_settings()) {
             log::warn!("failed to save theme preference: {e}");
         }
+    }
+
+    /// Persist the engine settings being edited (no-op under `cfg(test)`). `false` = failed.
+    pub fn save_engine(&mut self) -> bool {
+        if cfg!(test) {
+            return true;
+        }
+        let mine = self.engine_cfg.clone();
+        match cleansys_core::engine::EngineConfig::update(|c| {
+            c.scan_roots = mine.scan_roots;
+            c.max_depth = mine.max_depth;
+            c.min_age_days = mine.min_age_days;
+            c.exclude = mine.exclude;
+        }) {
+            Ok(()) => true,
+            Err(e) => {
+                self.settings_message = format!("Could not save: {e}");
+                false
+            }
+        }
+    }
+
+    /// Open the Settings / About dialog on `tab`, refreshing the engine settings from disk.
+    pub fn open_settings(&mut self, tab: SettingsTab) {
+        if !cfg!(test) {
+            self.engine_cfg = cleansys_core::engine::EngineConfig::load();
+            self.min_age_days = self.engine_cfg.min_age_days;
+        }
+        self.settings_tab = tab;
+        self.settings_open = true;
+        self.settings_message.clear();
+        self.new_root.clear();
+        self.new_exclude.clear();
     }
 
     /// Persist the current cleaner selections (and theme) to `settings.json`.

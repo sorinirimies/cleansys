@@ -85,6 +85,22 @@ label.e .p small { color:var(--dim); font-size:11px; overflow:hidden; text-overf
 label.e .n { font-variant-numeric:tabular-nums; font-size:12px; color:var(--fg2); }
 .bar form.age { margin:0; font-size:12px; color:var(--dim); }
 .bar form.age select { font-size:12px; }
+.ver { color:var(--dim); font-weight:400; font-size:12px; margin-left:4px; }
+.verline { margin:18px 0 6px; color:var(--dim); font-size:12px; text-align:center; }
+.verline a { color:var(--dim); }
+.tabs { display:flex; gap:6px; margin:0 0 10px; }
+.tabs .tab { padding:6px 14px; border:1px solid var(--line); border-radius:8px; text-decoration:none; color:var(--fg2); background:var(--panel); }
+.tabs .tab.active { border-color:var(--accent); color:var(--fg); background:var(--sel); }
+form.switch { display:flex; flex-direction:column; gap:8px; }
+ul.plain { list-style:none; padding:0; margin:0 0 10px; display:flex; flex-direction:column; gap:6px; }
+ul.plain li { display:flex; align-items:center; gap:10px; justify-content:space-between; }
+ul.plain code { word-break:break-all; }
+form.inline { margin:0; }
+form.add { display:flex; gap:8px; }
+form.add input[type=text] { flex:1 1 auto; min-width:0; }
+table.kv { border-collapse:collapse; }
+table.kv th { text-align:left; color:var(--dim); font-weight:400; padding:5px 18px 5px 0; white-space:nowrap; vertical-align:top; }
+table.kv td { padding:5px 0; word-break:break-all; }
 .empty { padding:28px; text-align:center; color:var(--dim); background:var(--panel); border:1px dashed var(--line); border-radius:10px; }
 
 /* ── action bar ── */

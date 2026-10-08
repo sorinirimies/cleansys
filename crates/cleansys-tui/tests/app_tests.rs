@@ -679,3 +679,190 @@ fn idle_days_step_does_nothing_while_running() {
     key(&mut app, KeyCode::Char(']'));
     assert_eq!(app.min_age_days, before);
 }
+
+// ── settings / about overlay ─────────────────────────────────────────────────
+
+use cleansys_tui::app::{InfoTab, InputKind, SettingsRow};
+
+fn type_text(app: &mut App, text: &str) {
+    for c in text.chars() {
+        key(app, KeyCode::Char(c));
+    }
+}
+
+fn settings_app() -> App {
+    let mut app = app_with_categories();
+    app.open_info(InfoTab::Settings);
+    // Deterministic in-memory config, whatever is on this machine's disk.
+    app.engine_cfg = cleansys_core::engine::EngineConfig {
+        scan_roots: vec!["/work/a".into()],
+        exclude: vec!["~/keep/**".into()],
+        max_depth: 6,
+        min_age_days: 14,
+    };
+    app
+}
+
+#[test]
+fn o_and_i_open_settings_and_about_and_tab_switches() {
+    let mut app = app_with_categories();
+    key(&mut app, KeyCode::Char('o'));
+    assert!(app.info_open && app.info_tab == InfoTab::Settings);
+    key(&mut app, KeyCode::Tab);
+    assert_eq!(app.info_tab, InfoTab::About);
+    key(&mut app, KeyCode::Char('o'));
+    assert_eq!(app.info_tab, InfoTab::Settings);
+    key(&mut app, KeyCode::Esc);
+    assert!(!app.info_open);
+    key(&mut app, KeyCode::Char('i'));
+    assert!(app.info_open && app.info_tab == InfoTab::About);
+    // q closes the overlay instead of quitting the app.
+    let quit = app
+        .handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE))
+        .unwrap();
+    assert!(!quit && !app.info_open);
+}
+
+#[test]
+fn overlay_keys_do_not_leak_to_the_cleaner_list() {
+    let mut app = app_with_categories();
+    app.open_info(InfoTab::About);
+    let sel = app.item_list_state.selected();
+    key(&mut app, KeyCode::Char(' '));
+    assert!(app.categories[0].items.iter().all(|i| !i.selected));
+    assert_eq!(app.item_list_state.selected(), sel);
+}
+
+#[test]
+fn settings_rows_follow_the_config() {
+    let app = settings_app();
+    assert_eq!(
+        app.settings_rows(),
+        vec![
+            SettingsRow::IdleDays,
+            SettingsRow::ScanDepth,
+            SettingsRow::HideEmpty,
+            SettingsRow::Confirm,
+            SettingsRow::Root(0),
+            SettingsRow::AddRoot,
+            SettingsRow::Exclude(0),
+            SettingsRow::AddExclude,
+        ]
+    );
+}
+
+#[test]
+fn values_adjust_with_left_right_and_switches_toggle() {
+    let mut app = settings_app();
+    // Idle days is first; the scan is "idle" in tests, persist is off.
+    key(&mut app, KeyCode::Right);
+    assert_eq!(app.engine_cfg.min_age_days, 30);
+    key(&mut app, KeyCode::Left);
+    key(&mut app, KeyCode::Left);
+    assert_eq!(app.engine_cfg.min_age_days, 7);
+
+    key(&mut app, KeyCode::Down); // scan depth
+    key(&mut app, KeyCode::Right);
+    assert_eq!(app.engine_cfg.max_depth, 8);
+
+    key(&mut app, KeyCode::Down); // hide empty
+    let hide = app.hide_empty;
+    key(&mut app, KeyCode::Char(' '));
+    assert_eq!(app.hide_empty, !hide);
+    key(&mut app, KeyCode::Down); // confirm
+    let confirm = app.confirmation_mode;
+    key(&mut app, KeyCode::Enter);
+    assert_eq!(app.confirmation_mode, !confirm);
+}
+
+#[test]
+fn adding_and_removing_folders_and_patterns() {
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().to_string_lossy().into_owned();
+    let mut app = settings_app();
+
+    // Move to "＋ Add a folder…" and type a real directory.
+    app.settings_cursor = 5;
+    key(&mut app, KeyCode::Enter);
+    assert!(matches!(&app.settings_input, Some(i) if i.kind == InputKind::Root));
+    type_text(&mut app, "/definitely/not/here");
+    key(&mut app, KeyCode::Enter);
+    assert!(
+        app.settings_input.is_some(),
+        "invalid input keeps the field open"
+    );
+    assert!(!app.settings_message.is_empty());
+    for _ in 0.."/definitely/not/here".len() {
+        key(&mut app, KeyCode::Backspace);
+    }
+    type_text(&mut app, &path);
+    key(&mut app, KeyCode::Enter);
+    assert!(app.settings_input.is_none());
+    assert_eq!(app.engine_cfg.scan_roots, vec!["/work/a".to_string(), path]);
+
+    // Remove the first folder (d).
+    app.settings_cursor = 4;
+    key(&mut app, KeyCode::Char('d'));
+    assert_eq!(app.engine_cfg.scan_roots.len(), 1);
+
+    // Patterns: add then remove.
+    let rows = app.settings_rows();
+    let add_ex = rows
+        .iter()
+        .position(|r| *r == SettingsRow::AddExclude)
+        .unwrap();
+    app.settings_cursor = add_ex;
+    key(&mut app, KeyCode::Enter);
+    type_text(&mut app, "~/other/**");
+    key(&mut app, KeyCode::Enter);
+    assert_eq!(
+        app.engine_cfg.exclude,
+        vec!["~/keep/**".to_string(), "~/other/**".to_string()]
+    );
+    let first_ex = app
+        .settings_rows()
+        .iter()
+        .position(|r| matches!(r, SettingsRow::Exclude(0)))
+        .unwrap();
+    app.settings_cursor = first_ex;
+    key(&mut app, KeyCode::Delete);
+    assert_eq!(app.engine_cfg.exclude, vec!["~/other/**".to_string()]);
+
+    // Esc cancels typing without closing the overlay.
+    let add_ex = app
+        .settings_rows()
+        .iter()
+        .position(|r| *r == SettingsRow::AddExclude)
+        .unwrap();
+    app.settings_cursor = add_ex;
+    key(&mut app, KeyCode::Enter);
+    key(&mut app, KeyCode::Esc);
+    assert!(app.settings_input.is_none() && app.info_open);
+}
+
+#[test]
+fn about_links_are_detected() {
+    let mut app = app_with_categories();
+    app.open_info(InfoTab::About);
+    let rows = cleansys_core::appinfo::about_rows();
+    let gh = rows.iter().position(|(l, _)| *l == "GitHub").unwrap();
+    app.about_cursor = gh;
+    assert_eq!(
+        app.about_selected_link().as_deref(),
+        Some(cleansys_core::appinfo::GITHUB_PROFILE)
+    );
+    let lic = rows.iter().position(|(l, _)| *l == "License").unwrap();
+    app.about_cursor = lic;
+    assert!(app.about_selected_link().is_none());
+}
+
+#[test]
+fn saved_preferences_are_applied() {
+    let mut app = app_with_categories();
+    app.apply_settings(&cleansys_core::Settings {
+        hide_empty: Some(false),
+        confirm_before_run: Some(false),
+        ..Default::default()
+    });
+    assert!(!app.hide_empty && !app.confirmation_mode);
+}

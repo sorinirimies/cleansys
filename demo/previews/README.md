@@ -10,6 +10,7 @@ fetch LFS objects.
 | `tui-system-root.gif` | the user-land / root split and the password prompt | `demo/tui-system-root.tape` |
 | `tui-schedule.gif` | the schedule overlay (`S`) | `demo/tui-schedule.tape` |
 | `tui-narrow.gif` | responsive layout on a narrow terminal | `demo/tui-narrow.tape` |
+| `tui-settings.gif` | the Settings (`o`) and About (`i`) overlays | `demo/tui-settings.tape` |
 | `tui-clean.gif` | a real clean run: pick paths (`→`) → confirm → live progress + activity log in the main view → summary → rescan | `demo/tui-clean.tape` |
 | `tui-details.png`, `tui-clean-done.png` | the expanded per-path details; the finished-run summary under the list | screenshots from `demo/tui-clean.tape` (copied from `demo/target/`) |
 | `cli.gif` | `auto`, `scan --json`, `schedule` | `demo/cli.tape` |
@@ -17,6 +18,7 @@ fetch LFS objects.
 | `gui-schedule.png` | the GUI schedule dialog | `scripts/gui-screenshots.nu` |
 | `web-wide/medium/narrow.png` | the three responsive web layouts | `scripts/web-screenshots.nu` |
 | `web-preview.png`, `web-schedule.png` | web dry-run and schedule pages | `scripts/web-screenshots.nu` |
+| `web-settings.png`, `web-about.png` | the web Settings and About pages | `scripts/web-screenshots.nu` |
 | `web-details.png` | web: a cleaner expanded to its paths, one unticked; the *Idle ≥* selector | `scripts/web-screenshots.nu` |
 | `web-flow.gif` | web: tick → confirm → progress → done | `scripts/web-screenshots.nu` |
 | `web-responsive.gif` | the same page at three widths | `scripts/web-screenshots.nu` |

@@ -80,6 +80,25 @@ pub fn step_min_age(current: u64, step: i32) -> u64 {
     MIN_AGE_CHOICES[next.min(MIN_AGE_CHOICES.len() - 1)]
 }
 
+/// Scan-depth choices offered by the settings screens.
+pub const MAX_DEPTH_CHOICES: [usize; 7] = [2, 3, 4, 5, 6, 8, 10];
+
+/// Next (`step > 0`) / previous (`step < 0`) depth choice, clamped; off-grid values snap.
+pub fn step_max_depth(current: usize, step: i32) -> usize {
+    let idx = MAX_DEPTH_CHOICES
+        .iter()
+        .position(|d| *d >= current)
+        .unwrap_or(MAX_DEPTH_CHOICES.len() - 1);
+    let exact = MAX_DEPTH_CHOICES[idx] == current;
+    let next = match step.signum() {
+        1 if exact => idx + 1,
+        1 => idx,
+        -1 => idx.saturating_sub(1),
+        _ => idx,
+    };
+    MAX_DEPTH_CHOICES[next.min(MAX_DEPTH_CHOICES.len() - 1)]
+}
+
 /// Human label: `0` → "any age", `7` → "7 days".
 pub fn min_age_label(days: u64) -> String {
     match days {
@@ -90,6 +109,86 @@ pub fn min_age_label(days: u64) -> String {
 }
 
 impl EngineConfig {
+    /// Load → change → save, so front-ends editing different fields never clobber each other.
+    pub fn update<R>(change: impl FnOnce(&mut Self) -> R) -> Result<R> {
+        let mut cfg = Self::load();
+        let out = change(&mut cfg);
+        cfg.save()?;
+        Ok(out)
+    }
+
+    /// The roots as the settings screens list and edit them: the configured ones, or — when
+    /// none are configured — what is auto-detected (so removing one keeps the rest).
+    pub fn roots_for_editing(&self) -> Vec<String> {
+        if self.scan_roots.is_empty() {
+            self.effective_roots()
+                .iter()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect()
+        } else {
+            self.scan_roots.clone()
+        }
+    }
+
+    /// Add a project scan root. Accepts `~`/`$VAR`; the directory must exist.
+    pub fn add_scan_root(&mut self, input: &str) -> std::result::Result<(), String> {
+        let input = input.trim();
+        if input.is_empty() {
+            return Err("enter a folder".into());
+        }
+        let expanded = super::paths::expand(input, &super::paths::lookup_env);
+        let path = std::path::Path::new(&expanded);
+        if !path.is_absolute() {
+            return Err("use an absolute path (or start with ~)".into());
+        }
+        if !path.is_dir() {
+            return Err(format!("{expanded} is not a folder"));
+        }
+        let mut roots = self.roots_for_editing();
+        if roots.iter().any(|r| r == input) {
+            return Err("already listed".into());
+        }
+        roots.push(input.to_string());
+        self.scan_roots = roots;
+        Ok(())
+    }
+
+    /// Remove the root at `index` (as listed by [`Self::roots_for_editing`]).
+    pub fn remove_scan_root(&mut self, index: usize) -> std::result::Result<(), String> {
+        let mut roots = self.roots_for_editing();
+        if index >= roots.len() {
+            return Err("no such folder".into());
+        }
+        roots.remove(index);
+        self.scan_roots = roots;
+        Ok(())
+    }
+
+    /// Add a glob that is never deleted (`~`, `$VAR` allowed).
+    pub fn add_exclude(&mut self, input: &str) -> std::result::Result<(), String> {
+        let input = input.trim();
+        if input.is_empty() {
+            return Err("enter a path or pattern".into());
+        }
+        if glob::Pattern::new(&super::paths::expand(input, &super::paths::lookup_env)).is_err() {
+            return Err("not a valid pattern".into());
+        }
+        if self.exclude.iter().any(|e| e == input) {
+            return Err("already listed".into());
+        }
+        self.exclude.push(input.to_string());
+        Ok(())
+    }
+
+    /// Remove the exclusion at `index`.
+    pub fn remove_exclude(&mut self, index: usize) -> std::result::Result<(), String> {
+        if index >= self.exclude.len() {
+            return Err("no such exclusion".into());
+        }
+        self.exclude.remove(index);
+        Ok(())
+    }
+
     /// Persist a new idle-day threshold (load → set → save).
     pub fn save_min_age_days(days: u64) -> Result<()> {
         let mut cfg = Self::load();
@@ -189,5 +288,50 @@ mod min_age_step_tests {
         assert_eq!(step_min_age(10, -1), 7);
         assert_eq!(min_age_label(0), "any age");
         assert_eq!(min_age_label(7), "7 days");
+    }
+}
+
+#[cfg(test)]
+mod edit_tests {
+    use super::*;
+
+    #[test]
+    fn depth_steps_and_clamps() {
+        assert_eq!(step_max_depth(6, 1), 8);
+        assert_eq!(step_max_depth(6, -1), 5);
+        assert_eq!(step_max_depth(2, -1), 2);
+        assert_eq!(step_max_depth(10, 1), 10);
+        assert_eq!(step_max_depth(7, 1), 8, "off-grid values snap upward");
+    }
+
+    #[test]
+    fn scan_roots_validate_dedupe_and_remove() {
+        let dir = tempfile::tempdir().unwrap();
+        let p = dir.path().to_string_lossy().into_owned();
+        let mut cfg = EngineConfig {
+            scan_roots: vec!["/already/here".into()],
+            ..EngineConfig::default()
+        };
+        assert!(cfg.add_scan_root("").is_err());
+        assert!(cfg.add_scan_root("relative/dir").is_err());
+        assert!(cfg.add_scan_root("/definitely/not/a/dir/xyz").is_err());
+        cfg.add_scan_root(&p).unwrap();
+        assert_eq!(cfg.scan_roots, vec!["/already/here".to_string(), p.clone()]);
+        assert!(cfg.add_scan_root(&p).is_err(), "duplicates are refused");
+        cfg.remove_scan_root(0).unwrap();
+        assert_eq!(cfg.scan_roots, vec![p]);
+        assert!(cfg.remove_scan_root(5).is_err());
+    }
+
+    #[test]
+    fn excludes_validate_dedupe_and_remove() {
+        let mut cfg = EngineConfig::default();
+        assert!(cfg.add_exclude("  ").is_err());
+        assert!(cfg.add_exclude("[").is_err(), "bad glob");
+        cfg.add_exclude("~/keep/**").unwrap();
+        assert!(cfg.add_exclude("~/keep/**").is_err());
+        cfg.remove_exclude(0).unwrap();
+        assert!(cfg.exclude.is_empty());
+        assert!(cfg.remove_exclude(0).is_err());
     }
 }

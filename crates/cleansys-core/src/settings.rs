@@ -25,6 +25,12 @@ pub struct Settings {
     /// collide.
     #[serde(default)]
     pub selected_cleaners: Vec<String>,
+    /// Hide cleaners that have nothing to clean (`None` = default: on).
+    #[serde(default)]
+    pub hide_empty: Option<bool>,
+    /// Ask before running a clean (`None` = default: on).
+    #[serde(default)]
+    pub confirm_before_run: Option<bool>,
 }
 
 impl Settings {
@@ -35,6 +41,16 @@ impl Settings {
             .as_deref()
             .map(crate::theme::theme_index_by_name)
             .unwrap_or(0)
+    }
+
+    /// Whether empty cleaners are hidden after a scan (default: yes).
+    pub fn hide_empty(&self) -> bool {
+        self.hide_empty.unwrap_or(true)
+    }
+
+    /// Whether a clean asks for confirmation first (default: yes).
+    pub fn confirm_before_run(&self) -> bool {
+        self.confirm_before_run.unwrap_or(true)
     }
 
     /// Build the `"Category: Item"` key used to identify a selected cleaner.
@@ -113,6 +129,15 @@ pub fn save_settings(settings: &Settings) -> Result<()> {
     save_to(&settings_json_path()?, settings)
 }
 
+/// Read-modify-write `settings.json`, so one front-end changing a preference never
+/// clobbers fields it doesn't know about.
+pub fn update_settings(change: impl FnOnce(&mut Settings)) -> Result<Settings> {
+    let mut s = load_settings()?;
+    change(&mut s);
+    save_settings(&s)?;
+    Ok(s)
+}
+
 /// Load TUI-specific settings (`tui-settings.json`).
 pub fn load_tui_settings() -> Result<Settings> {
     load_from(&tui_settings_json_path()?)
@@ -127,6 +152,16 @@ pub fn save_tui_settings(settings: &Settings) -> Result<()> {
 mod tests {
     use super::*;
     use tempfile::TempDir;
+
+    #[test]
+    fn preferences_default_to_on_and_old_files_still_load() {
+        let s = Settings::default();
+        assert!(s.hide_empty() && s.confirm_before_run());
+        // A settings.json written before these fields existed.
+        let old: Settings =
+            serde_json::from_str(r#"{"theme_name":"Nord","selected_cleaners":[]}"#).unwrap();
+        assert!(old.hide_empty() && old.confirm_before_run());
+    }
 
     #[test]
     fn default_settings_have_no_theme() {
@@ -183,11 +218,15 @@ mod tests {
         let settings = Settings {
             theme_name: Some("Nord".to_string()),
             selected_cleaners: vec!["User Land Cleaners: Trash".to_string()],
+            hide_empty: Some(false),
+            confirm_before_run: Some(false),
         };
         save_to(&path, &settings).unwrap();
 
         let loaded = load_from(&path).unwrap();
         assert_eq!(loaded.theme_name.as_deref(), Some("Nord"));
+        assert!(!loaded.hide_empty());
+        assert!(!loaded.confirm_before_run());
         assert_eq!(
             loaded.selected_cleaners,
             vec!["User Land Cleaners: Trash".to_string()]

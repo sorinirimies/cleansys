@@ -18,7 +18,7 @@ use topcoat::{
 };
 
 use crate::{
-    components::{action_bar, cat_pick, document, item_row, side_nav, top_bar},
+    components::{action_bar, cat_pick, document, info_tabs, item_row, side_nav, top_bar},
     state::{LineStatus, NEEDS_AUTH, Phase, Shared, Snapshot},
     theme,
     util::{fmt, nav_href, safe_back, size_class},
@@ -57,7 +57,14 @@ async fn home(cx: &Cx) -> Result<impl View> {
     st.poll();
     let p = query_params::<HomeParams>(cx)?;
     let theme_idx = theme_for(p.theme.as_deref());
-    let hide = p.hide.as_deref() != Some("0");
+    // `?hide=0|1` wins; without it the saved preference decides (default: hide empty).
+    let hide = match p.hide.as_deref() {
+        Some("0") => false,
+        Some(_) => true,
+        None => cleansys_core::load_settings()
+            .unwrap_or_default()
+            .hide_empty(),
+    };
     let q = p.q.clone().unwrap_or_default();
 
     let mut snap = st.snapshot();
@@ -499,6 +506,235 @@ async fn progress(cx: &Cx) -> Result<impl View> {
 async fn dismiss(cx: &Cx) -> Result<SeeOther> {
     shared(cx).clear_run();
     Ok(see_other("/"))
+}
+
+// ── settings & about ─────────────────────────────────────────────────
+
+#[query_params(error = redirect("/settings"))]
+pub struct SettingsParams {
+    pub msg: Option<String>,
+}
+
+fn settings_back(msg: &str) -> SeeOther {
+    see_other(format!("/settings?msg={}", crate::util::pct(msg)))
+}
+
+#[page("/settings")]
+async fn settings_page(cx: &Cx) -> Result<impl View> {
+    let params = query_params::<SettingsParams>(cx)?;
+    let theme_idx = theme_for(None);
+    let cfg = EngineConfig::load();
+    let prefs = cleansys_core::load_settings().unwrap_or_default();
+    let roots = cfg.roots_for_editing();
+    let auto_roots = cfg.scan_roots.is_empty();
+    let ages = cleansys_core::engine::config::MIN_AGE_CHOICES;
+    let depths = cleansys_core::engine::config::MAX_DEPTH_CHOICES;
+    let age_listed = ages.contains(&cfg.min_age_days);
+    let depth_listed = depths.contains(&cfg.max_depth);
+    Ok(view! {
+        document(refresh: 0, theme: theme_idx, title: "Settings — CleanSys".to_string(),
+            <header class="top"><h1>"⚙ Settings"</h1><small class="ver">(cleansys_core::appinfo::version_label())</small><span class="grow"></span><a class="btn" href="/">"← Back"</a></header>
+            info_tabs(active: "settings".to_string())
+            if let Some(m) = &params.msg { <div class="banner">(m.clone())</div> }
+            <div class="card">
+                <h2>"Scanning"</h2>
+                <form class="stack" method="post" action="/min-age">
+                    <input type="hidden" name="back" value="/settings">
+                    <label for="days">"Project idle for at least"</label>
+                    <select id="days" name="days" onchange="this.form.submit()">
+                        for d in ages.iter() {
+                            <option value=(d.to_string()) selected=(*d == cfg.min_age_days)>(cleansys_core::engine::config::min_age_label(*d))</option>
+                        }
+                        if !age_listed { <option value=(cfg.min_age_days.to_string()) selected=(true)>(cleansys_core::engine::config::min_age_label(cfg.min_age_days))</option> }
+                    </select>
+                    <noscript><span class="actions"><button type="submit">"Save"</button></span></noscript>
+                </form>
+                <form class="stack" method="post" action="/settings/depth">
+                    <label for="depth">"Scan depth"</label>
+                    <select id="depth" name="depth" onchange="this.form.submit()">
+                        for d in depths.iter() {
+                            <option value=(d.to_string()) selected=(*d == cfg.max_depth)>(*d)</option>
+                        }
+                        if !depth_listed { <option value=(cfg.max_depth.to_string()) selected=(true)>(cfg.max_depth)</option> }
+                    </select>
+                    <noscript><span class="actions"><button type="submit">"Save"</button></span></noscript>
+                </form>
+                <p class="dim">"Build output (target/, node_modules, …) is only offered once its project has been untouched this long. Changing a value re-measures everything."</p>
+            </div>
+            <div class="card">
+                <h2>"Behaviour"</h2>
+                <form class="switch" method="post" action="/settings/prefs">
+                    <label><input type="checkbox" name="hide_empty" value="1" checked=(prefs.hide_empty()) onchange="this.form.submit()"> " Hide cleaners with nothing to clean"</label>
+                    <label><input type="checkbox" name="confirm" value="1" checked=(prefs.confirm_before_run()) onchange="this.form.submit()"> " Ask before cleaning (the confirmation page)"</label>
+                    <noscript><button type="submit">"Save"</button></noscript>
+                </form>
+            </div>
+            <div class="card">
+                <h2>"Project folders scanned for build output"</h2>
+                if auto_roots { <p class="dim">"Auto-detected (~/Projects, ~/dev, ~/src, …). Add or remove one to set your own list."</p> }
+                <ul class="plain">
+                    for (i, r) in roots.iter().enumerate() {
+                        <li><code>(r.clone())</code>
+                            <form method="post" action="/settings/root-remove" class="inline">
+                                <input type="hidden" name="idx" value=(i.to_string())>
+                                <button type="submit" title="Remove this folder">"Remove"</button>
+                            </form>
+                        </li>
+                    }
+                    if roots.is_empty() { <li class="dim">"No project folders found."</li> }
+                </ul>
+                <form class="add" method="post" action="/settings/root-add">
+                    <input type="text" name="path" placeholder="Add a folder, e.g. ~/code" aria-label="Folder to scan" required=(true)>
+                    <button type="submit">"Add"</button>
+                </form>
+            </div>
+            <div class="card">
+                <h2>"Never delete (glob patterns)"</h2>
+                <ul class="plain">
+                    for (i, p) in cfg.exclude.iter().enumerate() {
+                        <li><code>(p.clone())</code>
+                            <form method="post" action="/settings/exclude-remove" class="inline">
+                                <input type="hidden" name="idx" value=(i.to_string())>
+                                <button type="submit" title="Remove this pattern">"Remove"</button>
+                            </form>
+                        </li>
+                    }
+                    if cfg.exclude.is_empty() { <li class="dim">"Nothing excluded."</li> }
+                </ul>
+                <form class="add" method="post" action="/settings/exclude-add">
+                    <input type="text" name="pattern" placeholder="Add a path or pattern, e.g. ~/work/keep/**" aria-label="Pattern to exclude" required=(true)>
+                    <button type="submit">"Add"</button>
+                </form>
+            </div>
+        )
+    })
+}
+
+#[derive(Deserialize)]
+struct DepthForm {
+    depth: usize,
+}
+
+#[route(POST "/settings/depth")]
+async fn settings_depth(cx: &Cx, Form(f): Form<DepthForm>) -> Result<SeeOther> {
+    let depth = f.depth.clamp(1, 20);
+    Ok(
+        match shared(cx).edit_engine(true, |c| {
+            c.max_depth = depth;
+            Ok(())
+        }) {
+            Ok(()) => settings_back(&format!("Scan depth set to {depth}.")),
+            Err(e) => settings_back(&e),
+        },
+    )
+}
+
+#[derive(Deserialize)]
+struct PrefsForm {
+    hide_empty: Option<String>,
+    confirm: Option<String>,
+}
+
+#[route(POST "/settings/prefs")]
+async fn settings_prefs(cx: &Cx, Form(f): Form<PrefsForm>) -> Result<SeeOther> {
+    let _ = shared(cx); // (state is untouched: preferences live in settings.json)
+    let hide = f.hide_empty.is_some();
+    let ask = f.confirm.is_some();
+    Ok(
+        match cleansys_core::update_settings(|s| {
+            s.hide_empty = Some(hide);
+            s.confirm_before_run = Some(ask);
+        }) {
+            Ok(_) => settings_back("Saved."),
+            Err(e) => settings_back(&format!("Could not save: {e}")),
+        },
+    )
+}
+
+#[derive(Deserialize)]
+struct PathForm {
+    path: String,
+}
+
+#[route(POST "/settings/root-add")]
+async fn settings_root_add(cx: &Cx, Form(f): Form<PathForm>) -> Result<SeeOther> {
+    Ok(
+        match shared(cx).edit_engine(true, |c| c.add_scan_root(&f.path)) {
+            Ok(()) => settings_back("Folder added — re-measuring."),
+            Err(e) => settings_back(&e),
+        },
+    )
+}
+
+#[derive(Deserialize)]
+struct PatternForm {
+    pattern: String,
+}
+
+#[route(POST "/settings/exclude-add")]
+async fn settings_exclude_add(cx: &Cx, Form(f): Form<PatternForm>) -> Result<SeeOther> {
+    Ok(
+        match shared(cx).edit_engine(false, |c| c.add_exclude(&f.pattern)) {
+            Ok(()) => settings_back("Pattern added."),
+            Err(e) => settings_back(&e),
+        },
+    )
+}
+
+#[derive(Deserialize)]
+struct IdxForm {
+    idx: usize,
+}
+
+#[route(POST "/settings/root-remove")]
+async fn settings_root_remove(cx: &Cx, Form(f): Form<IdxForm>) -> Result<SeeOther> {
+    Ok(
+        match shared(cx).edit_engine(true, |c| c.remove_scan_root(f.idx)) {
+            Ok(()) => settings_back("Folder removed — re-measuring."),
+            Err(e) => settings_back(&e),
+        },
+    )
+}
+
+#[route(POST "/settings/exclude-remove")]
+async fn settings_exclude_remove(cx: &Cx, Form(f): Form<IdxForm>) -> Result<SeeOther> {
+    Ok(
+        match shared(cx).edit_engine(false, |c| c.remove_exclude(f.idx)) {
+            Ok(()) => settings_back("Pattern removed."),
+            Err(e) => settings_back(&e),
+        },
+    )
+}
+
+#[page("/about")]
+async fn about_page(cx: &Cx) -> Result<impl View> {
+    let _ = shared(cx);
+    let theme_idx = theme_for(None);
+    let rows = cleansys_core::appinfo::about_rows();
+    Ok(view! {
+        document(refresh: 0, theme: theme_idx, title: "About — CleanSys".to_string(),
+            <header class="top"><h1>"ℹ About"</h1><small class="ver">(cleansys_core::appinfo::version_label())</small><span class="grow"></span><a class="btn" href="/">"← Back"</a></header>
+            info_tabs(active: "about".to_string())
+            <div class="card">
+                <h2>"🧹 " (cleansys_core::appinfo::title())</h2>
+                <p class="dim">(cleansys_core::appinfo::TAGLINE)</p>
+                <table class="kv">
+                    for (label, value) in rows.iter() {
+                        <tr>
+                            <th>(*label)</th>
+                            <td>
+                                if cleansys_core::appinfo::is_link(value) {
+                                    <a href=(value.clone()) target="_blank" rel="noopener noreferrer">(value.clone())</a>
+                                } else {
+                                    (value.clone())
+                                }
+                            </td>
+                        </tr>
+                    }
+                </table>
+            </div>
+        )
+    })
 }
 
 // ── schedule ─────────────────────────────────────────────────────────

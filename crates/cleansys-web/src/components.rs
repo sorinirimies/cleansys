@@ -34,8 +34,25 @@ pub async fn document(
                 <style>(css)</style>
                 topcoat::dev::script()
             </head>
-            <body><main>(child)</main></body>
+            <body><main>(child)
+                <div class="verline">
+                    (cleansys_core::appinfo::title()) " · "
+                    <a href=(cleansys_core::appinfo::GITHUB_PROFILE) target="_blank" rel="noopener">"GitHub"</a> " · "
+                    <a href="/about">"About"</a>
+                </div>
+            </main></body>
         </html>
+    })
+}
+
+/// Tab bar shared by the Settings and About pages.
+#[component]
+pub async fn info_tabs(active: String) -> Result<impl View> {
+    Ok(view! {
+        <nav class="tabs" aria-label="Settings and About">
+            <a class=(if active == "settings" { "tab active" } else { "tab" }) href="/settings">"⚙ Settings"</a>
+            <a class=(if active == "about" { "tab active" } else { "tab" }) href="/about">"ℹ About"</a>
+        </nav>
     })
 }
 
@@ -51,7 +68,7 @@ pub async fn top_bar(
 ) -> Result<impl View> {
     Ok(view! {
         <header class="top">
-            <h1><a href="/" style="color:inherit">"🧹 CleanSys"</a></h1>
+            <h1><a href="/" style="color:inherit">"🧹 CleanSys"</a> <small class="ver">(cleansys_core::appinfo::version_label())</small></h1>
             if is_root {
                 <span class="badge caut" title="System (root) section">"ROOT"</span>
             } else {
@@ -66,6 +83,8 @@ pub async fn top_bar(
                 <button type="submit" title="Search"><span class="ico">"🔎"</span><span class="lbl">"Search"</span></button>
             </form>
             <a class="btn" href="/schedule" title="Automatic cleaning"><span class="ico">"⏰"</span><span class="lbl">"⏰ Schedule"</span></a>
+            <a class="btn" href="/settings" title="Settings"><span class="ico">"⚙"</span><span class="lbl">"⚙ Settings"</span></a>
+            <a class="btn" href="/about" title="About CleanSys"><span class="ico">"ℹ"</span><span class="lbl">"ℹ About"</span></a>
             <form method="get" action=(back)>
                 <select name="theme" onchange="this.form.submit()" aria-label="Theme">
                     for (i, n) in theme::names().iter().enumerate() {
@@ -299,6 +318,13 @@ pub async fn action_bar(
                     </label>
                 </form>
                 <a class="btn" href=(if can_run { "/preview" } else { "#" }) aria-disabled=(if can_run { "false" } else { "true" }) title="Show exactly what would be removed (deletes nothing)"><span class="ico">"🔍"</span><span class="lbl">"🔍 Preview"</span></a>
+                if can_run && !snap.confirm_before_run {
+                    <form method="post" action="/run">
+                        <button class="btn primary" type="submit" title="Asking first is off in Settings">
+                            "🧹 Clean " (snap.selected_count) " · " (fmt(reclaim))
+                        </button>
+                    </form>
+                } else {
                 <a class="btn primary" href=(if can_run { "/confirm" } else { "#" }) aria-disabled=(if can_run { "false" } else { "true" })>
                     if can_run && snap.scanning {
                         "🧹 Clean " (snap.selected_count) " · " spinner() " measuring…"
@@ -308,6 +334,7 @@ pub async fn action_bar(
                         "Select cleaners"
                     }
                 </a>
+                }
             </div>
         </div>
     })
