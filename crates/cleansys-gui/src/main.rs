@@ -1,8 +1,29 @@
 use cleansys_gui::{update, view, CleanSysGui, Message};
 
+/// One-time, platform-specific setup that needs the window to exist.
+///
+/// macOS: add the standard Window menu (Minimize, Zoom, Move & Resize / tiling), which winit's
+/// default menu bar lacks — without it the system's tiling shortcuts (⌃⌘←, Window → Move &
+/// Resize, …) do nothing for this window. See [`cleansys_gui::macos`].
+#[cfg(target_os = "macos")]
+fn platform_setup() -> iced::Task<Message> {
+    iced::window::oldest()
+        .and_then(|id| {
+            iced::window::run(id, |_window| {
+                cleansys_gui::macos::install_window_menu();
+            })
+        })
+        .discard()
+}
+
+#[cfg(not(target_os = "macos"))]
+fn platform_setup() -> iced::Task<Message> {
+    iced::Task::none()
+}
+
 fn boot() -> (CleanSysGui, iced::Task<Message>) {
     // Measure what every cleaner can free as soon as the window opens.
-    let mut tasks = vec![iced::Task::done(Message::ScanAll)];
+    let mut tasks = vec![iced::Task::done(Message::ScanAll), platform_setup()];
     // `CLEANSYS_GUI_OPEN=schedule` opens the schedule dialog at start-up
     // (used to produce documentation screenshots).
     if std::env::var("CLEANSYS_GUI_OPEN").as_deref() == Ok("schedule") {

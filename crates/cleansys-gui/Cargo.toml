@@ -30,5 +30,13 @@ notify-rust   = { workspace = true }
 [dev-dependencies]
 tempfile = { workspace = true }
 
+# macOS: winit builds a menu bar with only the application menu, so the system's window
+# commands (Minimize, Zoom, Move & Resize / tiling and the shortcuts that go with them, e.g.
+# ⌃⌘←) are missing. `src/macos.rs` adds the standard Window menu. Same versions winit uses.
+[target.'cfg(target_os = "macos")'.dependencies]
+objc2            = "0.5"
+objc2-app-kit    = { version = "0.2", features = ["NSApplication", "NSMenu", "NSMenuItem", "NSResponder"] }
+objc2-foundation = { version = "0.2", features = ["NSString", "NSObject"] }
+
 [target.'cfg(windows)'.dependencies]
 windows = { version = "0.62", features = ["Win32_UI_Shell", "Win32_UI_WindowsAndMessaging"] }

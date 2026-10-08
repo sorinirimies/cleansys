@@ -28,6 +28,10 @@ pub mod theme;
 /// Theme picker widget (`pick_list` of all `cleansys-core` themes).
 pub mod theme_selector;
 
+/// macOS: the standard Window menu (Zoom, Move & Resize / tiling).
+#[cfg(target_os = "macos")]
+pub mod macos;
+
 /// Window presets, resize shortcuts and the remembered size.
 pub mod window;
 
