@@ -58,6 +58,20 @@ pub enum Message {
     ScanItemFinished(usize, usize, Result<cleansys_core::CleaningResult, String>),
     /// Toggle hiding cleaners that have nothing to clean.
     ToggleHideEmpty,
+    /// Resize the window to a preset (⌘1–4).
+    WindowPreset(crate::window::WindowPreset),
+    /// Grow / shrink the window by a factor (⌘+ / ⌘−).
+    WindowScale(f32),
+    /// Back to the default size (⌘0).
+    WindowReset,
+    /// Toggle full screen (F11 / ⌃⌘F).
+    ToggleFullscreen,
+    /// Toggle maximised (⌘⇧M).
+    ToggleMaximize,
+    /// The window was resized (by the user, a shortcut or the window manager).
+    WindowResized(f32, f32),
+    /// Persist the window size (debounced).
+    SaveWindowSize,
     /// Open the Settings / About dialog on a tab.
     OpenSettings(crate::state::SettingsTab),
     /// Close the Settings / About dialog.

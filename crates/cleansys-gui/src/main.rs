@@ -11,16 +11,14 @@ fn boot() -> (CleanSysGui, iced::Task<Message>) {
     (CleanSysGui::new(), iced::Task::batch(tasks))
 }
 
-/// Initial window size; `CLEANSYS_GUI_SIZE=WxH` overrides (handy for testing
-/// the responsive layouts).
+/// Initial window size: `CLEANSYS_GUI_SIZE=WxH` (handy for testing the responsive layouts),
+/// else the size remembered from last time, else the default.
 fn initial_size() -> iced::Size {
-    std::env::var("CLEANSYS_GUI_SIZE")
+    let saved = cleansys_core::load_settings()
         .ok()
-        .and_then(|v| {
-            let (w, h) = v.split_once('x')?;
-            Some(iced::Size::new(w.parse().ok()?, h.parse().ok()?))
-        })
-        .unwrap_or(iced::Size::new(1180.0, 780.0))
+        .and_then(|s| s.saved_window_size());
+    let (w, h) = cleansys_gui::window::initial_size(saved);
+    iced::Size::new(w, h)
 }
 
 fn main() -> iced::Result {
@@ -29,6 +27,7 @@ fn main() -> iced::Result {
     iced::application(boot, update, view)
         .title("CleanSys")
         .theme(|state: &CleanSysGui| state.iced_theme())
+        .subscription(cleansys_gui::subscription)
         .settings(iced::Settings {
             fonts: vec![iced_fonts::BOOTSTRAP_FONT_BYTES.into()],
             ..Default::default()
@@ -41,7 +40,10 @@ fn main() -> iced::Result {
             } else {
                 iced::window::Level::Normal
             },
-            min_size: Some(iced::Size::new(420.0, 520.0)),
+            min_size: Some(iced::Size::new(
+                cleansys_gui::window::MIN_SIZE.0,
+                cleansys_gui::window::MIN_SIZE.1,
+            )),
             ..Default::default()
         })
         .run()

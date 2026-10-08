@@ -75,6 +75,51 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             state.save_selections(); // also persists the preference
             Task::none()
         }
+        Message::WindowPreset(p) => resize_window(state, p.size()),
+        Message::WindowScale(f) => {
+            let target = crate::window::scaled(state.window_size, f);
+            resize_window(state, target)
+        }
+        Message::WindowReset => resize_window(state, crate::window::DEFAULT_SIZE),
+        Message::ToggleFullscreen => {
+            state.fullscreen = !state.fullscreen;
+            let mode = if state.fullscreen {
+                iced::window::Mode::Fullscreen
+            } else {
+                iced::window::Mode::Windowed
+            };
+            iced::window::latest().and_then(move |id| iced::window::set_mode(id, mode))
+        }
+        Message::ToggleMaximize => iced::window::latest().and_then(iced::window::toggle_maximize),
+        Message::WindowResized(w, h) => {
+            state.window_size = (w, h);
+            let now = (w.round() as u32, h.round() as u32);
+            let was_dirty = state.window_dirty;
+            state.window_dirty = state.saved_window_size != Some(now);
+            if state.window_dirty && !was_dirty && !cfg!(test) {
+                // Save once the size has settled: one timer per burst of resizes, not per event.
+                Task::perform(delay(std::time::Duration::from_secs(1)), |()| {
+                    Message::SaveWindowSize
+                })
+            } else {
+                Task::none()
+            }
+        }
+        Message::SaveWindowSize => {
+            if state.window_dirty && !state.fullscreen {
+                let now = (
+                    state.window_size.0.round() as u32,
+                    state.window_size.1.round() as u32,
+                );
+                if cfg!(test)
+                    || cleansys_core::update_settings(|s| s.window_size = Some(now)).is_ok()
+                {
+                    state.saved_window_size = Some(now);
+                }
+                state.window_dirty = false;
+            }
+            Task::none()
+        }
         Message::OpenSettings(tab) => {
             if !state.is_running {
                 state.open_settings(tab);
@@ -633,6 +678,33 @@ fn start_pending_operations(state: &mut CleanSysGui) -> Task<Message> {
     Task::batch(tasks)
 }
 
+/// Resolve after `d` without needing an async runtime (a short-lived thread sleeps).
+async fn delay(d: std::time::Duration) {
+    let (tx, rx) = iced::futures::channel::oneshot::channel();
+    std::thread::spawn(move || {
+        std::thread::sleep(d);
+        let _ = tx.send(());
+    });
+    let _ = rx.await;
+}
+
+/// Resize the window to `target` (clamped), leaving full screen first if needed.
+fn resize_window(state: &mut CleanSysGui, target: (f32, f32)) -> Task<Message> {
+    let (w, h) = crate::window::clamp_size(target);
+    log::debug!("resizing window to {w}x{h}");
+    let was_fullscreen = std::mem::take(&mut state.fullscreen);
+    state.window_size = (w, h);
+    let size = iced::Size::new(w, h);
+    iced::window::latest().and_then(move |id| {
+        let resize = iced::window::resize(id, size);
+        if was_fullscreen {
+            iced::window::set_mode(id, iced::window::Mode::Windowed).chain(resize)
+        } else {
+            resize
+        }
+    })
+}
+
 /// Kick off a preview (dry-run) of every selected cleaner: measures real
 /// sizes/paths without deleting anything or invoking any mutating command.
 fn request_preview(state: &mut CleanSysGui) -> Task<Message> {
@@ -818,6 +890,64 @@ mod tests {
         state.confirm_before_run = false;
         let s = state.current_settings();
         assert!(!s.hide_empty() && !s.confirm_before_run());
+    }
+
+    #[test]
+    fn window_presets_scale_and_reset_update_the_tracked_size() {
+        use crate::window::{WindowPreset, DEFAULT_SIZE, GROW_FACTOR, MIN_SIZE};
+        let mut state = CleanSysGui::new();
+        let _ = update(&mut state, Message::WindowPreset(WindowPreset::Compact));
+        assert_eq!(state.window_size, WindowPreset::Compact.size());
+        let before = state.window_size;
+        let _ = update(&mut state, Message::WindowScale(GROW_FACTOR));
+        assert!(state.window_size.0 > before.0 && state.window_size.1 > before.1);
+        // Shrinking far below the minimum stops at the minimum.
+        for _ in 0..30 {
+            let _ = update(&mut state, Message::WindowScale(1.0 / GROW_FACTOR));
+        }
+        assert_eq!(state.window_size, MIN_SIZE);
+        let _ = update(&mut state, Message::WindowReset);
+        assert_eq!(state.window_size, DEFAULT_SIZE);
+    }
+
+    #[test]
+    fn fullscreen_toggles_and_resizing_leaves_it() {
+        use crate::window::WindowPreset;
+        let mut state = CleanSysGui::new();
+        assert!(!state.fullscreen);
+        let _ = update(&mut state, Message::ToggleFullscreen);
+        assert!(state.fullscreen);
+        let _ = update(&mut state, Message::ToggleFullscreen);
+        assert!(!state.fullscreen);
+        let _ = update(&mut state, Message::ToggleFullscreen);
+        let _ = update(&mut state, Message::WindowPreset(WindowPreset::Medium));
+        assert!(!state.fullscreen, "picking a size leaves full screen");
+    }
+
+    #[test]
+    fn resize_events_track_the_size_and_save_only_real_changes() {
+        let mut state = CleanSysGui::new();
+        state.saved_window_size = Some((1180, 780));
+        let _ = update(&mut state, Message::WindowResized(1180.0, 780.0));
+        assert!(!state.window_dirty, "same as saved: nothing to write");
+        let _ = update(&mut state, Message::WindowResized(900.4, 700.0));
+        assert_eq!(state.window_size, (900.4, 700.0));
+        assert!(state.window_dirty);
+        let _ = update(&mut state, Message::SaveWindowSize);
+        assert!(!state.window_dirty);
+        assert_eq!(state.saved_window_size, Some((900, 700)));
+        // The persisted settings carry it.
+        assert_eq!(state.current_settings().window_size, Some((900, 700)));
+    }
+
+    #[test]
+    fn full_screen_size_is_never_saved() {
+        let mut state = CleanSysGui::new();
+        state.saved_window_size = Some((1180, 780));
+        let _ = update(&mut state, Message::ToggleFullscreen);
+        let _ = update(&mut state, Message::WindowResized(2560.0, 1440.0));
+        let _ = update(&mut state, Message::SaveWindowSize);
+        assert_eq!(state.saved_window_size, Some((1180, 780)));
     }
 
     #[test]

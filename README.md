@@ -196,6 +196,7 @@ Marks next to names: `~` moderate, `!` caution, `(root)` needs your password.
 - **Search box** filters every cleaner; **Hide empty cleaners** keeps the list short once the scan is done.
 - **Action bar** is always visible: selection summary + progress, *Recommended*, *Preview*, *Rescan*, *Activity* log, and the big **Clean N · X GB** button.
 - **Details**: each cleaner has a *▸ Details* button listing every path with a checkbox — untick the projects you want to keep. The **Idle ≥** drop-down in the action bar sets how long a project must be untouched before its build output is offered.
+- **Window resizer** — macOS window-manager shortcuts don't always resize a winit window, so the GUI has its own: `⌘1`–`⌘4` Compact / Medium / Wide / Large (one per responsive layout), `⌘0` reset, `⌘+` / `⌘−` larger / smaller, `⌘⇧M` maximise, `⌃⌘F` or `F11` full screen (`Ctrl` instead of `⌘` on Windows/Linux). The same controls are in **⚙ Settings → Window**, and the size is remembered for the next launch.
 - ⏰ **Schedule** opens the automatic-cleaning dialog. 43 themes (Catppuccin, Dracula, Nord, Tokyo Night…), remembered across restarts.
 - Scans and runs happen on background threads — the window never freezes.
 - **Details & day selector** — see [below](#details--fine-grained-selection).
@@ -218,6 +219,7 @@ Every front-end has the same two screens, so you never have to edit `engine.json
 | Scan depth | how many folders below each root are searched for projects | `engine.json` (`max_depth`) |
 | Project folders | the roots scanned for build output (add / remove; `~` and `$VAR` work) | `engine.json` (`scan_roots`) |
 | Never delete | glob patterns that are never touched | `engine.json` (`exclude`) |
+| Window (GUI) | size preset / larger / smaller / maximise / full screen / reset — the last size is restored on launch | `settings.json` (`window_size`) |
 | Hide cleaners with nothing to clean | tidy list after a scan | `settings.json` |
 | Ask before cleaning | the confirmation step (the web UI then posts straight to *Run*) | `settings.json` |
 

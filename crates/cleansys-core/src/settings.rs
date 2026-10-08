@@ -31,6 +31,9 @@ pub struct Settings {
     /// Ask before running a clean (`None` = default: on).
     #[serde(default)]
     pub confirm_before_run: Option<bool>,
+    /// Last GUI window size in logical pixels (`width`, `height`).
+    #[serde(default)]
+    pub window_size: Option<(u32, u32)>,
 }
 
 impl Settings {
@@ -51,6 +54,12 @@ impl Settings {
     /// Whether a clean asks for confirmation first (default: yes).
     pub fn confirm_before_run(&self) -> bool {
         self.confirm_before_run.unwrap_or(true)
+    }
+
+    /// The saved GUI window size, if it looks sane (a corrupt or absurd value is ignored).
+    pub fn saved_window_size(&self) -> Option<(u32, u32)> {
+        self.window_size
+            .filter(|(w, h)| (200..=16_000).contains(w) && (200..=16_000).contains(h))
     }
 
     /// Build the `"Category: Item"` key used to identify a selected cleaner.
@@ -161,6 +170,18 @@ mod tests {
         let old: Settings =
             serde_json::from_str(r#"{"theme_name":"Nord","selected_cleaners":[]}"#).unwrap();
         assert!(old.hide_empty() && old.confirm_before_run());
+        assert_eq!(old.saved_window_size(), None);
+    }
+
+    #[test]
+    fn absurd_window_sizes_are_ignored() {
+        for bad in [(0, 0), (50, 700), (900, 99_999), (u32::MAX, 700)] {
+            let s = Settings {
+                window_size: Some(bad),
+                ..Default::default()
+            };
+            assert_eq!(s.saved_window_size(), None, "{bad:?}");
+        }
     }
 
     #[test]
@@ -220,6 +241,7 @@ mod tests {
             selected_cleaners: vec!["User Land Cleaners: Trash".to_string()],
             hide_empty: Some(false),
             confirm_before_run: Some(false),
+            window_size: Some((900, 700)),
         };
         save_to(&path, &settings).unwrap();
 
@@ -227,6 +249,7 @@ mod tests {
         assert_eq!(loaded.theme_name.as_deref(), Some("Nord"));
         assert!(!loaded.hide_empty());
         assert!(!loaded.confirm_before_run());
+        assert_eq!(loaded.saved_window_size(), Some((900, 700)));
         assert_eq!(
             loaded.selected_cleaners,
             vec!["User Land Cleaners: Trash".to_string()]

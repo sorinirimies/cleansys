@@ -75,6 +75,14 @@ pub struct CleanSysGui {
     pub settings_message: String,
     /// Ask before running a clean.
     pub confirm_before_run: bool,
+    /// Last known window size (logical pixels).
+    pub window_size: (f32, f32),
+    /// The size stored in `settings.json`, if any.
+    pub saved_window_size: Option<(u32, u32)>,
+    /// The window size changed since it was last saved.
+    pub window_dirty: bool,
+    /// Whether the window is full screen (toggled by F11 / ⌃⌘F).
+    pub fullscreen: bool,
     /// Whether the automatic-cleaning (schedule) dialog is visible.
     pub schedule_open: bool,
     /// Schedule being edited in the dialog.
@@ -136,6 +144,10 @@ impl CleanSysGui {
             board,
             hide_empty: settings.hide_empty(),
             confirm_before_run: settings.confirm_before_run(),
+            window_size: crate::window::initial_size(settings.saved_window_size()),
+            saved_window_size: settings.saved_window_size(),
+            window_dirty: false,
+            fullscreen: false,
             settings_open: false,
             settings_tab: SettingsTab::Settings,
             engine_cfg: cleansys_core::engine::EngineConfig::load(),
@@ -382,6 +394,7 @@ impl CleanSysGui {
             selected_cleaners,
             hide_empty: Some(self.hide_empty),
             confirm_before_run: Some(self.confirm_before_run),
+            window_size: self.saved_window_size,
         }
     }
 
