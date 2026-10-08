@@ -464,38 +464,94 @@ async fn foreign_origin_post_is_forbidden() {
     assert!(text.starts_with("HTTP/1.1 403"), "{text}");
 }
 
+/// One user cleaner that reports two skippable paths (its own, so this test never races the
+/// tests that really clean the shared sandbox project).
+fn two_path_categories() -> Vec<cleansys_core::CleanerCategory> {
+    use cleansys_core::{
+        CleanedItem, CleanerCategory, CleanerItem, CleaningResult, Risk, cleaner_fn,
+    };
+    vec![CleanerCategory {
+        name: "User Land Cleaners".into(),
+        description: "user".into(),
+        items: vec![CleanerItem {
+            id: "multi".into(),
+            risk: Risk::Safe,
+            name: "Multi".into(),
+            description: "two paths".into(),
+            requires_root: false,
+            selected: false,
+            function: cleaner_fn(|_| {
+                let mut r = CleaningResult::new();
+                r.add_item(
+                    CleanedItem::directory(
+                        PathBuf::from("/fake/alpha/target"),
+                        3072,
+                        "Rust build: alpha",
+                    )
+                    .skippable(),
+                );
+                r.add_item(
+                    CleanedItem::directory(
+                        PathBuf::from("/fake/beta/target"),
+                        1024,
+                        "Rust build: beta",
+                    )
+                    .skippable(),
+                );
+                Ok(r)
+            }),
+            bytes_cleaned: 0,
+            last_result: None,
+            status: None,
+        }],
+    }]
+}
+
 #[tokio::test]
 async fn details_expand_lists_entries_and_entry_toggle_changes_the_selected_size() {
-    let addr = start().await;
+    let addr = start_with(two_path_categories()).await;
     wait_for_scan(addr).await;
-    // Collapsed: no entry list, but a "Details" link.
-    let r = get(addr, "/?cat=1").await;
+    // Collapsed: a "Details" link but no entry forms.
+    let r = get(addr, "/?cat=0").await;
     assert!(r.body.contains("Details"), "{}", r.body);
     assert!(!r.body.contains("action=\"/toggle-entry\""));
 
-    // Expanded: the demo project's target dir is listed with a checkbox form.
-    let r = get(addr, "/?cat=1&open=proj-rust").await;
-    assert!(r.body.contains("demo-rust/target"), "{}", r.body);
+    // Expanded: both paths listed, each with a checkbox form.
+    let r = get(addr, "/?cat=0&open=multi").await;
+    assert!(
+        r.body.contains("/fake/alpha/target") && r.body.contains("/fake/beta/target"),
+        "{}",
+        r.body
+    );
     assert!(r.body.contains("action=\"/toggle-entry\""));
+    assert!(r.body.contains("4.00 KB"), "full size before unticking");
+    assert!(!r.body.contains("of it selected"));
 
-    // Tick the cleaner, then untick the only entry: nothing left to free.
-    post(addr, "/toggle", "id=proj-rust&back=%2F").await;
-    let before = get(addr, "/api/status").await;
-    let path = format!("{}/target", sandbox().project.display());
-    let enc: String = path.bytes().map(|b| format!("%{b:02X}")).collect();
+    // Tick the cleaner, untick alpha: only beta's 1 KB remains selected.
+    post(addr, "/toggle", "id=multi&back=%2F").await;
     let r = post(
         addr,
         "/toggle-entry",
-        &format!("path={enc}&back=%2F%3Fcat%3D1%26open%3Dproj-rust"),
+        "path=%2Ffake%2Falpha%2Ftarget&back=%2F%3Fcat%3D0%26open%3Dmulti",
     )
     .await;
     assert_eq!(r.status, 303);
-    assert_eq!(
-        r.header("location").as_deref(),
-        Some("/?cat=1&open=proj-rust")
+    assert_eq!(r.header("location").as_deref(), Some("/?cat=0&open=multi"));
+    let r = get(addr, "/?cat=0&open=multi").await;
+    assert!(
+        r.body.contains("of it selected"),
+        "partial selection badge:\n{}",
+        r.body
     );
-    let after = get(addr, "/api/status").await;
-    assert_ne!(before.body, after.body, "selected size should change");
+    assert!(r.body.contains("1.00 KB of it selected"), "{}", r.body);
+
+    // Select none / all via the bulk form.
+    post(addr, "/entries", "id=multi&on=0&back=%2F").await;
+    let r = get(addr, "/?cat=0&open=multi").await;
+    assert!(r.body.contains("nothing selected"), "{}", r.body);
+    post(addr, "/entries", "id=multi&on=1&back=%2F").await;
+    let r = get(addr, "/?cat=0&open=multi").await;
+    assert!(!r.body.contains("of it selected") && !r.body.contains("nothing selected"));
 }
 
 #[tokio::test]

@@ -122,7 +122,16 @@ impl EngineConfig {
         if let Some(dir) = path.parent() {
             std::fs::create_dir_all(dir).context("create config dir")?;
         }
-        std::fs::write(&path, serde_json::to_string_pretty(self)?).context("write engine.json")
+        // Write to a temp file and rename it over the target: readers (a scan, the
+        // scheduled job, another front-end) never see a truncated, half-written file,
+        // which `load` would silently turn into the defaults.
+        let tmp = path.with_extension(format!("json.tmp{}", std::process::id()));
+        std::fs::write(&tmp, serde_json::to_string_pretty(self)?).context("write engine.json")?;
+        std::fs::rename(&tmp, &path)
+            .inspect_err(|_| {
+                let _ = std::fs::remove_file(&tmp);
+            })
+            .context("replace engine.json")
     }
 
     /// Effective, existing, de-duplicated scan roots.
