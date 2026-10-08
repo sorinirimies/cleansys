@@ -58,6 +58,8 @@ pub enum Message {
     ScanItemFinished(usize, usize, Result<cleansys_core::CleaningResult, String>),
     /// Toggle hiding cleaners that have nothing to clean.
     ToggleHideEmpty,
+    /// One animation step (spinner / progress-bar highlight).
+    AnimationTick,
     /// Resize the window to a preset (⌘1–4).
     WindowPreset(crate::window::WindowPreset),
     /// Grow / shrink the window by a factor (⌘+ / ⌘−).

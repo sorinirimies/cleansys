@@ -18,7 +18,7 @@ use topcoat::{
 };
 
 use crate::{
-    components::{action_bar, cat_pick, document, info_tabs, item_row, side_nav, top_bar},
+    components::{action_bar, cat_pick, document, info_tabs, item_row, side_nav, spinner, top_bar},
     state::{LineStatus, NEEDS_AUTH, Phase, Shared, Snapshot},
     theme,
     util::{fmt, nav_href, safe_back, size_class},
@@ -474,7 +474,8 @@ async fn progress(cx: &Cx) -> Result<impl View> {
                     <p class="dim">"No clean has been started."</p>
                 } else {
                     <p>
-                        <b>(run.done) "/" (run.total)</b> " cleaners · freed " <b class="ok">(fmt(run.freed))</b>
+                        if running { spinner() " " }
+                        <b>(run.done) "/" (run.total)</b> " cleaners · " (pct) "% · freed " <b class="ok">(fmt(run.freed))</b>
                         if let Some(c) = &run.current { <span class="dim">" · running " (c.clone())</span> }
                     </p>
                     <div class="progress"><span style=(format!("width:{pct}%"))></span></div>

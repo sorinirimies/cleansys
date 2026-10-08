@@ -550,7 +550,9 @@ fn item_row<'a>(
         .align_y(Alignment::Center)
         .into(),
         Some(Status::Running) => row![
-            icon(icons::ARROW_REPEAT, c.accent),
+            text(cleansys_core::anim::spinner(state.anim_tick))
+                .size(14)
+                .color(c.accent),
             text("running…").size(12).color(c.accent),
         ]
         .spacing(6)
@@ -752,14 +754,20 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
             "Cleaning"
         };
         column![
-            text(format!(
-                "{label} {}/{}…",
-                state.operations_completed, state.operations_total
-            ))
-            .size(13)
-            .color(c.text_primary),
-            iced::widget::progress_bar(0.0..=1.0, state.progress_fraction())
-                .girth(Length::Fixed(6.0)),
+            progress_label(
+                &c,
+                state.anim_tick,
+                format!(
+                    "{label} {}/{} · {}%",
+                    state.operations_completed,
+                    state.operations_total,
+                    cleansys_core::anim::percent(
+                        state.operations_completed,
+                        state.operations_total
+                    )
+                )
+            ),
+            animated_bar(&c, state.progress_fraction(), state.anim_tick),
         ]
         .spacing(4)
         .width(Length::Fill)
@@ -767,21 +775,20 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
     } else if scanning {
         let done = state.board.total - state.board.pending;
         column![
-            text(format!(
-                "Scanning your system… {done}/{}",
-                state.board.total
-            ))
-            .size(13)
-            .color(c.text_primary),
-            iced::widget::progress_bar(
-                0.0..=1.0,
-                if state.board.total == 0 {
-                    0.0
-                } else {
-                    done as f32 / state.board.total as f32
-                }
-            )
-            .girth(Length::Fixed(6.0)),
+            progress_label(
+                &c,
+                state.anim_tick,
+                format!(
+                    "Scanning your system… {done}/{} · {}%",
+                    state.board.total,
+                    cleansys_core::anim::percent(done, state.board.total)
+                )
+            ),
+            animated_bar(
+                &c,
+                cleansys_core::anim::fraction(done, state.board.total),
+                state.anim_tick
+            ),
         ]
         .spacing(4)
         .width(Length::Fill)
@@ -1588,6 +1595,92 @@ fn preview_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Me
     modal_backdrop(card.into(), c)
 }
 
+// ── Animated progress ─────────────────────────────────────────────────────────
+
+/// Spinner glyph + label: the text line above a progress bar.
+fn progress_label<'a>(c: &ThemeColors, tick: u32, label: String) -> Element<'a, Message> {
+    row![
+        text(cleansys_core::anim::spinner(tick))
+            .size(14)
+            .color(c.accent),
+        text(label).size(13).color(c.text_primary),
+    ]
+    .spacing(8)
+    .align_y(Alignment::Center)
+    .into()
+}
+
+/// A progress bar whose filled part carries a highlight that sweeps along it — the same
+/// look as the TUI's bar and the web's `.progress` (see `cleansys_core::anim`).
+///
+/// Built from fill-portions only (no canvas, no pixel maths): the filled part and the rest
+/// share 1000 portions, and inside the filled part the highlight's offset changes with `tick`.
+fn animated_bar<'a>(c: &ThemeColors, frac: f32, tick: u32) -> Element<'a, Message> {
+    const TOTAL: u16 = 1000;
+    const HIGHLIGHT: u16 = 260;
+    let c = *c;
+    let filled = ((frac.clamp(0.0, 1.0) * f32::from(TOTAL)).round() as u16).min(TOTAL);
+    let seg = |portion: u16| Length::FillPortion(portion.max(1));
+    let radius = 4.0;
+
+    let filled_part: Element<'a, Message> = if filled == 0 {
+        Space::new().into()
+    } else {
+        let lead = (cleansys_core::anim::sweep(tick, 20) * f32::from(TOTAL - HIGHLIGHT)) as u16;
+        let sheen = container(Space::new())
+            .width(seg(HIGHLIGHT))
+            .height(Length::Fill)
+            .style(move |_t: &iced::Theme| container::Style {
+                background: Some(Color::from_rgba(1.0, 1.0, 1.0, 0.38).into()),
+                border: iced::Border {
+                    radius: radius.into(),
+                    ..Default::default()
+                },
+                ..Default::default()
+            });
+        container(row![
+            Space::new().width(seg(lead)),
+            sheen,
+            Space::new().width(seg(TOTAL - HIGHLIGHT - lead)),
+        ])
+        .width(seg(filled))
+        .height(Length::Fill)
+        .style(move |_t: &iced::Theme| container::Style {
+            background: Some(c.accent.into()),
+            border: iced::Border {
+                radius: radius.into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .into()
+    };
+    let rest: Element<'a, Message> = if filled >= TOTAL {
+        Space::new().into()
+    } else {
+        Space::new().width(seg(TOTAL - filled)).into()
+    };
+    // A fully empty / full bar has one zero-width side: give it no portion at all.
+    let bar = match filled {
+        0 => row![Space::new().width(Length::Fill)],
+        f if f >= TOTAL => row![filled_part],
+        _ => row![filled_part, rest],
+    };
+    container(bar)
+        .width(Length::Fill)
+        .height(Length::Fixed(8.0))
+        .clip(true)
+        .style(move |_t: &iced::Theme| container::Style {
+            background: Some(c.surface_highlight.into()),
+            border: iced::Border {
+                radius: radius.into(),
+                ..Default::default()
+            },
+            ..Default::default()
+        })
+        .into()
+}
+
 // ── Settings / About dialog ───────────────────────────────────────────────────
 
 /// One labelled row of the settings form.
@@ -2057,6 +2150,32 @@ mod tests {
             state.settings_message = "hello".into();
             state.open_settings(tab);
             let _ = view(&state);
+        }
+    }
+
+    #[test]
+    fn view_does_not_panic_while_scanning_cleaning_or_previewing_at_every_progress() {
+        for (done, total) in [(0usize, 0usize), (0, 4), (1, 4), (3, 4), (4, 4)] {
+            for tick in [0u32, 7, 19, u32::MAX] {
+                // cleaning
+                let mut state = CleanSysGui::new();
+                state.anim_tick = tick;
+                state.is_running = true;
+                state.operations_total = total;
+                state.operations_completed = done;
+                let _ = view(&state);
+                // previewing
+                state.is_running = false;
+                state.previewing = true;
+                let _ = view(&state);
+                // scanning
+                state.previewing = false;
+                state.board.start(total);
+                for _ in 0..done {
+                    state.board.record(0, 0, cleansys_core::ScanInfo::default());
+                }
+                let _ = view(&state);
+            }
         }
     }
 

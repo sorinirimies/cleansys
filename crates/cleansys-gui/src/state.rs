@@ -75,6 +75,10 @@ pub struct CleanSysGui {
     pub settings_message: String,
     /// Ask before running a clean.
     pub confirm_before_run: bool,
+    /// Free-running animation counter (one step per ~80 ms) driving the spinner glyph and
+    /// the highlight that sweeps along progress bars. Only advances while something is
+    /// in progress (see [`CleanSysGui::is_animating`]).
+    pub anim_tick: u32,
     /// Last known window size (logical pixels).
     pub window_size: (f32, f32),
     /// The size stored in `settings.json`, if any.
@@ -144,6 +148,7 @@ impl CleanSysGui {
             board,
             hide_empty: settings.hide_empty(),
             confirm_before_run: settings.confirm_before_run(),
+            anim_tick: 0,
             window_size: crate::window::initial_size(settings.saved_window_size()),
             saved_window_size: settings.saved_window_size(),
             window_dirty: false,
@@ -320,6 +325,12 @@ impl CleanSysGui {
 
     /// Fraction of the current run's operations completed so far, in
     /// `0.0..=1.0`. `0.0` when no run is in progress.
+    /// Whether anything is in progress, i.e. the animation should be running (an idle
+    /// window costs nothing).
+    pub fn is_animating(&self) -> bool {
+        self.is_running || self.previewing || self.board.is_scanning()
+    }
+
     pub fn progress_fraction(&self) -> f32 {
         if self.operations_total == 0 {
             0.0

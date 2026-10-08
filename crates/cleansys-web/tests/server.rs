@@ -663,3 +663,21 @@ async fn settings_forms_validate_and_report_back() {
     let page = get(addr, "/settings?msg=Saved.").await;
     assert!(page.body.contains("Saved."));
 }
+
+#[tokio::test]
+async fn progress_bar_and_spinner_are_animated_in_the_stylesheet() {
+    let addr = start().await;
+    let css = get(addr, "/style.css").await.body;
+    for needle in [
+        "@keyframes spin",
+        "@keyframes sweep",
+        ".progress > span::after",
+        "animation:sweep",
+    ] {
+        assert!(css.contains(needle), "stylesheet lacks `{needle}`");
+    }
+    // The progress page (idle) renders without a bar; the home page shows one while scanning
+    // or the spinner class is available to every page.
+    let r = get(addr, "/progress").await;
+    assert_eq!(r.status, 200);
+}

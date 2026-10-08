@@ -43,10 +43,10 @@ pub use state::CleanSysGui;
 pub use update::update;
 pub use view::view;
 
-/// Keyboard shortcuts and window resize events.
-pub fn subscription(_state: &CleanSysGui) -> iced::Subscription<Message> {
+/// Keyboard shortcuts, window resize events and the progress animation tick.
+pub fn subscription(state: &CleanSysGui) -> iced::Subscription<Message> {
     use iced::{event, keyboard, window as win, Event};
-    event::listen_with(|event, _status, _id| match event {
+    let events = event::listen_with(|event, _status, _id| match event {
         Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
             window::shortcut(&key, modifiers)
         }
@@ -54,5 +54,23 @@ pub fn subscription(_state: &CleanSysGui) -> iced::Subscription<Message> {
             Some(Message::WindowResized(size.width, size.height))
         }
         _ => None,
+    });
+    // The spinner and the bar highlight only tick while something is in progress.
+    if state.is_animating() {
+        iced::Subscription::batch([events, iced::Subscription::run(animation_stream)])
+    } else {
+        events
+    }
+}
+
+/// Interval of the animation tick.
+const ANIMATION_STEP: std::time::Duration = std::time::Duration::from_millis(80);
+
+/// Emits [`Message::AnimationTick`] every [`ANIMATION_STEP`]. The blocking sleep is fine:
+/// each subscription runs on its own worker.
+fn animation_stream() -> impl iced::futures::Stream<Item = Message> {
+    iced::futures::stream::unfold((), |()| async {
+        std::thread::sleep(ANIMATION_STEP);
+        Some((Message::AnimationTick, ()))
     })
 }

@@ -75,6 +75,10 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             state.save_selections(); // also persists the preference
             Task::none()
         }
+        Message::AnimationTick => {
+            state.anim_tick = state.anim_tick.wrapping_add(1);
+            Task::none()
+        }
         Message::WindowPreset(p) => resize_window(state, p.size()),
         Message::WindowScale(f) => {
             let target = crate::window::scaled(state.window_size, f);
@@ -948,6 +952,27 @@ mod tests {
         let _ = update(&mut state, Message::WindowResized(2560.0, 1440.0));
         let _ = update(&mut state, Message::SaveWindowSize);
         assert_eq!(state.saved_window_size, Some((1180, 780)));
+    }
+
+    #[test]
+    fn animation_ticks_advance_and_only_run_while_something_is_in_progress() {
+        let mut state = CleanSysGui::new();
+        assert!(!state.is_animating(), "an idle window needs no animation");
+        let before = state.anim_tick;
+        let _ = update(&mut state, Message::AnimationTick);
+        assert_eq!(state.anim_tick, before.wrapping_add(1));
+        state.anim_tick = u32::MAX;
+        let _ = update(&mut state, Message::AnimationTick);
+        assert_eq!(state.anim_tick, 0, "wraps instead of overflowing");
+
+        state.is_running = true;
+        assert!(state.is_animating());
+        state.is_running = false;
+        state.previewing = true;
+        assert!(state.is_animating());
+        state.previewing = false;
+        state.board.start(3);
+        assert!(state.is_animating(), "scanning animates too");
     }
 
     #[test]

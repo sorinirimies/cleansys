@@ -110,12 +110,15 @@ table.kv td { padding:5px 0; word-break:break-all; }
 .bar .sum b { font-size:15px; }
 .bar .sum small { display:block; color:var(--dim); }
 .bar form { display:contents; }
-.progress { height:6px; background:var(--line); border-radius:3px; overflow:hidden; margin-top:4px; }
-.progress > span { display:block; height:100%; background:var(--accent); }
+.progress { height:8px; background:var(--line); border-radius:4px; overflow:hidden; margin-top:4px; }
+.progress > span { display:block; height:100%; background:var(--accent); border-radius:4px; position:relative; overflow:hidden; transition:width .6s ease; }
+/* the highlight that sweeps along the filled part (the TUI and GUI draw the same thing) */
+.progress > span::after { content:""; position:absolute; inset:0; background:linear-gradient(90deg, transparent 0%, rgba(255,255,255,.45) 50%, transparent 100%); transform:translateX(-100%); animation:sweep 1.4s ease-in-out infinite; }
+@keyframes sweep { to { transform:translateX(100%); } }
 .ico { display:none; }
 .spin { display:inline-block; width:.9em; height:.9em; border:2px solid var(--line); border-top-color:var(--accent); border-radius:50%; vertical-align:-.12em; animation:spin .8s linear infinite; }
 @keyframes spin { to { transform:rotate(360deg); } }
-@media (prefers-reduced-motion: reduce) { .spin { animation-duration:2.4s; } }
+@media (prefers-reduced-motion: reduce) { .spin { animation-duration:2.4s; } .progress > span::after { animation-duration:4s; } }
 
 /* ── tables / pages ── */
 .card { background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:14px 16px; }

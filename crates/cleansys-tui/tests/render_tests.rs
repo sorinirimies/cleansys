@@ -420,3 +420,81 @@ fn input_field_is_shown_while_adding_a_folder() {
     assert!(text.contains("/my/new/folder"), "{text}");
     assert!(text.contains("Enter: add"));
 }
+
+/// x positions of the cells drawn in the progress bar's highlight colour.
+fn highlight_columns(app: &mut App) -> Vec<u16> {
+    let backend = TestBackend::new(120, 40);
+    let mut terminal = Terminal::new(backend).unwrap();
+    terminal.draw(|f| ui(f, app)).unwrap();
+    let buf = terminal.backend().buffer().clone();
+    let mut xs = Vec::new();
+    for y in 0..buf.area.height {
+        for x in 0..buf.area.width {
+            let cell = &buf[(x, y)];
+            if cell.symbol() == "█" && cell.fg == ratatui::style::Color::LightGreen {
+                xs.push(x);
+            }
+        }
+    }
+    xs.sort_unstable();
+    xs.dedup();
+    xs
+}
+
+#[test]
+fn progress_bar_shows_percent_and_a_highlight_that_sweeps() {
+    let mut app = app_with_categories();
+    app.is_running = true;
+    app.run_total = 4;
+    app.run_done = 2;
+    app.run_current = Some("Trash".into());
+    app.categories[0].items[1].status = Some(cleansys_core::Status::Running);
+
+    let mut seen = std::collections::HashSet::new();
+    for tick in 0..16u32 {
+        app.anim_tick = tick;
+        let cols = highlight_columns(&mut app);
+        assert!(!cols.is_empty(), "tick {tick}: no highlight drawn");
+        seen.insert(cols[0]);
+    }
+    assert!(
+        seen.len() > 3,
+        "the highlight must move across the bar: {seen:?}"
+    );
+
+    app.anim_tick = 0;
+    let text = screen_text(&mut app, 120, 40);
+    assert!(text.contains("50%"), "percent missing:\n{text}");
+    assert!(
+        text.contains("█") && text.contains("░"),
+        "bar glyphs missing"
+    );
+    assert!(text.contains("running Trash"));
+}
+
+#[test]
+fn spinner_glyph_turns_with_the_tick() {
+    let mut app = app_with_categories();
+    app.is_running = true;
+    app.run_total = 2;
+    let mut glyphs = std::collections::HashSet::new();
+    for tick in 0..10u32 {
+        app.anim_tick = tick;
+        let text = screen_text(&mut app, 120, 40);
+        let g = cleansys_core::anim::spinner(tick);
+        assert!(text.contains(g), "tick {tick}: spinner {g} not on screen");
+        glyphs.insert(g);
+    }
+    assert_eq!(glyphs.len(), 10);
+}
+
+#[test]
+fn animation_counter_advances_with_frames() {
+    let mut app = app_with_categories();
+    let start = app.anim_tick;
+    for _ in 0..3 {
+        std::thread::sleep(std::time::Duration::from_millis(120));
+        app.update_animation();
+    }
+    assert!(app.anim_tick >= start + 3, "{} -> {}", start, app.anim_tick);
+}

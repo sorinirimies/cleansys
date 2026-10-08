@@ -31,6 +31,7 @@ from a **terminal UI**, a **desktop GUI**, a **local web UI** or the **command l
 - **Automatic cleaning** — daily/weekly/monthly via systemd/cron, launchd or Task Scheduler, configurable from the TUI, GUI or CLI.
 - **Skips apps that are open**, never follows symlinks, refuses to touch `$HOME`, `/usr`, `Documents`, `.ssh`…, honours your exclusion globs.
 - **Responsive everywhere** — the TUI, the GUI and the web UI share the same wide / medium / narrow behaviour (sidebar → narrower sidebar → drop-down + icon buttons); 43 colour themes in the GUI and web UI.
+- **Same animated progress everywhere** — scans and cleans show a turning spinner and a progress bar whose filled part has a highlight sweeping along it, with `n/total · percent`, in the TUI, the GUI and the web UI (CSS). The shared maths lives in [`cleansys_core::anim`](crates/cleansys-core/src/anim.rs); the GUI's animation only ticks while something is in progress, so an idle window costs nothing.
 - **Four front-ends, one engine** — TUI, GUI, [web UI (Topcoat)](crates/cleansys-web) and CLI all run the same cleaners, scan, scheduler and safety rules from `cleansys-core`.
 - **Scriptable** — `--json` output, stable cleaner ids, exit codes; extend with your own TOML cleaners.
 

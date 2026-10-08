@@ -2,7 +2,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Gauge, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
     Frame,
 };
 // Using tui-checkbox library for consistent checkbox symbols across the application
@@ -282,9 +282,25 @@ fn render_run_panel(f: &mut Frame, app: &App, area: Rect) {
     }
 }
 
+/// A text progress bar: filled `█` with a highlight sweeping along it, empty `░`.
+/// Same look as the GUI's bar and the web's `.progress` (see `cleansys_core::anim`).
+fn animated_bar(width: usize, frac: f32, tick: u32) -> Vec<Span<'static>> {
+    let (filled, (hl_start, hl_len)) = cleansys_core::anim::bar_cells(width, frac, tick, 16, 4);
+    let base = Style::default().fg(Color::Green);
+    let hot = Style::default()
+        .fg(Color::LightGreen)
+        .add_modifier(Modifier::BOLD);
+    let empty = Style::default().fg(Color::DarkGray);
+    vec![
+        Span::styled("█".repeat(hl_start), base),
+        Span::styled("█".repeat(hl_len), hot),
+        Span::styled("█".repeat(filled - hl_start - hl_len), base),
+        Span::styled("░".repeat(width - filled), empty),
+    ]
+}
+
 fn render_progress_bar(f: &mut Frame, app: &App, area: Rect) {
-    let total = app.run_total.max(1);
-    let ratio = (app.run_done as f64 / total as f64).clamp(0.0, 1.0);
+    let ratio = cleansys_core::anim::fraction(app.run_done, app.run_total);
     let title = format!(
         " Cleaning {}/{} · freed {} · {} ",
         app.run_done,
@@ -292,22 +308,34 @@ fn render_progress_bar(f: &mut Frame, app: &App, area: Rect) {
         format_size(app.total_bytes_cleaned),
         app.get_elapsed_time()
     );
+    let block = Block::default()
+        .title(title)
+        .title_bottom(Line::from(" q / Esc: cancel · L: log ").right_aligned())
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(Color::Green));
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+    if inner.width == 0 || inner.height == 0 {
+        return;
+    }
+
     let label = match &app.run_current {
         Some(name) => format!("running {name}"),
         None => "starting…".to_string(),
     };
-    let gauge = Gauge::default()
-        .block(
-            Block::default()
-                .title(title)
-                .title_bottom(Line::from(" q / Esc: cancel · L: log ").right_aligned())
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Green)),
-        )
-        .gauge_style(Style::default().fg(Color::Green).bg(Color::DarkGray))
-        .ratio(ratio)
-        .label(label);
-    f.render_widget(gauge, area);
+    let pct = cleansys_core::anim::percent(app.run_done, app.run_total);
+    let spin = cleansys_core::anim::spinner(app.anim_tick);
+    let text = format!(" {pct:>3}% · {label}");
+    let text: String = text.chars().take((inner.width as usize) / 2).collect();
+    // spinner + space, the bar, then the text
+    let bar_w = (inner.width as usize).saturating_sub(2 + text.chars().count());
+    let mut spans = vec![Span::styled(
+        format!("{spin} "),
+        Style::default().fg(Color::Cyan),
+    )];
+    spans.extend(animated_bar(bar_w, ratio, app.anim_tick));
+    spans.push(Span::raw(text));
+    f.render_widget(Paragraph::new(Line::from(spans)), inner);
 }
 
 fn render_summary(f: &mut Frame, sum: &crate::app::RunSummary, area: Rect) {
@@ -397,14 +425,11 @@ fn size_style(bytes: u64) -> Style {
 /// One animated spinner glyph from the `tui-spinner` crate, as spans that can be dropped
 /// into any `Line` (the widget implements `Into<Text>`).
 fn spinner_spans(app: &App) -> Vec<Span<'static>> {
-    FluxSpinner::new(app.animation_frame as u64)
-        .frames(FluxFrames::CLASSIC)
-        .color(Color::Cyan)
-        .to_lines()
-        .into_iter()
-        .next()
-        .map(|l| l.spans)
-        .unwrap_or_default()
+    // The same braille spinner the GUI shows (cleansys_core::anim).
+    vec![Span::styled(
+        cleansys_core::anim::spinner(app.anim_tick),
+        Style::default().fg(Color::Cyan),
+    )]
 }
 
 /// ` (X to free)` for the footer — a spinner instead of numbers while the scan is still
@@ -454,8 +479,14 @@ fn scan_line(app: &App) -> Line<'static> {
         let done = app.board.total - app.board.pending;
         let mut spans = spinner_spans(app);
         spans.push(Span::styled(
-            format!(" scanning {done}/{}", app.board.total),
+            format!(" scanning {done}/{} ", app.board.total),
             Style::default().fg(Color::Cyan),
+        ));
+        // A small bar with the same sweeping highlight as the clean progress bar.
+        spans.extend(animated_bar(
+            8,
+            cleansys_core::anim::fraction(done, app.board.total),
+            app.anim_tick,
         ));
         Line::from(spans)
     } else if app.board.complete() {

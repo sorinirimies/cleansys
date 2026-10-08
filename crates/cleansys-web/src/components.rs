@@ -286,7 +286,7 @@ pub async fn action_bar(
             <div class="inner">
                 <div class="sum">
                     if snap.scanning {
-                        <b>spinner() " Scanning your system… " (snap.scan_done) "/" (snap.scan_total)</b>
+                        <b>spinner() " Scanning your system… " (snap.scan_done) "/" (snap.scan_total) " · " (cleansys_core::anim::percent(snap.scan_done, snap.scan_total)) "%"</b>
                         <div class="progress"><span style=(format!("width:{}%", (snap.scan_done * 100).checked_div(snap.scan_total).unwrap_or(0)))></span></div>
                     } else if snap.selected_count == 0 {
                         <b>(fmt(snap.total_bytes)) " can be freed"</b>

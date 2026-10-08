@@ -120,6 +120,9 @@ pub struct App {
     pub total_bytes_cleaned: u64,
     pub show_help: bool,
     pub animation_frame: usize,
+    /// Free-running animation counter (one step per ~100 ms): drives the spinner and the
+    /// highlight that sweeps along progress bars.
+    pub anim_tick: u32,
     pub last_frame_time: Instant,
     pub terminal_width: u16,
     pub terminal_height: u16,
@@ -215,6 +218,7 @@ impl App {
             total_bytes_cleaned: 0,
             show_help: false,
             animation_frame: 0,
+            anim_tick: 0,
             last_frame_time: Instant::now(),
             terminal_width: width,
             terminal_height: height,
@@ -1210,6 +1214,7 @@ impl App {
         let now = Instant::now();
         if now.duration_since(self.last_frame_time).as_millis() > 100 {
             self.animation_frame = (self.animation_frame + 1) % 10;
+            self.anim_tick = self.anim_tick.wrapping_add(1);
             self.last_frame_time = now;
         }
     }

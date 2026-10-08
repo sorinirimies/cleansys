@@ -14,6 +14,9 @@
 
 #![allow(missing_docs)]
 
+/// Shared progress-indicator look: spinner frames and the sweeping bar highlight.
+pub mod anim;
+
 /// About information (version, developer, links) shared by all front-ends.
 pub mod appinfo;
 
