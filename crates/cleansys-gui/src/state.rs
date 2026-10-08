@@ -75,7 +75,7 @@ pub struct CleanSysGui {
     pub settings_message: String,
     /// Ask before running a clean.
     pub confirm_before_run: bool,
-    /// Free-running animation counter (one step per ~80 ms) driving the spinner glyph and
+    /// Free-running animation counter (one step per ~50 ms) driving the spinner glyph and
     /// the highlight that sweeps along progress bars. Only advances while something is
     /// in progress (see [`CleanSysGui::is_animating`]).
     pub anim_tick: u32,

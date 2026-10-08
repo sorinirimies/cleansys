@@ -19,6 +19,16 @@ pub fn sweep(tick: u32, period: u32) -> f32 {
     (tick % period) as f32 / period as f32
 }
 
+/// The arc of a round progress ring as fractions of a full turn: `(start, length)`.
+///
+/// The arc turns once every `turn_period` ticks while its length breathes between 1/6 and
+/// 2/3 of the circle every `breathe_period` ticks.
+pub fn ring_arc(tick: u32, turn_period: u32, breathe_period: u32) -> (f32, f32) {
+    let start = sweep(tick, turn_period);
+    let pulse = 0.5 - 0.5 * (sweep(tick, breathe_period) * std::f32::consts::TAU).cos();
+    (start, 1.0 / 6.0 + pulse * 0.5)
+}
+
 /// `done` of `total` as a fraction `0.0..=1.0` (an empty total is 0).
 pub fn fraction(done: usize, total: usize) -> f32 {
     if total == 0 {
@@ -73,6 +83,28 @@ mod tests {
         assert_eq!(sweep(20, 20), 0.0, "wraps");
         assert!((0..100).all(|t| (0.0..1.0).contains(&sweep(t, 7))));
         assert_eq!(sweep(5, 0), 0.0, "a zero period is treated as 1");
+    }
+
+    #[test]
+    fn ring_arc_turns_and_breathes_within_bounds() {
+        let mut starts = std::collections::HashSet::new();
+        let (mut min_len, mut max_len) = (f32::MAX, f32::MIN);
+        for tick in 0..40 {
+            let (start, len) = ring_arc(tick, 20, 40);
+            assert!((0.0..1.0).contains(&start), "start {start}");
+            assert!(
+                (1.0 / 6.0 - 1e-4..=2.0 / 3.0 + 1e-4).contains(&len),
+                "len {len}"
+            );
+            starts.insert((start * 1000.0) as u32);
+            min_len = min_len.min(len);
+            max_len = max_len.max(len);
+        }
+        assert_eq!(starts.len(), 20, "one full turn every 20 ticks");
+        assert!(
+            max_len - min_len > 0.4,
+            "the arc breathes: {min_len}..{max_len}"
+        );
     }
 
     #[test]

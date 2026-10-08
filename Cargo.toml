@@ -43,7 +43,7 @@ tui-spinner   = "0.4"
 clap          = { version = "4.6", features = ["derive", "env"] }
 
 # GUI (Iced)
-iced       = { version = "0.14", features = ["advanced"] }
+iced       = { version = "0.14", features = ["advanced", "canvas"] }
 iced_fonts = { version = "0.3", features = ["bootstrap"] }
 notify-rust = "4.18"
 

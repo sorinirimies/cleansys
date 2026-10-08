@@ -64,7 +64,7 @@ pub fn subscription(state: &CleanSysGui) -> iced::Subscription<Message> {
 }
 
 /// Interval of the animation tick.
-const ANIMATION_STEP: std::time::Duration = std::time::Duration::from_millis(80);
+const ANIMATION_STEP: std::time::Duration = std::time::Duration::from_millis(50);
 
 /// Emits [`Message::AnimationTick`] every [`ANIMATION_STEP`]. The blocking sleep is fine:
 /// each subscription runs on its own worker.

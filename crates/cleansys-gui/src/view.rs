@@ -2,8 +2,8 @@
 
 use cleansys_core::{format_size, EntryState, Status};
 use iced::widget::{
-    button, checkbox, column, container, pick_list, responsive, row, rule, scrollable, text,
-    text_input, tooltip, Space,
+    button, canvas, checkbox, column, container, pick_list, responsive, row, rule, scrollable,
+    text, text_input, tooltip, Space,
 };
 use iced::{Alignment, Color, Element, Length};
 
@@ -308,7 +308,7 @@ fn category_button<'a>(
             .color(size_color(&c, b))
             .into(),
         Some(_) => text("—").size(12).color(c.muted).into(),
-        None if state.board.is_scanning() => text("…").size(12).color(c.muted).into(),
+        None if state.board.is_scanning() => ring(&c, state.anim_tick, 13.0),
         None => Space::new().into(),
     };
     let tick: Element<'a, Message> = if ticked > 0 {
@@ -550,9 +550,7 @@ fn item_row<'a>(
         .align_y(Alignment::Center)
         .into(),
         Some(Status::Running) => row![
-            text(cleansys_core::anim::spinner(state.anim_tick))
-                .size(14)
-                .color(c.accent),
+            ring(&c, state.anim_tick, 16.0),
             text("running…").size(12).color(c.accent),
         ]
         .spacing(6)
@@ -588,14 +586,15 @@ fn item_row<'a>(
                 col.into()
             }
             Some(_) => text("nothing to clean").size(12).color(c.muted).into(),
-            None => text(if state.board.is_scanning() {
-                "scanning…"
-            } else {
-                ""
-            })
-            .size(12)
-            .color(c.muted)
+            // Still being measured: a round progress ring, like the web UI's.
+            None if state.board.is_scanning() => row![
+                ring(&c, state.anim_tick, 16.0),
+                text("measuring…").size(12).color(c.muted),
+            ]
+            .spacing(6)
+            .align_y(Alignment::Center)
             .into(),
+            None => Space::new().into(),
         },
     };
 
@@ -1597,12 +1596,74 @@ fn preview_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Me
 
 // ── Animated progress ─────────────────────────────────────────────────────────
 
-/// Spinner glyph + label: the text line above a progress bar.
+/// A round progress ring: a faint track with an accent arc that turns and breathes, drawn on
+/// a canvas. The GUI's counterpart of the web UI's `.spin` and the TUI's braille spinner.
+struct Ring {
+    tick: u32,
+    color: Color,
+    track: Color,
+    stroke: f32,
+}
+
+impl canvas::Program<Message> for Ring {
+    type State = ();
+
+    fn draw(
+        &self,
+        _state: &(),
+        renderer: &iced::Renderer,
+        _theme: &iced::Theme,
+        bounds: iced::Rectangle,
+        _cursor: iced::mouse::Cursor,
+    ) -> Vec<canvas::Geometry> {
+        use std::f32::consts::TAU;
+        let mut frame = canvas::Frame::new(renderer, bounds.size());
+        let center = frame.center();
+        let radius = (bounds.width.min(bounds.height) / 2.0 - self.stroke).max(1.0);
+        frame.stroke(
+            &canvas::Path::circle(center, radius),
+            canvas::Stroke::default()
+                .with_color(self.track)
+                .with_width(self.stroke),
+        );
+        // One turn per second; the arc grows and shrinks between ~60° and ~240°.
+        let (start, sweep) = cleansys_core::anim::ring_arc(self.tick, 20, 40);
+        let arc = canvas::Path::new(|b| {
+            b.arc(canvas::path::Arc {
+                center,
+                radius,
+                start_angle: iced::Radians(start * TAU),
+                end_angle: iced::Radians((start + sweep) * TAU),
+            });
+        });
+        frame.stroke(
+            &arc,
+            canvas::Stroke::default()
+                .with_color(self.color)
+                .with_width(self.stroke)
+                .with_line_cap(canvas::LineCap::Round),
+        );
+        vec![frame.into_geometry()]
+    }
+}
+
+/// A round progress ring of `size` pixels, animated by `tick`.
+fn ring<'a>(c: &ThemeColors, tick: u32, size: f32) -> Element<'a, Message> {
+    canvas(Ring {
+        tick,
+        color: c.accent,
+        track: c.surface_highlight,
+        stroke: (size / 7.0).max(1.5),
+    })
+    .width(Length::Fixed(size))
+    .height(Length::Fixed(size))
+    .into()
+}
+
+/// Ring + label: the text line above a progress bar.
 fn progress_label<'a>(c: &ThemeColors, tick: u32, label: String) -> Element<'a, Message> {
     row![
-        text(cleansys_core::anim::spinner(tick))
-            .size(14)
-            .color(c.accent),
+        ring(c, tick, 16.0),
         text(label).size(13).color(c.text_primary),
     ]
     .spacing(8)
