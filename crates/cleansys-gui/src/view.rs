@@ -2,8 +2,8 @@
 
 use cleansys_core::{format_size, EntryState, Status};
 use iced::widget::{
-    button, canvas, checkbox, column, container, pick_list, responsive, row, rule, scrollable,
-    text, text_input, tooltip, Space,
+    button, canvas, checkbox, column, container, mouse_area, pick_list, responsive, row, rule,
+    scrollable, text, text_input, tooltip, Space,
 };
 use iced::{Alignment, Color, Element, Length};
 
@@ -985,6 +985,7 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
 }
 
 fn log_panel<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message> {
+    let c = *c;
     let log_lines: Vec<Element<'a, Message>> = if state.logs.is_empty() {
         vec![text("No activity yet.").size(12).color(c.muted).into()]
     } else {
@@ -993,28 +994,92 @@ fn log_panel<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message
             .iter()
             .rev()
             .take(200)
-            .map(|l| text(l.clone()).size(12).color(c.text_secondary).into())
+            .map(|l| {
+                text(l.clone())
+                    .size(12)
+                    .color(c.text_secondary)
+                    .width(Length::Fill)
+                    .into()
+            })
             .collect()
     };
 
+    // Lit when there is something to clear, greyed out (and inert) when there is not.
+    let has_content = !state.logs.is_empty();
+    let clear = button(text("Clear").size(11))
+        .padding([3, 10])
+        .style(if has_content {
+            button::primary
+        } else {
+            button::secondary
+        })
+        .on_press_maybe(has_content.then_some(Message::ClearLog));
+
+    // The grip along the top edge: drag it with the mouse to change the panel's height.
+    let dragging = state.log_drag.is_some();
+    let grip_color = if dragging { c.accent } else { c.border };
+    let grip = mouse_area(
+        container(
+            container(Space::new())
+                .width(Length::Fixed(46.0))
+                .height(Length::Fixed(4.0))
+                .style(move |_t: &iced::Theme| container::Style {
+                    background: Some(grip_color.into()),
+                    border: iced::Border {
+                        radius: 2.0.into(),
+                        ..Default::default()
+                    },
+                    ..Default::default()
+                }),
+        )
+        .width(Length::Fill)
+        .height(Length::Fixed(12.0))
+        .center_x(Length::Fill)
+        .center_y(Length::Fixed(12.0)),
+    )
+    .on_press(Message::LogDragStart)
+    .interaction(iced::mouse::Interaction::ResizingVertically);
+
     container(
         column![
+            grip,
             row![
                 text("Activity").size(13).color(c.text_primary),
+                text(if has_content {
+                    format!("{} line(s)", state.logs.len())
+                } else {
+                    String::new()
+                })
+                .size(11)
+                .color(c.muted),
                 Space::new().width(Length::Fill),
-                button(text("Clear").size(11))
-                    .padding([3, 8])
-                    .style(button::secondary)
-                    .on_press(Message::ClearLog),
+                clear,
             ]
+            .spacing(8)
             .align_y(Alignment::Center),
-            scrollable(column(log_lines).spacing(2)).height(Length::Fixed(120.0)),
+            scrollable(
+                column(log_lines)
+                    .spacing(2)
+                    .width(Length::Fill)
+                    .padding(iced::Padding {
+                        right: 12.0,
+                        ..Default::default()
+                    })
+            )
+            .width(Length::Fill)
+            .height(Length::Fixed(state.log_height)),
         ]
-        .spacing(6),
+        .spacing(6)
+        .width(Length::Fill),
     )
-    .padding(10)
+    .padding(iced::Padding {
+        top: 2.0,
+        right: 10.0,
+        bottom: 10.0,
+        left: 10.0,
+    })
     .width(Length::Fill)
-    .style(surface_style(*c))
+    .style(surface_style(c))
     .into()
 }
 
@@ -2236,6 +2301,31 @@ mod tests {
                     state.board.record(0, 0, cleansys_core::ScanInfo::default());
                 }
                 let _ = view(&state);
+            }
+        }
+    }
+
+    #[test]
+    fn view_does_not_panic_for_the_activity_panel_in_every_state() {
+        for w in [420.0f32, 800.0, 1400.0] {
+            for logs in [0usize, 1, 300] {
+                for dragging in [false, true] {
+                    let mut state = CleanSysGui::new();
+                    state.show_log = true;
+                    for i in 0..logs {
+                        state.push_log(format!(
+                            "line {i} with a fairly long message to wrap around"
+                        ));
+                    }
+                    if dragging {
+                        state.log_drag = Some(crate::state::LogDrag {
+                            anchor_y: Some(10.0),
+                            start_height: 120.0,
+                        });
+                    }
+                    let c = state.colors();
+                    let _ = main_layout(&state, &c, w);
+                }
             }
         }
     }

@@ -75,6 +75,33 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             state.save_selections(); // also persists the preference
             Task::none()
         }
+        Message::LogDragStart => {
+            state.log_drag = Some(crate::state::LogDrag {
+                anchor_y: None,
+                start_height: state.log_height,
+            });
+            Task::none()
+        }
+        Message::LogDragMoved(y) => {
+            if let Some(d) = state.log_drag.as_mut() {
+                match d.anchor_y {
+                    None => d.anchor_y = Some(y),
+                    // The panel sits at the bottom: dragging its top edge up makes it taller.
+                    Some(a) => {
+                        let wanted = d.start_height + (a - y);
+                        state.log_height =
+                            crate::state::clamp_log_height(wanted, state.window_size.1);
+                    }
+                }
+            }
+            Task::none()
+        }
+        Message::LogDragEnd => {
+            if state.log_drag.take().is_some() {
+                state.save_selections(); // persists the panel height with the other preferences
+            }
+            Task::none()
+        }
         Message::AnimationTick => {
             state.anim_tick = state.anim_tick.wrapping_add(1);
             Task::none()
@@ -973,6 +1000,55 @@ mod tests {
         state.previewing = false;
         state.board.start(3);
         assert!(state.is_animating(), "scanning animates too");
+    }
+
+    #[test]
+    fn dragging_the_activity_panel_edge_up_makes_it_taller_and_down_shorter() {
+        use crate::state::{LOG_DEFAULT_HEIGHT, LOG_MIN_HEIGHT};
+        let mut state = CleanSysGui::new();
+        state.window_size = (1180.0, 780.0);
+        assert_eq!(state.log_height, LOG_DEFAULT_HEIGHT);
+
+        let _ = update(&mut state, Message::LogDragStart);
+        assert!(state.log_drag.is_some());
+        // The first move only records where the cursor is.
+        let _ = update(&mut state, Message::LogDragMoved(500.0));
+        assert_eq!(state.log_height, LOG_DEFAULT_HEIGHT);
+        // 80 px up: taller by 80.
+        let _ = update(&mut state, Message::LogDragMoved(420.0));
+        assert_eq!(state.log_height, LOG_DEFAULT_HEIGHT + 80.0);
+        // Far down: stops at the minimum.
+        let _ = update(&mut state, Message::LogDragMoved(900.0));
+        assert_eq!(state.log_height, LOG_MIN_HEIGHT);
+        // Far up: stops at 70% of the window.
+        let _ = update(&mut state, Message::LogDragMoved(-5000.0));
+        assert_eq!(state.log_height, (780.0f32 * 0.7).round());
+
+        let _ = update(&mut state, Message::LogDragEnd);
+        assert!(state.log_drag.is_none());
+        // Moves after the release are ignored.
+        let h = state.log_height;
+        let _ = update(&mut state, Message::LogDragMoved(0.0));
+        assert_eq!(state.log_height, h);
+        // ...and the height is part of the persisted settings.
+        assert_eq!(state.current_settings().log_height, Some(h as u32));
+    }
+
+    #[test]
+    fn a_release_without_a_drag_is_a_no_op() {
+        let mut state = CleanSysGui::new();
+        let h = state.log_height;
+        let _ = update(&mut state, Message::LogDragEnd);
+        assert_eq!(state.log_height, h);
+    }
+
+    #[test]
+    fn clear_log_empties_the_activity_log() {
+        let mut state = CleanSysGui::new();
+        state.push_log("something happened");
+        assert!(!state.logs.is_empty());
+        let _ = update(&mut state, Message::ClearLog);
+        assert!(state.logs.is_empty());
     }
 
     #[test]

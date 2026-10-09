@@ -58,6 +58,12 @@ pub enum Message {
     ScanItemFinished(usize, usize, Result<cleansys_core::CleaningResult, String>),
     /// Toggle hiding cleaners that have nothing to clean.
     ToggleHideEmpty,
+    /// The user grabbed the activity panel's top edge.
+    LogDragStart,
+    /// The cursor moved (window y) during a panel drag.
+    LogDragMoved(f32),
+    /// The mouse button was released.
+    LogDragEnd,
     /// One animation step (spinner / progress-bar highlight).
     AnimationTick,
     /// Resize the window to a preset (⌘1–4).

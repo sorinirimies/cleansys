@@ -34,6 +34,9 @@ pub struct Settings {
     /// Last GUI window size in logical pixels (`width`, `height`).
     #[serde(default)]
     pub window_size: Option<(u32, u32)>,
+    /// Height of the GUI activity panel in pixels (dragged by the user).
+    #[serde(default)]
+    pub log_height: Option<u32>,
 }
 
 impl Settings {
@@ -242,6 +245,7 @@ mod tests {
             hide_empty: Some(false),
             confirm_before_run: Some(false),
             window_size: Some((900, 700)),
+            log_height: Some(240),
         };
         save_to(&path, &settings).unwrap();
 

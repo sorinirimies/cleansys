@@ -55,12 +55,24 @@ pub fn subscription(state: &CleanSysGui) -> iced::Subscription<Message> {
         }
         _ => None,
     });
+    let mut subs = vec![events];
     // The spinner and the bar highlight only tick while something is in progress.
     if state.is_animating() {
-        iced::Subscription::batch([events, iced::Subscription::run(animation_stream)])
-    } else {
-        events
+        subs.push(iced::Subscription::run(animation_stream));
     }
+    // While the activity panel's edge is being dragged, follow the cursor until release.
+    if state.log_drag.is_some() {
+        subs.push(event::listen_with(|event, _status, _id| match event {
+            Event::Mouse(iced::mouse::Event::CursorMoved { position }) => {
+                Some(Message::LogDragMoved(position.y))
+            }
+            Event::Mouse(iced::mouse::Event::ButtonReleased(iced::mouse::Button::Left)) => {
+                Some(Message::LogDragEnd)
+            }
+            _ => None,
+        }));
+    }
+    iced::Subscription::batch(subs)
 }
 
 /// Interval of the animation tick.

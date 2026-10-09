@@ -11,6 +11,25 @@ pub enum SettingsTab {
     About,
 }
 
+/// A drag of the activity panel's top edge.
+#[derive(Debug, Clone, Copy, PartialEq)]
+pub struct LogDrag {
+    /// Cursor y (window coordinates) when the drag began; `None` until the first move.
+    pub anchor_y: Option<f32>,
+    /// Panel height when the drag began.
+    pub start_height: f32,
+}
+
+/// Smallest / default activity panel height.
+pub const LOG_MIN_HEIGHT: f32 = 60.0;
+pub const LOG_DEFAULT_HEIGHT: f32 = 120.0;
+
+/// Keep the panel usable: at least [`LOG_MIN_HEIGHT`], at most 70% of the window.
+pub fn clamp_log_height(height: f32, window_height: f32) -> f32 {
+    let max = (window_height * 0.7).max(LOG_DEFAULT_HEIGHT);
+    height.clamp(LOG_MIN_HEIGHT, max).round()
+}
+
 /// Top-level state for the CleanSys GUI application.
 pub struct CleanSysGui {
     /// Cleaner categories and items (shared domain model from `cleansys-core`).
@@ -75,6 +94,10 @@ pub struct CleanSysGui {
     pub settings_message: String,
     /// Ask before running a clean.
     pub confirm_before_run: bool,
+    /// Height of the activity panel in pixels (drag its top edge to change it).
+    pub log_height: f32,
+    /// An activity-panel resize drag in progress.
+    pub log_drag: Option<LogDrag>,
     /// Free-running animation counter (one step per ~50 ms) driving the spinner glyph and
     /// the highlight that sweeps along progress bars. Only advances while something is
     /// in progress (see [`CleanSysGui::is_animating`]).
@@ -148,6 +171,10 @@ impl CleanSysGui {
             board,
             hide_empty: settings.hide_empty(),
             confirm_before_run: settings.confirm_before_run(),
+            log_height: settings
+                .log_height
+                .map_or(LOG_DEFAULT_HEIGHT, |h| clamp_log_height(h as f32, 4000.0)),
+            log_drag: None,
             anim_tick: 0,
             window_size: crate::window::initial_size(settings.saved_window_size()),
             saved_window_size: settings.saved_window_size(),
@@ -406,6 +433,7 @@ impl CleanSysGui {
             hide_empty: Some(self.hide_empty),
             confirm_before_run: Some(self.confirm_before_run),
             window_size: self.saved_window_size,
+            log_height: Some(self.log_height.round() as u32),
         }
     }
 
@@ -606,6 +634,15 @@ mod tests {
         state.categories[0].items[2].selected = true;
         let indices = state.selected_indices();
         assert_eq!(indices, vec![(0, 0), (0, 2)]);
+    }
+
+    #[test]
+    fn log_height_is_clamped_to_a_usable_range() {
+        assert_eq!(clamp_log_height(1.0, 800.0), LOG_MIN_HEIGHT);
+        assert_eq!(clamp_log_height(10_000.0, 800.0), 560.0);
+        assert_eq!(clamp_log_height(200.4, 800.0), 200.0);
+        // A tiny window still allows the default height.
+        assert_eq!(clamp_log_height(500.0, 100.0), LOG_DEFAULT_HEIGHT);
     }
 
     #[test]
