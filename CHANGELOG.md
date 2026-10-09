@@ -7,6 +7,8 @@ All notable changes to this project will be documented in this file.
 - feat(gui): activity panel fills the width, resizable by dragging its top edge, Clear lit only when there is content
 ### 🐛 Bug Fixes
 - fix(gui): sudo authentication no longer pins the header badge to ROOT; remove dead code (unused settings fns, icon, message); regression tests
+### 🔧 Chores
+- chore: bump version to 0.8.0
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.9...v0.8.0
 ## 0.7.9 - 2026-10-09
 ### ✨ Features
