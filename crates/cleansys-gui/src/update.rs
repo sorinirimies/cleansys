@@ -41,16 +41,6 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             Task::none()
         }
 
-        Message::SelectAllEverywhere => {
-            for category in &mut state.categories {
-                for item in &mut category.items {
-                    item.selected = true;
-                }
-            }
-            state.save_selections();
-            Task::none()
-        }
-
         Message::DeselectAllEverywhere => {
             for category in &mut state.categories {
                 for item in &mut category.items {
@@ -307,9 +297,10 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
         }
 
         Message::SelectRecommended => {
+            let include_root = state.can_run_root();
             let n = state
                 .board
-                .select_recommended(&mut state.categories, state.is_root);
+                .select_recommended(&mut state.categories, include_root);
             state.push_log(format!("Selected {n} recommended (safe) cleaners"));
             state.save_selections();
             Task::none()
@@ -475,7 +466,7 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
                 state.needs_password = false;
                 state.password_input.clear();
                 state.password_error = None;
-                state.is_root = true; // sudo credentials are now cached
+                state.sudo_ok = true; // sudo credentials are now cached (the process is still not root)
                 start_pending_operations(state)
             } else {
                 state.password_error = Some("Incorrect password. Please try again.".to_string());
@@ -1051,6 +1042,84 @@ mod tests {
         assert!(state.logs.is_empty());
     }
 
+    fn first_index(state: &CleanSysGui, root: bool) -> usize {
+        state
+            .categories
+            .iter()
+            .position(|c| crate::view::scope_is_root_category(c) == root)
+            .expect("a category of that kind")
+    }
+
+    #[test]
+    fn authenticating_with_sudo_does_not_turn_the_badge_to_root_for_good() {
+        // Regression: after the sudo dialog succeeded the app set `is_root = true`, so the
+        // header kept saying ROOT even when the user switched back to the user cleaners.
+        let mut state = CleanSysGui::new();
+        state.is_root = false;
+        let user = first_index(&state, false);
+        let root = first_index(&state, true);
+        state.active_tab = root;
+        assert!(
+            crate::view::scope_is_root(&state),
+            "ROOT while a system category is open"
+        );
+
+        let _ = update(&mut state, Message::AuthenticationResult(true));
+        assert!(
+            state.sudo_ok && !state.is_root,
+            "authenticated, but the process is not root"
+        );
+        assert!(state.can_run_root());
+
+        let _ = update(&mut state, Message::SwitchCategoryTab(user));
+        assert!(
+            !crate::view::scope_is_root(&state),
+            "back on a user category the badge must say USER"
+        );
+        let _ = update(&mut state, Message::SwitchCategoryTab(root));
+        assert!(crate::view::scope_is_root(&state));
+    }
+
+    #[test]
+    fn badge_follows_the_open_category_and_the_search_box() {
+        let mut state = CleanSysGui::new();
+        state.is_root = false;
+        let user = first_index(&state, false);
+        let root = first_index(&state, true);
+        state.active_tab = user;
+        assert!(!crate::view::scope_is_root(&state));
+        state.active_tab = root;
+        assert!(crate::view::scope_is_root(&state));
+        // A search spans every category, so it is not "the root section".
+        state.search = "log".into();
+        assert!(!crate::view::scope_is_root(&state));
+        // A process that really runs as root always says ROOT.
+        state.is_root = true;
+        state.active_tab = user;
+        assert!(crate::view::scope_is_root(&state));
+    }
+
+    #[test]
+    fn selecting_root_cleaners_asks_for_sudo_until_authenticated() {
+        let mut state = CleanSysGui::new();
+        state.is_root = false;
+        let root = first_index(&state, true);
+        let item = state.categories[root]
+            .items
+            .iter()
+            .position(|i| i.requires_root)
+            .expect("a root cleaner");
+        state.categories[root].items[item].selected = true;
+        assert!(state.selection_needs_root());
+        let _ = update(&mut state, Message::AuthenticationResult(false));
+        assert!(
+            !state.sudo_ok && state.selection_needs_root(),
+            "a wrong password changes nothing"
+        );
+        let _ = update(&mut state, Message::AuthenticationResult(true));
+        assert!(!state.selection_needs_root());
+    }
+
     #[test]
     fn open_url_refuses_anything_but_web_links() {
         let mut state = CleanSysGui::new();
@@ -1076,13 +1145,13 @@ mod tests {
     }
 
     #[test]
-    fn select_all_everywhere_selects_every_category() {
+    fn deselect_all_everywhere_clears_every_category() {
         let mut state = CleanSysGui::new();
-        let _ = update(&mut state, Message::SelectAllEverywhere);
-        assert!(state
-            .categories
-            .iter()
-            .all(|c| c.items.iter().all(|i| i.selected)));
+        for category in &mut state.categories {
+            for item in &mut category.items {
+                item.selected = true;
+            }
+        }
 
         let _ = update(&mut state, Message::DeselectAllEverywhere);
         assert!(state
@@ -1265,18 +1334,22 @@ mod tests {
     }
 
     #[test]
-    fn authentication_success_hides_dialog_and_marks_root() {
+    fn authentication_success_hides_dialog_and_remembers_sudo_without_becoming_root() {
         let mut state = CleanSysGui::new();
         state.needs_password = true;
         state.is_root = false;
         let (ci, ii) = first_root_required_item(&state);
         state.pending_root_ops = vec![(ci, ii)];
         state.categories[ci].items[ii].selected = true;
+        // Never run a real (root) cleaner from a unit test.
+        state.categories[ci].items[ii].function =
+            cleansys_core::cleaner_fn(|_| Ok(cleansys_core::CleaningResult::new()));
 
         let _ = update(&mut state, Message::AuthenticationResult(true));
 
         assert!(!state.needs_password);
-        assert!(state.is_root);
+        assert!(state.sudo_ok, "the session is authenticated");
+        assert!(!state.is_root, "the process itself is still not root");
         assert!(state.is_running);
     }
 

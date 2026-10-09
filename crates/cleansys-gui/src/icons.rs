@@ -12,8 +12,6 @@ pub const FONT: Font = Font::with_name("bootstrap-icons");
 pub const CHECK_CIRCLE_FILL: char = '\u{f26a}';
 /// `x-circle` — failed operation.
 pub const X_CIRCLE: char = '\u{f623}';
-/// `arrow-repeat` — in-progress / running spinner glyph.
-pub const ARROW_REPEAT: char = '\u{f130}';
 /// `clock` — queued / pending.
 pub const CLOCK: char = '\u{f293}';
 /// `shield-lock` (approximated with `exclamation-triangle`) — requires root.

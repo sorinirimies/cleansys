@@ -126,16 +126,23 @@ fn main_layout<'a>(state: &'a CleanSysGui, c: &ThemeColors, width: f32) -> Eleme
 
 // ── Header ───────────────────────────────────────────────────────────────────
 
-fn header<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> Element<'a, Message> {
-    let c = *c;
-    // The badge shows the scope you are working in: ROOT while a system (root)
-    // category is open or when the app itself runs as root, otherwise USER.
+/// Is the header badge ROOT? Yes when the *process* runs as root, or while a system (root)
+/// category is open; otherwise USER. Having authenticated with sudo does not count — that
+/// used to leave the badge on ROOT even after switching back to the user cleaners.
+pub fn scope_is_root(state: &CleanSysGui) -> bool {
     let in_root_section = state.search.trim().is_empty()
         && state
             .categories
             .get(state.active_tab)
             .is_some_and(|cat| is_root_category(&cat.name, &cat.items));
-    let root_badge = if state.is_root || in_root_section {
+    state.is_root || in_root_section
+}
+
+fn header<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> Element<'a, Message> {
+    let c = *c;
+    // The badge shows the scope you are working in: ROOT while a system (root)
+    // category is open or when the app itself runs as root, otherwise USER.
+    let root_badge = if scope_is_root(state) {
         badge("ROOT", c.red)
     } else {
         badge("USER", c.accent)
@@ -245,6 +252,11 @@ fn header<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> Elemen
 // ── Sidebar / category navigation ────────────────────────────────────────────
 
 /// `true` for categories on the root/system side of the UI.
+/// [`is_root_category`] for a whole category.
+pub fn scope_is_root_category(cat: &cleansys_core::CleanerCategory) -> bool {
+    is_root_category(&cat.name, &cat.items)
+}
+
 fn is_root_category(name: &str, items: &[cleansys_core::CleanerItem]) -> bool {
     name == "System Cleaners"
         || name.ends_with(cleansys_core::model::ROOT_SUFFIX)

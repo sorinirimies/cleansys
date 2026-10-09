@@ -9,8 +9,6 @@ pub enum Message {
     SelectAllCategory(usize),
     /// Deselect every item in a category.
     DeselectAllCategory(usize),
-    /// Select every item across every category.
-    SelectAllEverywhere,
     /// Deselect every item across every category.
     DeselectAllEverywhere,
     /// Switch the active category tab.

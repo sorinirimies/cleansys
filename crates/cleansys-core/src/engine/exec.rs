@@ -332,13 +332,6 @@ fn index_cache() -> &'static std::sync::Mutex<Option<(String, std::time::Instant
     CACHE.get_or_init(|| std::sync::Mutex::new(None))
 }
 
-/// Drop the cached directory index (frees memory once scanning is done).
-pub fn clear_index_cache() {
-    if let Ok(mut guard) = index_cache().lock() {
-        guard.take();
-    }
-}
-
 /// One level of the walk: marker files found in `dir`, and its sub-directories to visit.
 fn scan_one_dir(
     dir: &Path,

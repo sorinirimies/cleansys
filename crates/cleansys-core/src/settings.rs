@@ -1,9 +1,7 @@
-//! Simple JSON-backed settings persistence, shared by the TUI and GUI.
+//! Simple JSON-backed settings persistence, shared by every front-end.
 //!
-//! Settings are stored at `~/.config/cleansys/settings.json` (GUI) and
-//! `~/.config/cleansys/tui-settings.json` (TUI) — or the platform-appropriate
-//! config directory. Writes are atomic: content is first written to a
-//! `NamedTempFile` in the same directory and then `persist()`-ed into place,
+//! Settings are stored at `~/.config/cleansys/settings.json` — or the platform-appropriate
+//! config directory. Writes are atomic: content is first written to a `NamedTempFile` in the same directory and then `persist()`-ed into place,
 //! so a crash mid-write can never produce a corrupted file.
 
 use anyhow::{Context, Result};
@@ -84,14 +82,9 @@ pub fn settings_dir() -> Result<PathBuf> {
     Ok(dirs.config_dir().join("cleansys"))
 }
 
-/// Full path to the GUI JSON settings file.
+/// Full path to the JSON settings file.
 pub fn settings_json_path() -> Result<PathBuf> {
     Ok(settings_dir()?.join("settings.json"))
-}
-
-/// Full path to the TUI-specific JSON settings file.
-pub fn tui_settings_json_path() -> Result<PathBuf> {
-    Ok(settings_dir()?.join("tui-settings.json"))
 }
 
 /// Load settings from any JSON path.
@@ -128,7 +121,7 @@ fn save_to(path: &Path, settings: &Settings) -> Result<()> {
     Ok(())
 }
 
-/// Load GUI application settings (`settings.json`).
+/// Load application settings (`settings.json`).
 ///
 /// Returns [`Settings::default`] when the file does not exist yet (first
 /// run) or is malformed (the file is preserved for manual recovery).
@@ -136,7 +129,7 @@ pub fn load_settings() -> Result<Settings> {
     load_from(&settings_json_path()?)
 }
 
-/// Persist GUI application settings.
+/// Persist application settings.
 pub fn save_settings(settings: &Settings) -> Result<()> {
     save_to(&settings_json_path()?, settings)
 }
@@ -148,16 +141,6 @@ pub fn update_settings(change: impl FnOnce(&mut Settings)) -> Result<Settings> {
     change(&mut s);
     save_settings(&s)?;
     Ok(s)
-}
-
-/// Load TUI-specific settings (`tui-settings.json`).
-pub fn load_tui_settings() -> Result<Settings> {
-    load_from(&tui_settings_json_path()?)
-}
-
-/// Persist TUI-specific settings.
-pub fn save_tui_settings(settings: &Settings) -> Result<()> {
-    save_to(&tui_settings_json_path()?, settings)
 }
 
 #[cfg(test)]

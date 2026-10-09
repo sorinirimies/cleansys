@@ -41,7 +41,13 @@ pub struct CleanSysGui {
     /// Whether cleaners are currently running.
     pub is_running: bool,
     /// Whether the process is running with root/administrator privileges.
+    /// Whether the *process* runs as root/administrator (e.g. `sudo cleansys-gui`).
+    /// Never changed at run time; the ROOT/USER badge is based on it.
     pub is_root: bool,
+    /// The user authenticated through the sudo dialog this session, so root cleaners can
+    /// run without asking again. Deliberately separate from [`Self::is_root`]: being
+    /// authenticated must not turn the header badge to ROOT for good.
+    pub sudo_ok: bool,
     /// Whether the sudo authentication dialog is visible.
     pub needs_password: bool,
     /// The password currently typed into the authentication dialog.
@@ -154,6 +160,7 @@ impl CleanSysGui {
             total_bytes_cleaned: 0,
             is_running: false,
             is_root: cleansys_core::check_root(),
+            sudo_ok: false,
             needs_password: false,
             password_input: String::new(),
             password_error: None,
@@ -325,9 +332,14 @@ impl CleanSysGui {
             .unwrap_or(0)
     }
 
+    /// Can root cleaners run right now: the process is root, or sudo was authenticated.
+    pub fn can_run_root(&self) -> bool {
+        self.is_root || self.sudo_ok
+    }
+
     /// True if any selected item requires root and we don't already have it.
     pub fn selection_needs_root(&self) -> bool {
-        !self.is_root
+        !self.can_run_root()
             && self
                 .categories
                 .iter()
