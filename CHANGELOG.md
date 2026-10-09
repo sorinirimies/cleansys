@@ -3,6 +3,10 @@
 All notable changes to this project will be documented in this file.
 
 ## 0.8.1 - 2026-10-09
+### 📚 Documentation
+- docs: update README and CHANGELOG for v0.8.0
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.8.1...v0.8.1
+## 0.8.1 - 2026-10-09
 ### 🔧 Chores
 - chore: bump version to 0.8.1
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.8.0...v0.8.1
