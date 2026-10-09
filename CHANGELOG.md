@@ -2,6 +2,12 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.8.0 - 2026-10-09
+### ✨ Features
+- feat(gui): activity panel fills the width, resizable by dragging its top edge, Clear lit only when there is content
+### 🐛 Bug Fixes
+- fix(gui): sudo authentication no longer pins the header badge to ROOT; remove dead code (unused settings fns, icon, message); regression tests
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.9...v0.8.0
 ## 0.7.9 - 2026-10-09
 ### ✨ Features
 - feat: sudo prompt in web UI; idle-day selector and expandable per-path selection in TUI/GUI/web
@@ -17,6 +23,8 @@ All notable changes to this project will be documented in this file.
 - docs: document details expansion, per-path selection and idle-days selector
 ### 📦 Other Changes
 - docs/demo: re-record TUI tapes and web screenshots for the in-view progress, details and idle-days; silence cleaner output in the TUI; wider footer
+### 🔧 Chores
+- chore: bump version to 0.7.9
 ### 🧪 Testing
 - test(tui): cover the clean worker, progress/summary state and run keys; tidy logging and lints
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.8...v0.7.9
