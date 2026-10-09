@@ -2,6 +2,28 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.7.9 - 2026-10-09
+### ✨ Features
+- feat: sudo prompt in web UI; idle-day selector and expandable per-path selection in TUI/GUI/web
+- feat(tui): show clean progress, outcome and activity log in the main view (worker thread); remove the detailed progress screen
+- feat: Settings and About in the TUI, GUI and web UI; version always visible; engine/preferences editable in-app
+- feat(gui): window resizer — presets, grow/shrink, maximise, full screen shortcuts and settings; remember the window size
+- feat: same animated progress in TUI, GUI and web — spinner plus a bar with a sweeping highlight (shared cleansys_core::anim)
+- feat(gui): round progress ring per cleaner/category while measuring, and on progress labels (canvas); shared ring_arc maths
+### 🐛 Bug Fixes
+- fix(test,core): make the web details test independent of the shared sandbox project; write engine.json atomically
+- fix(gui,macos): install the standard Window menu so the system's tiling/zoom shortcuts work (as in tokenburn)
+### 📚 Documentation
+- docs: document details expansion, per-path selection and idle-days selector
+### 📦 Other Changes
+- docs/demo: re-record TUI tapes and web screenshots for the in-view progress, details and idle-days; silence cleaner output in the TUI; wider footer
+### 🧪 Testing
+- test(tui): cover the clean worker, progress/summary state and run keys; tidy logging and lints
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.8...v0.7.9
+## 0.7.8 - 2026-10-07
+### 🔧 Chores
+- chore: bump version to 0.7.8
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.6...v0.7.8
 ## 0.7.6 - 2026-10-07
 ### 🐛 Bug Fixes
 - fix(core): evict stale project index cache; wipe cached sudo password on drop
