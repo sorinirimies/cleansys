@@ -17,23 +17,21 @@ from a **terminal UI**, a **desktop GUI**, a **local web UI** or the **command l
   <img src="demo/previews/tui-overview.gif" alt="CleanSys terminal UI: live sizes, recommended preset, preview and search" width="900">
 </p>
 
+<p align="center">
+  <img src="demo/previews/gui-wide.png" alt="CleanSys desktop GUI, wide layout" width="900">
+</p>
+
 ## ✨ Highlights
 
-- **See before you delete** — every cleaner is measured in the background on start-up; sizes appear per cleaner and per category, biggest first. Preview (`d` / 🔍) lists the exact paths.
-- **One-key smart selection** — `r` / ✨ *Recommended* ticks only the safe, user-land cleaners that actually have something to free.
-- **~190 cleaners** — browsers, chat/media apps, IDEs, Gradle/Android, Cargo, npm, Docker, Hugging Face/Ollama, Claude/Codex session data, OS logs and more. See [What it cleans](#-what-it-cleans).
-- **Project build output** — finds `target/`, `build/`, `node_modules/`, `.venv/`… next to a marker file (`Cargo.toml`, `build.gradle.kts`, `package.json`…) and, by default, only in projects you haven't touched for 14 days.
-- **Pick exactly what goes** — expand any cleaner to see every path it would remove (each project's `target/`, each cache folder…) and untick the ones you want to keep, in the TUI, GUI and web UI. See [Details & fine-grained selection](#details--fine-grained-selection).
-- **Settings & About in every front-end** — idle days, scan depth, scan folders, never-delete patterns, *hide empty* and *ask before cleaning* are all editable in the app (`o` in the TUI, ⚙ in the GUI, `/settings` on the web), and an **About** tab shows the version, the developer's GitHub and links. The version is always visible. See [Settings & About](#settings--about).
-- **Idle-days selector** — choose in the app how long a project must be untouched before its build output is offered (any age … 90 days).
-- **User land vs. root, kept separate** — everything that needs your password lives in its own *System · root* section; nothing asks for sudo until you run it.
-- **Risk levels** — `safe`, `moderate` (slow to rebuild, marked `~`) and `caution` (model weights, chat history, marked `!`; never part of bulk/unattended runs).
-- **Automatic cleaning** — daily/weekly/monthly via systemd/cron, launchd or Task Scheduler, configurable from the TUI, GUI or CLI.
-- **Skips apps that are open**, never follows symlinks, refuses to touch `$HOME`, `/usr`, `Documents`, `.ssh`…, honours your exclusion globs.
-- **Responsive everywhere** — the TUI, the GUI and the web UI share the same wide / medium / narrow behaviour (sidebar → narrower sidebar → drop-down + icon buttons); 43 colour themes in the GUI and web UI.
-- **Same animated progress everywhere** — scans and cleans show a turning spinner (a round ring in the GUI and web, a braille spinner in the terminal; every cleaner and category that is still being measured gets its own) and a progress bar whose filled part has a highlight sweeping along it, with `n/total · percent`, in the TUI, the GUI and the web UI (CSS). The shared maths lives in [`cleansys_core::anim`](crates/cleansys-core/src/anim.rs); the GUI's animation only ticks while something is in progress, so an idle window costs nothing.
-- **Four front-ends, one engine** — TUI, GUI, [web UI (Topcoat)](crates/cleansys-web) and CLI all run the same cleaners, scan, scheduler and safety rules from `cleansys-core`.
-- **Scriptable** — `--json` output, stable cleaner ids, exit codes; extend with your own TOML cleaners.
+- **See before you delete** — every cleaner is measured in the background, biggest first; preview (`d` / 🔍) lists exact paths.
+- **~190 cleaners** — browsers, apps, IDEs, Gradle/Cargo/npm, Docker, AI/LLM caches, OS logs and more. See [What it cleans](#-what-it-cleans).
+- **Project build output** — `target/`, `node_modules/`, `.venv/`… next to a marker file, by default only in projects idle for 14 days.
+- **Smart selection** — `r` / ✨ *Recommended* ticks only safe, user-land cleaners with something to free; expand any cleaner to [untick single paths](#details--fine-grained-selection).
+- **Risk levels** — `safe`, `moderate` (`~`), `caution` (`!`, never in bulk or unattended runs); root cleaners sit in a separate section and nothing asks for sudo until you run it.
+- **Safe by design** — skips open apps, never follows symlinks, refuses `$HOME`, `/usr`, `.ssh`…, honours your exclusions. See [Safety](#️-safety).
+- **Automatic cleaning** — daily/weekly/monthly via systemd/cron, launchd or Task Scheduler.
+- **Four front-ends, one engine** — TUI, GUI, [web UI](crates/cleansys-web) and CLI share cleaners, scanner, scheduler and safety rules; the UIs share [Settings & About](#settings--about), responsive layouts and progress animation (43 themes in GUI/web).
+- **Scriptable** — `--json`, stable cleaner ids, exit codes, your own cleaners in TOML.
 
 ## 🎬 Demo
 
@@ -79,7 +77,7 @@ the sidebar becomes a drop-down on narrow windows.
 | **Settings & About** — `o` / `i`<br><img src="demo/previews/tui-settings.gif" width="440"> | |
 | **Details** — `→` opens a cleaner: every path with its size, `Space` unticks one<br><img src="demo/previews/tui-details.png" width="440"> | **Done** — the outcome, freed space and activity log stay in the main view; `Esc` dismisses<br><img src="demo/previews/tui-clean-done.png" width="440"> |
 
-### Web UI
+### Web UI — how it works
 
 `cleansys-web` is the same app in a browser tab — **no JavaScript bundle, no Node**: a [Topcoat](https://github.com/tokio-rs/topcoat)
 server renders plain HTML, every action is a normal form post, and pages refresh themselves while a scan or a clean is
@@ -110,7 +108,7 @@ CleanSys is a Cargo workspace with four crates:
 
 | Crate | Binary | Description |
 |-------|--------|-------------|
-| [`cleansys-core`](crates/cleansys-core) | *(library)* | Framework-free logic shared by both front-ends: cleaner engine, scan board, scheduler, safety rules, sudo auth |
+| [`cleansys-core`](crates/cleansys-core) | *(library)* | Framework-free logic shared by all front-ends: cleaner engine, scan board, scheduler, safety rules, sudo auth |
 | [`cleansys-tui`](crates/cleansys-tui) | `cleansys` | Ratatui terminal UI **and** the CLI — published to crates.io as `cleansys` |
 | [`cleansys-gui`](crates/cleansys-gui) | `cleansys-gui` | Iced desktop GUI |
 | [`cleansys-web`](crates/cleansys-web) | `cleansys-web` | Local web UI built with [Topcoat](https://github.com/tokio-rs/topcoat) (needs Rust 1.98+) |
@@ -131,7 +129,18 @@ cargo build --workspace --release          # binaries in target/release/
 cargo install --path crates/cleansys-tui   # or crates/cleansys-gui
 ```
 
-Pre-built packages (`.deb` and `.rpm` for the TUI, GUI and web UI, AppImage, Windows installer and zip, macOS `.dmg`, plus raw `cleansys-web-<target>` binaries) are on the [Releases](https://github.com/sorinirimies/cleansys/releases) page; only the latest version's files are kept. `just --list` shows all development tasks.
+### Download the desktop GUI
+
+Pre-built `cleansys-gui` packages are on the [Releases](https://github.com/sorinirimies/cleansys/releases) page (only the latest version is kept):
+
+| Platform | Package |
+|----------|---------|
+| Linux (x86_64, aarch64) | `.deb`, `.rpm`; AppImage (x86_64) |
+| macOS (Intel + Apple Silicon) | universal `.dmg` |
+| Windows (x86_64) | installer (`.exe`) and zip |
+| Any | raw binary `cleansys-gui-<target>` |
+
+The TUI (`cleansys-tui-<target>`) and web UI (`cleansys-web-<target>`) ship the same way, with `.deb`/`.rpm` for Linux. `just --list` shows all development tasks.
 
 ## 🚀 Quick start
 
@@ -317,10 +326,8 @@ include `caution` cleaners** unless you explicitly ticked them (scope *selected*
 { "scan_roots": ["~/work"], "max_depth": 6, "min_age_days": 14, "exclude": ["~/work/keep-me/**"] }
 ```
 
-`min_age_days` can also be changed live from the TUI (`[` / `]`), GUI and web UI (*Idle ≥* selector).
-
-`min_age_days` (default **14**) means build output is only removed when nothing in the project changed for that
-long — set `0` to disable. `CLEANSYS_SCAN_ROOTS` overrides `scan_roots` (path-list).
+`min_age_days` (default **14**): build output is only removed when nothing in the project changed for that
+long — set `0` to disable. Change it live from the TUI (`[` / `]`), GUI or web UI (*Idle ≥* selector). `CLEANSYS_SCAN_ROOTS` overrides `scan_roots` (path-list).
 
 **Your own cleaners** are plain TOML in `~/.config/cleansys/cleaners.d/*.toml` (same `id` overrides a built-in):
 
