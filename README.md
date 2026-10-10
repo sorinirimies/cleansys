@@ -14,11 +14,13 @@ from a **terminal UI**, a **desktop GUI**, a **local web UI** or the **command l
 *before* you delete anything, never touches system folders, and can run **automatically on a schedule**.
 
 <p align="center">
-  <img src="demo/previews/tui-overview.gif" alt="CleanSys terminal UI: live sizes, recommended preset, preview and search" width="900">
+  <img src="demo/previews/tui-overview.gif" alt="CleanSys terminal UI: live sizes, recommended preset, preview and search" width="900"><br>
+  <b>Terminal UI</b>
 </p>
 
 <p align="center">
-  <img src="demo/previews/gui-wide.png" alt="CleanSys desktop GUI, wide layout" width="900">
+  <img src="demo/previews/gui-wide.png" alt="CleanSys desktop GUI, wide layout" width="900"><br>
+  <b>Desktop GUI</b>
 </p>
 
 ## ✨ Highlights
