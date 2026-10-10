@@ -411,30 +411,46 @@ push-gitea-starscream:
 
 push-all:
     #!/usr/bin/env sh
-    failed=""
-    git push origin main             || failed="$failed origin"
-    git push gitea main              || failed="$failed gitea"
-    git push gitea-nexus-lab main     || failed="$failed gitea-nexus-lab"
-    git push gitea-starscream main    || failed="$failed gitea-starscream"
-    if [ -n "$failed" ]; then
-        echo "⚠️  Failed to push to:$failed"
-    else
-        echo "✅ Pushed to GitHub, Gitea, Gitea (nexus-lab), and Gitea Starscream!"
-    fi
+    export GIT_SSH_COMMAND="ssh -o ConnectTimeout=10 -o BatchMode=yes"
+    ok=""; failed=""; skipped=""
+    for r in origin gitea gitea-nexus-lab gitea-starscream; do
+        if ! url=$(git remote get-url "$r" 2>/dev/null); then
+            skipped="$skipped $r"; continue
+        fi
+        if git push "$r" main; then
+            ok="$ok\n  ✅ $r → $url"
+        else
+            failed="$failed\n  ❌ $r → $url"
+        fi
+    done
+    echo ""
+    echo "── push summary ──"
+    [ -n "$ok" ]      && printf "Sent to:$ok\n"
+    [ -n "$failed" ]  && printf "Failed:$failed\n"
+    [ -n "$skipped" ] && echo "Skipped (remote not configured):$skipped"
+    [ -z "$failed" ]
 
 # Force-push to all remotes
 push-all-force:
     #!/usr/bin/env sh
-    failed=""
-    git push --force origin main             || failed="$failed origin"
-    git push --force gitea main              || failed="$failed gitea"
-    git push --force gitea-nexus-lab main     || failed="$failed gitea-nexus-lab"
-    git push --force gitea-starscream main    || failed="$failed gitea-starscream"
-    if [ -n "$failed" ]; then
-        echo "⚠️  Failed to force-push to:$failed"
-    else
-        echo "✅ Force-pushed to GitHub, Gitea, Gitea (nexus-lab), and Gitea Starscream!"
-    fi
+    export GIT_SSH_COMMAND="ssh -o ConnectTimeout=10 -o BatchMode=yes"
+    ok=""; failed=""; skipped=""
+    for r in origin gitea gitea-nexus-lab gitea-starscream; do
+        if ! url=$(git remote get-url "$r" 2>/dev/null); then
+            skipped="$skipped $r"; continue
+        fi
+        if git push --force "$r" main; then
+            ok="$ok\n  ✅ $r → $url"
+        else
+            failed="$failed\n  ❌ $r → $url"
+        fi
+    done
+    echo ""
+    echo "── force-push summary ──"
+    [ -n "$ok" ]      && printf "Sent to:$ok\n"
+    [ -n "$failed" ]  && printf "Failed:$failed\n"
+    [ -n "$skipped" ] && echo "Skipped (remote not configured):$skipped"
+    [ -z "$failed" ]
 
 push-tags:
     git push origin --tags
