@@ -362,25 +362,17 @@ needs elevation — it will appear in the System · root section.
 
 ## 🖥️ Platform Support
 
-Cleaners are **real and platform-native** on every OS — not just Linux paths
-that happen to compile elsewhere. Each cleaner resolves OS-appropriate
-locations (see [`cleansys-core::cleaners::platform`](crates/cleansys-core/src/cleaners/platform.rs))
-and measures real freed bytes (no estimates).
+Cleaners are platform-native: each resolves OS-appropriate locations
+([`cleansys-core::cleaners::platform`](crates/cleansys-core/src/cleaners/platform.rs)) and measures real freed bytes.
 
-| Platform | `cleansys` (TUI/CLI) | `cleansys-gui` | User cleaners | System cleaners |
-|----------|:---:|:---:|-------|-------|
-| Linux (x86_64, aarch64) | ✅ | ✅ | Firefox/Chrome/Chromium caches, `~/.cache`, thumbnails, `/tmp`, pip/npm/cargo caches, XDG Trash | apt/pacman/dnf caches, rotated logs + journald vacuum, `/var/cache`, old kernels, crash reports (root required) |
-| macOS (Intel + Apple Silicon) | ✅ | ✅ | Firefox/Chrome/Safari caches, `~/Library/Caches`, QuickLook thumbnails, `$TMPDIR`, pip/npm/cargo caches, `~/.Trash` | Homebrew cache (**not** root — brew refuses to run as root), Xcode DerivedData, unavailable Simulator caches, rotated system logs, diagnostic/crash reports (root required) |
-| Windows (x86_64) | ✅ | ✅ | Chrome/Edge/Firefox caches, Windows INetCache/CrashDumps, thumbnail cache, `%TEMP%`, pip/npm/cargo caches | Windows Update download cache, `C:\Windows\Temp` (Administrator), Recycle Bin (via Shell32, no Administrator needed for your own bin) |
+| Platform | TUI / CLI | GUI | Web | Typical cleaners (user · system/root) |
+|----------|:---:|:---:|:---:|-------|
+| Linux (x86_64, aarch64) | ✅ | ✅ | ✅ | `~/.cache`, browser caches, thumbnails, `/tmp`, Trash · apt/pacman/dnf caches, journald vacuum, old kernels, crash reports |
+| macOS (Intel + Apple Silicon) | ✅ | ✅ | ✅ | `~/Library/Caches`, browser caches, QuickLook, `$TMPDIR`, `~/.Trash` · Xcode DerivedData, Simulator caches, system logs, crash reports; Homebrew cache runs **without** root |
+| Windows (x86_64) | ✅ | ✅ | ✅ | Browser caches, INetCache, CrashDumps, `%TEMP%`, Recycle Bin · Windows Update cache, `C:\Windows\Temp` (Administrator) |
 
-Windowing / desktop-environment support for `cleansys-gui` (via [Iced](https://iced.rs)/winit):
-- **Linux**: X11 and Wayland (both enabled by default)
-- **macOS**: native Cocoa/AppKit windowing (Intel + Apple Silicon, universal binary in releases)
-- **Windows**: native Win32 windowing
-
-The terminal UI (`cleansys`, via [Ratatui](https://github.com/ratatui-org/ratatui)/[Crossterm](https://github.com/crossterm-rs/crossterm)) works in any terminal emulator on any of the three platforms.
-
-See [Releases](https://github.com/sorinirimies/cleansys/releases) for pre-built binaries: Linux `.deb`/`.rpm`/AppImage, Windows NSIS installer, and a universal macOS `.dmg`.
+pip/npm/cargo caches are cleaned on all three. The GUI uses [Iced](https://iced.rs) (X11 + Wayland, Cocoa, Win32), the TUI works in any
+terminal ([Ratatui](https://github.com/ratatui-org/ratatui)), and the web UI only needs a browser. Pre-built binaries: see [Releases](https://github.com/sorinirimies/cleansys/releases).
 
 ## 🏗️ Architecture
 
