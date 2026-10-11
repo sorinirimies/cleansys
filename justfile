@@ -595,3 +595,7 @@ release-retrigger version:
     @echo "Manually dispatching Release workflow for tag v{{version}}…"
     gh workflow run release.yml --field tag=v{{version}}
     @echo "✅ Dispatched — check progress at: https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/actions"
+
+# Security: dependency vulnerability scan (needs `cargo install cargo-audit`)
+audit:
+    cargo audit
