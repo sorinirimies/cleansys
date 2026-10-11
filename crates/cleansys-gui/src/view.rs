@@ -252,7 +252,7 @@ fn header<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> Elemen
 // ── Sidebar / category navigation ────────────────────────────────────────────
 
 /// `true` for categories on the root/system side of the UI.
-/// [`is_root_category`] for a whole category.
+/// Whole-category check, delegating to the private `is_root_category`.
 pub fn scope_is_root_category(cat: &cleansys_core::CleanerCategory) -> bool {
     is_root_category(&cat.name, &cat.items)
 }
