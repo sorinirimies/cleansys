@@ -92,6 +92,19 @@ def make-gif [frames: list<string>, out: string, secs: float, width: int] {
     print $"✓ ($out)"
 }
 
+# Like make-gif, but every frame is scaled to *fit* a fixed width x height canvas (aspect kept,
+# centred on the page background). Frames of different shapes (desktop / tablet / phone) would
+# otherwise be stretched to the first frame's size.
+def make-gif-fit [frames: list<string>, out: string, secs: float, width: int, height: int] {
+    let dir = (mktemp -d)
+    $frames | enumerate | each { |f|
+        ^ffmpeg -v error -y -i $f.item -vf $"scale=($width):($height):force_original_aspect_ratio=decrease:flags=lanczos,pad=($width):($height):\(ow-iw\)/2:\(oh-ih\)/2:color=#11111b" ($dir | path join $"f($f.index | fill -a r -c '0' -w 3).png")
+    } | ignore
+    ^ffmpeg -v error -y -framerate (1 / $secs) -i ($dir | path join "f%03d.png") -vf "split[a][b];[a]palettegen=max_colors=160:stats_mode=diff[p];[b][p]paletteuse=dither=sierra2_4a" $out
+    rm -rf $dir
+    print $"✓ ($out)"
+}
+
 def main [] {
     let bin = ($ROOT | path join "target" "release" "cleansys-web")
     if not ($bin | path exists) { error make {msg: "build first: cargo build --release -p cleansys-web"} }
@@ -118,11 +131,11 @@ def main [] {
     shoot $browser $"($base)/schedule" 1100 900 ($out | path join "web-schedule.png")
     shoot $browser $"($base)/settings" 1100 800 ($out | path join "web-settings.png")
     shoot $browser $"($base)/about" 1100 640 ($out | path join "web-about.png")
-    make-gif [
+    make-gif-fit [
         ($out | path join "web-wide.png")
         ($out | path join "web-medium.png")
         ($out | path join "web-narrow.png")
-    ] ($out | path join "web-responsive.gif") 1.6 900
+    ] ($out | path join "web-responsive.gif") 1.6 900 620
 
     # ── a real clean (inside the demo HOME): tick -> confirm -> progress -> done ──
     post "/select" {op: "none", back: "/"}
