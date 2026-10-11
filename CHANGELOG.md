@@ -2,83 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.8.1 - 2026-10-09
-### 📚 Documentation
-- docs: update README and CHANGELOG for v0.8.0
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.8.1...v0.8.1
-## 0.8.1 - 2026-10-09
-### 🔧 Chores
-- chore: bump version to 0.8.1
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.8.0...v0.8.1
-## 0.8.0 - 2026-10-09
-### ✨ Features
-- feat(gui): activity panel fills the width, resizable by dragging its top edge, Clear lit only when there is content
-### 🐛 Bug Fixes
-- fix(gui): sudo authentication no longer pins the header badge to ROOT; remove dead code (unused settings fns, icon, message); regression tests
-### 🔧 Chores
-- chore: bump version to 0.8.0
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.9...v0.8.0
-## 0.7.9 - 2026-10-09
-### ✨ Features
-- feat: sudo prompt in web UI; idle-day selector and expandable per-path selection in TUI/GUI/web
-- feat(tui): show clean progress, outcome and activity log in the main view (worker thread); remove the detailed progress screen
-- feat: Settings and About in the TUI, GUI and web UI; version always visible; engine/preferences editable in-app
-- feat(gui): window resizer — presets, grow/shrink, maximise, full screen shortcuts and settings; remember the window size
-- feat: same animated progress in TUI, GUI and web — spinner plus a bar with a sweeping highlight (shared cleansys_core::anim)
-- feat(gui): round progress ring per cleaner/category while measuring, and on progress labels (canvas); shared ring_arc maths
-### 🐛 Bug Fixes
-- fix(test,core): make the web details test independent of the shared sandbox project; write engine.json atomically
-- fix(gui,macos): install the standard Window menu so the system's tiling/zoom shortcuts work (as in tokenburn)
-### 📚 Documentation
-- docs: document details expansion, per-path selection and idle-days selector
-### 📦 Other Changes
-- docs/demo: re-record TUI tapes and web screenshots for the in-view progress, details and idle-days; silence cleaner output in the TUI; wider footer
-### 🔧 Chores
-- chore: bump version to 0.7.9
-### 🧪 Testing
-- test(tui): cover the clean worker, progress/summary state and run keys; tidy logging and lints
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.8...v0.7.9
-## 0.7.8 - 2026-10-07
-### 🔧 Chores
-- chore: bump version to 0.7.8
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.6...v0.7.8
-## 0.7.6 - 2026-10-07
-### 🐛 Bug Fixes
-- fix(core): evict stale project index cache; wipe cached sudo password on drop
-### 📦 Other Changes
-- ux: show a spinner instead of totals until the scan is done (TUI via tui-spinner, GUI, web)
-### 🔧 Chores
-- chore: bump version to 0.7.6
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.7...v0.7.6
-## 0.7.7 - 2026-10-07
-### 🔧 Chores
-- chore: bump version to 0.7.7
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.5...v0.7.7
-## 0.7.5 - 2026-10-07
+## 0.8.2 - 2026-10-11
 ### ⚡ Performance
 - perf(core): parallel directory sizing (rayon, first 4 levels) — Gradle cache 18s -> 4.5s, full scan 20s -> 7.8s
 - perf(core): parallel directory deletion, parallel marker-only project index, streaming file filters
-### 📦 Other Changes
-- scripts: prune_release_assets.nu auto-detects platform/repo/token/latest; just prune-releases[-preview]
-- scripts: prune_release_assets.nu — pure testable helpers, refuse unknown keep tag, nu tests (as in tokenburn)
-- gui/web: header badge shows ROOT while a system (root) category is open
-- release: ship cleansys-web with the rest — crates.io publish, raw binaries, Windows zip, .deb/.rpm; check_publish covers it
-### 🔄 CI
-- ci: keep only the latest release's uploaded assets
-- ci(gitea): checkout@v4 in prune job
-- ci: weekly + manual prune of old release assets (GitHub and Gitea)
-- ci: fix run 2098 — tests no longer assume non-root (CI runs as root), rustdoc private link, retry apt downloads
-### 🔧 Chores
-- chore: bump version to 0.7.5
-### 🧪 Testing
-- test(web): root-badge test shows empty categories (hide=0) so it passes on Linux CI
-- test(web): server tests use a small fake category set instead of scanning the real machine (11 parallel scans timed out on slower/busier hosts); 6s -> 0.15s
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.1...v0.7.5
-## 0.7.1 - 2026-10-06
-### 🔧 Chores
-- chore: bump version to 0.7.1
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.0...v0.7.1
-## 0.7.0 - 2026-10-06
 ### ✨ Features
 - feat(core): declarative cleaner engine with dev, build-artifact and AI/LLM cleaners
 - feat(engine): command action, sudo deletes, and ~130 more cleaners
@@ -86,13 +13,57 @@ All notable changes to this project will be documented in this file.
 - feat(gui): responsive redesign — sidebar nav, background scan with sizes, search, action bar
 - feat(tui): responsive sidebar layout, live sizes, filter, hide-empty; shared ScanBoard in core
 - feat(web): cleansys-web (Topcoat) + nushell-only tooling, new tapes/GIFs/screenshots (git-lfs)
+- feat: sudo prompt in web UI; idle-day selector and expandable per-path selection in TUI/GUI/web
+- feat(tui): show clean progress, outcome and activity log in the main view (worker thread); remove the detailed progress screen
+- feat: Settings and About in the TUI, GUI and web UI; version always visible; engine/preferences editable in-app
+- feat(gui): window resizer — presets, grow/shrink, maximise, full screen shortcuts and settings; remember the window size
+- feat: same animated progress in TUI, GUI and web — spinner plus a bar with a sweeping highlight (shared cleansys_core::anim)
+- feat(gui): round progress ring per cleaner/category while measuring, and on progress labels (canvas); shared ring_arc maths
+- feat(gui): activity panel fills the width, resizable by dragging its top edge, Clear lit only when there is content
 ### 🐛 Bug Fixes
 - fix(gui): stop macOS 'Choose Application' dialog after cleaning
+- fix(core): evict stale project index cache; wipe cached sudo password on drop
+- fix(test,core): make the web details test independent of the shared sandbox project; write engine.json atomically
+- fix(gui,macos): install the standard Window menu so the system's tiling/zoom shortcuts work (as in tokenburn)
+- fix(gui): sudo authentication no longer pins the header badge to ROOT; remove dead code (unused settings fns, icon, message); regression tests
+### 📚 Documentation
+- docs: document details expansion, per-path selection and idle-days selector
+- docs: update README and CHANGELOG for v0.8.0
+- docs: update README and CHANGELOG for v0.8.1
+- docs: tighten README highlights, add GUI downloads and GUI preview
+- docs: caption top README images
+- docs: put image captions above
+- docs: drop GitHub release badge
 ### 📦 Other Changes
 - docs+ux: responsive redesign docs, new tapes/GIFs/screenshots (git-lfs), synthetic demo fixture
+- scripts: prune_release_assets.nu auto-detects platform/repo/token/latest; just prune-releases[-preview]
+- scripts: prune_release_assets.nu — pure testable helpers, refuse unknown keep tag, nu tests (as in tokenburn)
+- gui/web: header badge shows ROOT while a system (root) category is open
+- release: ship cleansys-web with the rest — crates.io publish, raw binaries, Windows zip, .deb/.rpm; check_publish covers it
+- ux: show a spinner instead of totals until the scan is done (TUI via tui-spinner, GUI, web)
+- docs/demo: re-record TUI tapes and web screenshots for the in-view progress, details and idle-days; silence cleaner output in the TUI; wider footer
+- just: push-all(-force) skip missing remotes, time out, summarize
+### 🔄 CI
+- ci: keep only the latest release's uploaded assets
+- ci(gitea): checkout@v4 in prune job
+- ci: weekly + manual prune of old release assets (GitHub and Gitea)
+- ci: fix run 2098 — tests no longer assume non-root (CI runs as root), rustdoc private link, retry apt downloads
 ### 🔧 Chores
 - chore: bump version to 0.7.0
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.22...v0.7.0
+- chore: bump version to 0.7.1
+- chore: bump version to 0.7.5
+- chore: bump version to 0.7.7
+- chore: bump version to 0.7.6
+- chore: bump version to 0.7.8
+- chore: bump version to 0.7.9
+- chore: bump version to 0.8.0
+- chore: bump version to 0.8.1
+- chore(deps): nightly dependency upgrade 2026-10-11
+### 🧪 Testing
+- test(web): root-badge test shows empty categories (hide=0) so it passes on Linux CI
+- test(web): server tests use a small fake category set instead of scanning the real machine (11 parallel scans timed out on slower/busier hosts); 6s -> 0.15s
+- test(tui): cover the clean worker, progress/summary state and run keys; tidy logging and lints
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.22...v0.8.2
 ## 0.6.22 - 2026-10-06
 ### 📚 Documentation
 - docs(readme): add TUI and GUI crates.io download badges
@@ -137,52 +108,48 @@ All notable changes to this project will be documented in this file.
 ## 0.6.15 - 2026-09-25
 ### 🐛 Bug Fixes
 - fix(ci): disable Gitea nightly deps-update schedule to prevent dual auto-release
+### 📚 Documentation
+- docs: update README and CHANGELOG for v0.6.8
 ### 📦 Other Changes
 - merge: reconcile diverged GitHub/gitea-starscream nightly auto-release histories
 - merge: reconcile second round of gitea nightly divergence, bump to 0.6.14
 - merge: reconcile github's 2026-09-24 nightly run (thiserror bump) into 0.6.14
 ### 🔧 Chores
-- chore(deps): nightly dependency upgrade 2026-09-17
 - chore: bump version to 0.6.8
-- chore(deps): nightly dependency upgrade 2026-09-19
+- chore(deps): nightly dependency upgrade 2026-09-17
 - chore: bump version to 0.6.9
-- chore(deps): nightly dependency upgrade 2026-09-22
+- chore(deps): nightly dependency upgrade 2026-09-19
 - chore: bump version to 0.6.10
-- chore(deps): nightly dependency upgrade 2026-09-23
-- chore: bump version to 0.6.11
-- chore(deps): nightly dependency upgrade 2026-09-24
-- chore: bump version to 0.6.12
-- chore(deps): nightly dependency upgrade 2026-09-25
-- chore: bump version to 0.6.15
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.13...v0.6.15
-## 0.6.13 - 2026-09-23
-### 🔧 Chores
-- chore(deps): nightly dependency upgrade 2026-09-23
-- chore: bump version to 0.6.13
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.12...v0.6.13
-## 0.6.12 - 2026-09-22
-### 🔧 Chores
-- chore(deps): nightly dependency upgrade 2026-09-22
-- chore: bump version to 0.6.12
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.11...v0.6.12
-## 0.6.11 - 2026-09-20
-### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-20
 - chore: bump version to 0.6.11
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.10...v0.6.11
-## 0.6.10 - 2026-09-19
+- chore(deps): nightly dependency upgrade 2026-09-22
+- chore: bump version to 0.6.12
+- chore(deps): nightly dependency upgrade 2026-09-23
+- chore: bump version to 0.6.13
+- chore(deps): nightly dependency upgrade 2026-09-25
+- chore: bump version to 0.6.15
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.12...v0.6.15
+## 0.6.12 - 2026-09-24
 ### 🔧 Chores
-- chore(deps): nightly dependency upgrade 2026-09-19
+- chore(deps): nightly dependency upgrade 2026-09-24
+- chore: bump version to 0.6.12
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.11...v0.6.12
+## 0.6.11 - 2026-09-23
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-23
+- chore: bump version to 0.6.11
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.10...v0.6.11
+## 0.6.10 - 2026-09-22
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-22
 - chore: bump version to 0.6.10
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.9...v0.6.10
-## 0.6.9 - 2026-09-17
-### 📚 Documentation
-- docs: update README and CHANGELOG for v0.6.8
+## 0.6.9 - 2026-09-19
 ### 🔧 Chores
-- chore(deps): nightly dependency upgrade 2026-09-17
+- chore(deps): nightly dependency upgrade 2026-09-19
 - chore: bump version to 0.6.9
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.8...v0.6.9
-## 0.6.8 - 2026-09-16
+## 0.6.8 - 2026-09-17
 ### 🐛 Bug Fixes
 - fix(docs): repair corrupted README demo preview + commit real GIF/PNG assets
 - fix(gui): activity log (and whole main screen) didn't stretch full width on resize
@@ -192,6 +159,7 @@ All notable changes to this project will be documented in this file.
 ### 📦 Other Changes
 - merge: reconcile GitHub auto-generated README/CHANGELOG update
 ### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-17
 - chore: bump version to 0.6.8
 ### 🧪 Testing
 - test(tui): add render.rs smoke-test suite; cleanup: finish DRY'ing system_cleaners.rs sudo call sites
@@ -223,36 +191,39 @@ All notable changes to this project will be documented in this file.
 - docs: regenerate CHANGELOG.md after merging Gitea auto-releases
 ### 📦 Other Changes
 - merge: reconcile Gitea nightly-deps auto-releases (v0.6.3, v0.6.4) with GUI sudo fix
-### 🔄 Updated
-- Update jiff crates to latest patch versions
 ### 🔧 Chores
-- chore(deps): nightly dependency upgrade 2026-09-14
-- chore: bump version to 0.6.3
 - chore: bump version to 0.6.5
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.4...v0.6.5
 ## 0.6.4 - 2026-09-14
-### 🔧 Chores
-- chore(deps): nightly dependency upgrade 2026-09-14
-- chore: bump version to 0.6.4
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.3...v0.6.4
-## 0.6.3 - 2026-09-13
 ### 📚 Documentation
 - docs: update README and CHANGELOG for v0.6.2
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-13
 - chore: bump version to 0.6.3
+- chore(deps): nightly dependency upgrade 2026-09-14
+- chore: bump version to 0.6.4
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.3...v0.6.4
+## 0.6.3 - 2026-09-14
+### 🔄 Updated
+- Update jiff crates to latest patch versions
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-14
+- chore: bump version to 0.6.3
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.2...v0.6.3
 ## 0.6.2 - 2026-09-12
 ### 🐛 Bug Fixes
 - fix(ci): install aarch64 cross-libc + alien/fakeroot for Gitea Linux release job
+### 🔧 Chores
+- chore: bump version to 0.6.2
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.1...v0.6.2
+## 0.6.1 - 2026-09-12
 ### 📦 Other Changes
 - Rename TUI crate package to cleansys across tooling
 ### 🔄 Updated
 - Update lockfile dependency patch versions
 ### 🔧 Chores
 - chore: bump version to 0.6.1
-- chore: bump version to 0.6.2
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.0...v0.6.2
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.0...v0.6.1
 ## 0.6.0 - 2026-09-11
 ### ➕ Added
 - Add Starscream remote tasks and bulk pull/force push
@@ -407,11 +378,6 @@ All notable changes to this project will be documented in this file.
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.6...v0.0.7
 ## 0.0.6 - 2025-10-02
 ### 📦 Other Changes
-- Initial commit
-- Implements release workflow with git-cliff
-- Allows publishing crates with uncommitted changes
-- Updates crate category to comply with crates.io
-- Improves progress screen behavior and controls
 - keep cargolock
 ### 🔄 Updated
 - update readme
@@ -419,3 +385,20 @@ All notable changes to this project will be documented in this file.
 - chore: bump version to 0.0.5
 - chore: bump version to 0.0.5
 - chore: bump version to 0.0.6
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.4...v0.0.6
+## 0.0.4 - 2025-06-05
+### 📦 Other Changes
+- Improves progress screen behavior and controls
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.3...v0.0.4
+## 0.0.3 - 2025-06-05
+### 📦 Other Changes
+- Updates crate category to comply with crates.io
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.2...v0.0.3
+## 0.0.2 - 2025-06-05
+### 📦 Other Changes
+- Allows publishing crates with uncommitted changes
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.0.1...v0.0.2
+## 0.0.1 - 2025-06-05
+### 📦 Other Changes
+- Initial commit
+- Implements release workflow with git-cliff
