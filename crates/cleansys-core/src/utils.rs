@@ -2,14 +2,12 @@ use anyhow::{Context, Result};
 use colored::*;
 use std::io::{self, Write};
 use std::process::Command;
-#[cfg(unix)]
-use users::get_effective_uid;
 
 /// Check if the program is running with root privileges (Unix) or an
 /// elevated/Administrator token (Windows).
 #[cfg(unix)]
 pub fn check_root() -> bool {
-    get_effective_uid() == 0
+    (unsafe { libc::geteuid() }) == 0
 }
 
 /// Check if the current process token is elevated (running "as Administrator").

@@ -260,7 +260,7 @@ fn clean_temp_files(opts: RunOptions) -> Result<CleaningResult> {
 
                 // On shared Linux /tmp, only touch files owned by the current user.
                 if let Ok(metadata) = fs::metadata(&path) {
-                    if metadata.uid() == users::get_current_uid() {
+                    if metadata.uid() == unsafe { libc::getuid() } {
                         clean_path(&mut result, &path, "temporary file", opts, false)?;
                     }
                 }

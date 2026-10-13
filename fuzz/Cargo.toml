@@ -1,0 +1,40 @@
+[package]
+name = "cleansys-fuzz"
+version = "0.0.0"
+publish = false
+edition = "2021"
+
+[package.metadata]
+cargo-fuzz = true
+
+[dependencies]
+libfuzzer-sys = "0.4"
+serde_json = "1"
+cleansys-core = { path = "../crates/cleansys-core" }
+
+# Not part of the main workspace (needs nightly).
+[workspace]
+
+[[bin]]
+name = "schedule_parse"
+path = "fuzz_targets/schedule_parse.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "spec_toml"
+path = "fuzz_targets/spec_toml.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "paths_expand"
+path = "fuzz_targets/paths_expand.rs"
+test = false
+doc = false
+
+[[bin]]
+name = "settings_json"
+path = "fuzz_targets/settings_json.rs"
+test = false
+doc = false
