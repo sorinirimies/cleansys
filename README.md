@@ -6,6 +6,8 @@
 [![GUI Downloads](https://img.shields.io/crates/d/cleansys-gui?label=GUI%20downloads)](https://crates.io/crates/cleansys-gui)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI](https://github.com/sorinirimies/cleansys/actions/workflows/ci.yml/badge.svg)](https://github.com/sorinirimies/cleansys/actions/workflows/ci.yml)
+[![Audit](https://github.com/sorinirimies/cleansys/actions/workflows/security.yml/badge.svg)](https://github.com/sorinirimies/cleansys/actions/workflows/security.yml)
+[![Fuzz](https://github.com/sorinirimies/cleansys/actions/workflows/fuzz.yml/badge.svg)](https://github.com/sorinirimies/cleansys/actions/workflows/fuzz.yml)
 
 **CleanSys** finds and removes what quietly eats your disk — browser and app caches, package-manager and
 build-tool caches, `target/` and `node_modules/` folders in old projects, AI/LLM model caches, logs and crash dumps —
