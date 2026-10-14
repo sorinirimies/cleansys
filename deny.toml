@@ -4,7 +4,11 @@ all-features = true
 
 [advisories]
 version = 2
-ignore = []   # add "RUSTSEC-YYYY-NNNN" with a justification comment
+ignore = [
+    # Unmaintained transitive deps of the iced/wgpu GUI stack; no upstream fix yet.
+    "RUSTSEC-2024-0436", # paste
+    "RUSTSEC-2026-0192", # ttf-parser
+]
 
 [licenses]
 version = 2
