@@ -73,10 +73,15 @@ jobs:
             [ "$attempt" = 5 ] && exit 1
           done
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          rustup component add rustfmt clippy
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
       - name: Install Nushell
-        run: cargo install nu --locked
+        run: |
+          V=0.116.1
+          curl -fsSL https://github.com/nushell/nushell/releases/download/$V/nu-$V-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /tmp
+          sudo install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu /usr/local/bin/nu || install -D -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu $HOME/.cargo/bin/nu
+          nu --version
       - name: Quality gate
         run: nu scripts/ci/quality_gate.nu
 
@@ -142,7 +147,11 @@ jobs:
         run: cargo build --release -p cleansys-web --target ${{ matrix.target }}
 
       - name: Install Nushell
-        run: cargo install nu --locked
+        run: |
+          V=0.116.1
+          curl -fsSL https://github.com/nushell/nushell/releases/download/$V/nu-$V-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /tmp
+          sudo install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu /usr/local/bin/nu || install -D -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu $HOME/.cargo/bin/nu
+          nu --version
 
       - name: Build .deb and .rpm
         run: nu scripts/ci/package_linux.nu ${{ needs.validate.outputs.version }} ${{ matrix.target }}
@@ -267,7 +276,11 @@ jobs:
       - name: Install git-cliff
         run: cargo install git-cliff --locked
       - name: Install Nushell
-        run: cargo install nu --locked
+        run: |
+          V=0.116.1
+          curl -fsSL https://github.com/nushell/nushell/releases/download/$V/nu-$V-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /tmp
+          sudo install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu /usr/local/bin/nu || install -D -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu $HOME/.cargo/bin/nu
+          nu --version
       - name: Generate release notes
         run: nu scripts/ci/release_notes.nu ${{ needs.validate.outputs.tag }}
 
@@ -332,7 +345,11 @@ jobs:
           done
           echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
       - name: Install Nushell
-        run: cargo install nu --locked
+        run: |
+          V=0.116.1
+          curl -fsSL https://github.com/nushell/nushell/releases/download/$V/nu-$V-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /tmp
+          sudo install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu /usr/local/bin/nu || install -D -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu $HOME/.cargo/bin/nu
+          nu --version
       - name: Delete assets of every older release (notes and tags stay)
         env:
           TOKEN: ${{ secrets.GITHUB_TOKEN }}
