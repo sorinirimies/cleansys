@@ -2,6 +2,10 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.8.3 - 2026-10-15
+### 🔄 CI
+- ci: put cargo bin on PATH before rustup calls
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.8.2...v0.8.3
 ## 0.8.2 - 2026-10-15
 ### ✨ Features
 - feat(theme): add System theme that follows OS light/dark across core, gui, tui and web
@@ -35,6 +39,7 @@ All notable changes to this project will be documented in this file.
 - chore(justfile): push/pull current branch instead of hardcoded main
 - chore: refresh stale Cargo.lock
 - chore(deps): nightly dependency upgrade 2026-10-15
+- chore: bump version to 0.8.2
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.8.1...v0.8.2
 ## 0.8.1 - 2026-10-09
 ### 🔧 Chores
