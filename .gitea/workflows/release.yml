@@ -73,6 +73,7 @@ jobs:
             [ "$attempt" = 5 ] && exit 1
           done
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          export PATH="$HOME/.cargo/bin:$PATH"
           rustup component add rustfmt clippy
       - name: Cache Cargo
         uses: Swatinem/rust-cache@v2
@@ -123,6 +124,7 @@ jobs:
           done
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           . "$HOME/.cargo/env"
+          export PATH="$HOME/.cargo/bin:$PATH"
           rustup target add ${{ matrix.target }}
 
       - name: Configure aarch64 cross-linker
@@ -210,6 +212,7 @@ jobs:
           done
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           . "$HOME/.cargo/env"
+          export PATH="$HOME/.cargo/bin:$PATH"
           rustup target add x86_64-pc-windows-gnu
 
       - name: Configure Windows cross-linker

@@ -45,6 +45,7 @@ jobs:
           done
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           . "$HOME/.cargo/env"
+          export PATH="$HOME/.cargo/bin:$PATH"
           rustup component add rustfmt
 
       - name: Cache Cargo dependencies
@@ -93,6 +94,7 @@ jobs:
           done
           echo "$HOME/.cargo/bin" >> $GITHUB_PATH
           . "$HOME/.cargo/env"
+          export PATH="$HOME/.cargo/bin:$PATH"
           rustup component add clippy
 
       - name: Cache Cargo dependencies
