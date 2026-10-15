@@ -60,6 +60,8 @@ pub struct CleanSysGui {
     pub active_tab: usize,
     /// Index of the currently selected UI theme (see `cleansys_core::THEME_NAMES`).
     pub theme_index: usize,
+    /// Follow the OS light/dark setting (`theme_index` is then derived, not chosen).
+    pub follow_system: bool,
     /// Whether the "confirm this run" dialog is visible.
     pub confirm_run_pending: bool,
     /// Whether a preview (dry-run) is currently being computed.
@@ -167,6 +169,7 @@ impl CleanSysGui {
             pending_root_ops: Vec::new(),
             active_tab: 0,
             theme_index: settings.theme_index(),
+            follow_system: settings.follow_system_theme(),
             confirm_run_pending: false,
             previewing: false,
             preview_open: false,
@@ -440,7 +443,11 @@ impl CleanSysGui {
             .collect();
 
         cleansys_core::Settings {
-            theme_name: Some(self.current_theme_name().to_string()),
+            theme_name: Some(if self.follow_system {
+                cleansys_core::SYSTEM_THEME_NAME.to_string()
+            } else {
+                self.current_theme_name().to_string()
+            }),
             selected_cleaners,
             hide_empty: Some(self.hide_empty),
             confirm_before_run: Some(self.confirm_before_run),
@@ -607,6 +614,21 @@ mod tests {
             Some(Status::Pending)
         ));
         assert!(state.categories[0].items[1].status.is_none());
+    }
+
+    #[test]
+    fn follow_system_is_saved_as_system_name() {
+        let mut state = CleanSysGui::new();
+        state.follow_system = true;
+        assert_eq!(
+            state.current_settings().theme_name.as_deref(),
+            Some(cleansys_core::SYSTEM_THEME_NAME)
+        );
+        state.follow_system = false;
+        assert_eq!(
+            state.current_settings().theme_name.as_deref(),
+            Some(state.current_theme_name())
+        );
     }
 
     #[test]

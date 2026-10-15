@@ -9,9 +9,24 @@ fn hex(c: Rgb) -> String {
     format!("#{:02x}{:02x}{:02x}", c.r, c.g, c.b)
 }
 
+/// Pseudo-index meaning "follow the system" (one past the last preset).
+pub const SYSTEM_INDEX: usize = THEME_COUNT;
+
 /// CSS custom properties for the theme at `index` (clamped), as one `:root{…}` rule.
+///
+/// [`SYSTEM_INDEX`] yields the dark preset plus a `prefers-color-scheme: light` override,
+/// so the browser follows the OS live.
 pub fn css(index: usize) -> String {
-    let t = theme_by_index(index.min(THEME_COUNT - 1));
+    if index == SYSTEM_INDEX {
+        let dark = css_for(cleansys_core::system_theme_index(true));
+        let light = css_for(cleansys_core::system_theme_index(false));
+        return format!("{dark}@media (prefers-color-scheme:light){{{light}}}");
+    }
+    css_for(index.min(THEME_COUNT - 1))
+}
+
+fn css_for(index: usize) -> String {
+    let t = theme_by_index(index);
     let vars = [
         ("bg", t.background),
         ("panel", t.surface),
@@ -38,6 +53,7 @@ pub fn css(index: usize) -> String {
 /// Pick the theme: an explicit, valid `requested` name wins, otherwise `saved`.
 pub fn resolve(requested: Option<&str>, saved: usize) -> usize {
     match requested {
+        Some(n) if cleansys_core::is_system_name(n) => SYSTEM_INDEX,
         Some(n) if THEME_NAMES.contains(&n) => theme_index_by_name(n),
         _ => saved,
     }
@@ -74,15 +90,21 @@ pub fn catalogue() -> serde_json::Value {
 
 /// The saved theme (shared with the GUI via `settings.json`).
 pub fn saved_index() -> usize {
-    cleansys_core::load_settings()
-        .map(|s| s.theme_index())
-        .unwrap_or(0)
+    match cleansys_core::load_settings() {
+        Ok(s) if s.follow_system_theme() => SYSTEM_INDEX,
+        Ok(s) => s.theme_index(),
+        Err(_) => 0,
+    }
 }
 
 /// Remember `index` for the GUI and web (best effort).
 pub fn save_index(index: usize) {
     if let Ok(mut s) = cleansys_core::load_settings() {
-        s.theme_name = Some(THEME_NAMES[index.min(THEME_COUNT - 1)].to_string());
+        s.theme_name = Some(if index == SYSTEM_INDEX {
+            cleansys_core::SYSTEM_THEME_NAME.to_string()
+        } else {
+            THEME_NAMES[index.min(THEME_COUNT - 1)].to_string()
+        });
         let _ = cleansys_core::save_settings(&s);
     }
 }
@@ -106,6 +128,22 @@ mod tests {
         assert_eq!(resolve(Some(THEME_NAMES[3]), 7), 3);
         assert_eq!(resolve(Some("nope"), 7), 7);
         assert_eq!(resolve(None, 7), 7);
+    }
+
+    #[test]
+    fn system_resolves_to_system_index() {
+        assert_eq!(resolve(Some("System"), 7), SYSTEM_INDEX);
+        assert_eq!(resolve(Some("system"), 7), SYSTEM_INDEX);
+    }
+
+    #[test]
+    fn system_css_has_dark_base_and_light_media_override() {
+        let c = css(SYSTEM_INDEX);
+        assert!(c.starts_with(":root{color-scheme:dark;"), "{c}");
+        assert!(
+            c.contains("@media (prefers-color-scheme:light){:root{color-scheme:light;"),
+            "{c}"
+        );
     }
 
     #[test]

@@ -72,7 +72,18 @@ pub fn subscription(state: &CleanSysGui) -> iced::Subscription<Message> {
             _ => None,
         }));
     }
+    if state.follow_system {
+        subs.push(iced::Subscription::run(system_theme_stream));
+    }
     iced::Subscription::batch(subs)
+}
+
+/// Emits [`Message::SystemThemeTick`] every few seconds (only subscribed while following the system).
+fn system_theme_stream() -> impl iced::futures::Stream<Item = Message> {
+    iced::futures::stream::unfold((), |()| async {
+        std::thread::sleep(std::time::Duration::from_secs(3));
+        Some((Message::SystemThemeTick, ()))
+    })
 }
 
 /// Interval of the animation tick.

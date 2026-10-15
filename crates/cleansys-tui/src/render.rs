@@ -16,6 +16,12 @@ pub fn ui(f: &mut Frame, app: &mut App) {
     // Start every frame from a clean slate so nothing from the previous view
     // (title text, progress panels) bleeds through when views switch.
     f.render_widget(Clear, f.area());
+    crate::theme::set_current(app.theme);
+    // Paint the theme's background and default text colour over the whole screen.
+    f.render_widget(
+        Block::default().style(Style::default().bg(app.theme.bg).fg(app.theme.text)),
+        f.area(),
+    );
 
     // Update animation frame if needed
     app.update_animation();
@@ -67,6 +73,8 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         render_info(f, app, f.area());
     } else if app.schedule_open {
         render_schedule(f, app, f.area());
+    } else if app.theme_picker_open {
+        render_theme_picker(f, app, f.area());
     } else if app.preview_open {
         render_preview(f, app, f.area());
     }
@@ -80,18 +88,18 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
             Span::styled(
                 "Cleansys",
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(crate::theme::th().accent)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 format!(" {}", cleansys_core::appinfo::version_label()),
-                Style::default().fg(Color::Yellow),
+                Style::default().fg(crate::theme::th().warning),
             ),
             Span::raw(" - System Cleaner"),
             if app.terminal_width < 60 || app.terminal_height < 20 {
                 Span::styled(
                     format!(" [{}x{}]", app.terminal_width, app.terminal_height),
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(crate::theme::th().muted),
                 )
             } else {
                 Span::raw("")
@@ -118,12 +126,12 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
                 Span::styled(
                     "Cleansys",
                     Style::default()
-                        .fg(Color::Cyan)
+                        .fg(crate::theme::th().accent)
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
                     format!(" {}", cleansys_core::appinfo::version_label()),
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(crate::theme::th().warning),
                 ),
                 Span::raw(" - Modern System Cleaner for Linux, macOS & Windows"),
             ]),
@@ -161,7 +169,7 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
             Span::styled(
                 "RUNNING",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(crate::theme::th().warning)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw(" "),
@@ -184,7 +192,7 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
         f.render_widget(
             FluxSpinner::new(app.animation_frame as u64)
                 .frames(FluxFrames::CLASSIC)
-                .color(Color::Cyan),
+                .color(crate::theme::th().accent),
             glyph_area,
         );
     }
@@ -271,7 +279,7 @@ fn render_run_panel(f: &mut Frame, app: &App, area: Rect) {
             f.render_widget(
                 Paragraph::new(Span::styled(
                     msg.clone(),
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(crate::theme::th().warning),
                 )),
                 top,
             );
@@ -286,11 +294,11 @@ fn render_run_panel(f: &mut Frame, app: &App, area: Rect) {
 /// Same look as the GUI's bar and the web's `.progress` (see `cleansys_core::anim`).
 fn animated_bar(width: usize, frac: f32, tick: u32) -> Vec<Span<'static>> {
     let (filled, (hl_start, hl_len)) = cleansys_core::anim::bar_cells(width, frac, tick, 16, 4);
-    let base = Style::default().fg(Color::Green);
+    let base = Style::default().fg(crate::theme::th().success);
     let hot = Style::default()
-        .fg(Color::LightGreen)
+        .fg(crate::theme::th().success_hi)
         .add_modifier(Modifier::BOLD);
-    let empty = Style::default().fg(Color::DarkGray);
+    let empty = Style::default().fg(crate::theme::th().muted);
     vec![
         Span::styled("█".repeat(hl_start), base),
         Span::styled("█".repeat(hl_len), hot),
@@ -312,7 +320,7 @@ fn render_progress_bar(f: &mut Frame, app: &App, area: Rect) {
         .title(title)
         .title_bottom(Line::from(" q / Esc: cancel · L: log ").right_aligned())
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Green));
+        .border_style(Style::default().fg(crate::theme::th().success));
     let inner = block.inner(area);
     f.render_widget(block, area);
     if inner.width == 0 || inner.height == 0 {
@@ -331,7 +339,7 @@ fn render_progress_bar(f: &mut Frame, app: &App, area: Rect) {
     let bar_w = (inner.width as usize).saturating_sub(2 + text.chars().count());
     let mut spans = vec![Span::styled(
         format!("{spin} "),
-        Style::default().fg(Color::Cyan),
+        Style::default().fg(crate::theme::th().accent),
     )];
     spans.extend(animated_bar(bar_w, ratio, app.anim_tick));
     spans.push(Span::raw(text));
@@ -340,11 +348,11 @@ fn render_progress_bar(f: &mut Frame, app: &App, area: Rect) {
 
 fn render_summary(f: &mut Frame, sum: &crate::app::RunSummary, area: Rect) {
     let (icon, color) = if sum.cancelled {
-        ("⏹", Color::Yellow)
+        ("⏹", crate::theme::th().warning)
     } else if sum.failed > 0 {
-        ("⚠", Color::Yellow)
+        ("⚠", crate::theme::th().warning)
     } else {
-        ("✓", Color::Green)
+        ("✓", crate::theme::th().success)
     };
     let mut spans = vec![
         Span::styled(
@@ -356,12 +364,12 @@ fn render_summary(f: &mut Frame, sum: &crate::app::RunSummary, area: Rect) {
     if sum.failed > 0 {
         spans.push(Span::styled(
             format!(" · {} failed/cancelled", sum.failed),
-            Style::default().fg(Color::Red),
+            Style::default().fg(crate::theme::th().error),
         ));
     }
     spans.push(Span::styled(
         format!(" · {}", sum.elapsed),
-        Style::default().fg(Color::DarkGray),
+        Style::default().fg(crate::theme::th().muted),
     ));
     let block = Block::default()
         .borders(Borders::ALL)
@@ -379,7 +387,7 @@ fn render_activity_log(f: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .title(" Activity ")
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::DarkGray));
+        .border_style(Style::default().fg(crate::theme::th().muted));
     let inner = block.inner(area);
     let rows = inner.height as usize;
     let width = inner.width as usize;
@@ -388,11 +396,11 @@ fn render_activity_log(f: &mut Frame, app: &App, area: Rect) {
         .iter()
         .map(|l| {
             let color = if l.starts_with('❌') {
-                Color::Red
+                crate::theme::th().error
             } else if l.starts_with('✅') || l.starts_with('🎉') {
-                Color::Green
+                crate::theme::th().success
             } else {
-                Color::Gray
+                crate::theme::th().text_secondary
             };
             let text: String = l.chars().take(width).collect();
             Line::from(Span::styled(text, Style::default().fg(color)))
@@ -401,7 +409,7 @@ fn render_activity_log(f: &mut Frame, app: &App, area: Rect) {
     let body = if lines.is_empty() {
         vec![Line::from(Span::styled(
             "No activity yet.",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(crate::theme::th().muted),
         ))]
     } else {
         lines
@@ -414,11 +422,13 @@ fn size_style(bytes: u64) -> Style {
     const GB: u64 = 1 << 30;
     const MB: u64 = 1 << 20;
     if bytes >= 5 * GB {
-        Style::default().fg(Color::Red).add_modifier(Modifier::BOLD)
+        Style::default()
+            .fg(crate::theme::th().error)
+            .add_modifier(Modifier::BOLD)
     } else if bytes >= 500 * MB {
-        Style::default().fg(Color::Yellow)
+        Style::default().fg(crate::theme::th().warning)
     } else {
-        Style::default().fg(Color::White)
+        Style::default().fg(crate::theme::th().text)
     }
 }
 
@@ -428,7 +438,7 @@ fn spinner_spans(app: &App) -> Vec<Span<'static>> {
     // The same braille spinner the GUI shows (cleansys_core::anim).
     vec![Span::styled(
         cleansys_core::anim::spinner(app.anim_tick),
-        Style::default().fg(Color::Cyan),
+        Style::default().fg(crate::theme::th().accent),
     )]
 }
 
@@ -436,11 +446,14 @@ fn spinner_spans(app: &App) -> Vec<Span<'static>> {
 /// running (the partial sum would be misleading).
 fn to_free_spans(app: &App) -> Vec<Span<'static>> {
     if app.board.is_scanning() {
-        let mut v = vec![Span::styled(" (", Style::default().fg(Color::DarkGray))];
+        let mut v = vec![Span::styled(
+            " (",
+            Style::default().fg(crate::theme::th().muted),
+        )];
         v.extend(spinner_spans(app));
         v.push(Span::styled(
             " measuring…)",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(crate::theme::th().muted),
         ));
         return v;
     }
@@ -448,7 +461,7 @@ fn to_free_spans(app: &App) -> Vec<Span<'static>> {
     if b > 0 {
         vec![Span::styled(
             format!(" ({} to free)", format_size(b)),
-            Style::default().fg(Color::Green),
+            Style::default().fg(crate::theme::th().success),
         )]
     } else {
         Vec::new()
@@ -480,7 +493,7 @@ fn scan_line(app: &App) -> Line<'static> {
         let mut spans = spinner_spans(app);
         spans.push(Span::styled(
             format!(" scanning {done}/{} ", app.board.total),
-            Style::default().fg(Color::Cyan),
+            Style::default().fg(crate::theme::th().accent),
         ));
         // A small bar with the same sweeping highlight as the clean progress bar.
         spans.extend(animated_bar(
@@ -492,7 +505,7 @@ fn scan_line(app: &App) -> Line<'static> {
     } else if app.board.complete() {
         Line::from(Span::styled(
             format!("{} can be freed", format_size(app.board.total_bytes())),
-            Style::default().fg(Color::Green),
+            Style::default().fg(crate::theme::th().success),
         ))
     } else {
         Line::default()
@@ -518,7 +531,7 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
             items.push(ListItem::new(Line::from(Span::styled(
                 "USER LAND",
                 Style::default()
-                    .fg(Color::DarkGray)
+                    .fg(crate::theme::th().muted)
                     .add_modifier(Modifier::BOLD),
             ))));
         }
@@ -527,7 +540,7 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
             items.push(ListItem::new(Line::from(Span::styled(
                 "SYSTEM · ROOT",
                 Style::default()
-                    .fg(Color::DarkGray)
+                    .fg(crate::theme::th().muted)
                     .add_modifier(Modifier::BOLD),
             ))));
         }
@@ -545,7 +558,7 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
         };
         let right = match app.board.category_bytes_when_done(i) {
             Some(b) if b > 0 => Span::styled(format_size(b), size_style(b)),
-            Some(_) => Span::styled("—", Style::default().fg(Color::DarkGray)),
+            Some(_) => Span::styled("—", Style::default().fg(crate::theme::th().muted)),
             None if app.board.is_scanning() => spinner_spans(app)
                 .into_iter()
                 .next()
@@ -562,11 +575,14 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
         };
         let mut left = vec![Span::raw(if active { "▶ " } else { "  " }), Span::raw(name)];
         if ticked > 0 {
-            left.push(Span::styled(tick_text, Style::default().fg(Color::Green)));
+            left.push(Span::styled(
+                tick_text,
+                Style::default().fg(crate::theme::th().success),
+            ));
         }
         let style = if active {
             Style::default()
-                .fg(Color::Yellow)
+                .fg(crate::theme::th().warning)
                 .add_modifier(Modifier::BOLD)
         } else {
             Style::default()
@@ -593,9 +609,9 @@ fn entry_rows(app: &App, ci: usize, ii: usize, width: usize) -> Vec<ListItem<'st
     for e in &info.entries {
         let on = app.board.entry_selected(&e.path);
         let (mark, style) = match (e.skippable, on) {
-            (true, true) => ("[x]", Style::default().fg(Color::Green)),
-            (true, false) => ("[ ]", Style::default().fg(Color::White)),
-            (false, _) => (" · ", Style::default().fg(Color::DarkGray)),
+            (true, true) => ("[x]", Style::default().fg(crate::theme::th().success)),
+            (true, false) => ("[ ]", Style::default().fg(crate::theme::th().text)),
+            (false, _) => (" · ", Style::default().fg(crate::theme::th().muted)),
         };
         let size = format_size(e.bytes);
         let head = format!("    {mark} {}", e.label);
@@ -605,7 +621,7 @@ fn entry_rows(app: &App, ci: usize, ii: usize, width: usize) -> Vec<ListItem<'st
         let left = vec![
             Span::styled(head, style),
             Span::raw("  "),
-            Span::styled(path, Style::default().fg(Color::DarkGray)),
+            Span::styled(path, Style::default().fg(crate::theme::th().muted)),
         ];
         rows.push(ListItem::new(row_line(
             left,
@@ -625,7 +641,7 @@ fn entry_rows(app: &App, ci: usize, ii: usize, width: usize) -> Vec<ListItem<'st
         } else {
             hint.to_string()
         },
-        Style::default().fg(Color::DarkGray),
+        Style::default().fg(crate::theme::th().muted),
     ))));
     rows
 }
@@ -681,18 +697,18 @@ fn render_cleaner_pane(f: &mut Frame, app: &mut App, area: Rect, show_category_b
             .unwrap_or_default();
         let bar = Paragraph::new(Line::from(
             vec![
-                Span::styled("‹ ", Style::default().fg(Color::DarkGray)),
+                Span::styled("‹ ", Style::default().fg(crate::theme::th().muted)),
                 Span::styled(
                     cat.name.clone(),
                     Style::default()
-                        .fg(Color::Yellow)
+                        .fg(crate::theme::th().warning)
                         .add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
                     format!("  {pos}/{}{size}", visible.len()),
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(crate::theme::th().muted),
                 ),
-                Span::styled(" › (Tab)", Style::default().fg(Color::DarkGray)),
+                Span::styled(" › (Tab)", Style::default().fg(crate::theme::th().muted)),
             ]
             .into_iter()
             .chain(if app.board.is_scanning() {
@@ -733,19 +749,21 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
             };
             let checkbox_style = if item.selected {
                 Style::default()
-                    .fg(Color::Green)
+                    .fg(crate::theme::th().success)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(Color::White)
+                Style::default().fg(crate::theme::th().text)
             };
 
             let dimmed = (item.requires_root && !app.is_root)
                 || info.is_some_and(|s| s.bytes == 0 && s.error.is_none());
             // DIM (not a dark colour): stays readable on the highlighted row.
             let name_style = if dimmed {
-                Style::default().fg(Color::Gray).add_modifier(Modifier::DIM)
+                Style::default()
+                    .fg(crate::theme::th().text_secondary)
+                    .add_modifier(Modifier::DIM)
             } else {
-                Style::default().fg(Color::White)
+                Style::default().fg(crate::theme::th().text)
             };
 
             let mut left = vec![
@@ -755,21 +773,27 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
             ];
             match item.risk {
                 cleansys_core::Risk::Safe => {}
-                cleansys_core::Risk::Moderate => {
-                    left.push(Span::styled(" ~", Style::default().fg(Color::Yellow)))
-                }
+                cleansys_core::Risk::Moderate => left.push(Span::styled(
+                    " ~",
+                    Style::default().fg(crate::theme::th().warning),
+                )),
                 cleansys_core::Risk::Caution => left.push(Span::styled(
                     " !",
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(crate::theme::th().error)
+                        .add_modifier(Modifier::BOLD),
                 )),
             }
             if item.requires_root {
-                left.push(Span::styled(" (root)", Style::default().fg(Color::Red)));
+                left.push(Span::styled(
+                    " (root)",
+                    Style::default().fg(crate::theme::th().error),
+                ));
             }
             if filtering {
                 left.push(Span::styled(
                     format!("  · {}", app.categories[ci].name),
-                    Style::default().fg(Color::DarkGray),
+                    Style::default().fg(crate::theme::th().muted),
                 ));
             }
 
@@ -780,27 +804,29 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
                         "{} running",
                         Status::Running.get_animation_frame(app.animation_frame)
                     ),
-                    Style::default().fg(Color::Yellow),
+                    Style::default().fg(crate::theme::th().warning),
                 ),
                 Some(Status::Success(_)) if item.bytes_cleaned > 0 => Span::styled(
                     format!("✓ freed {}", format_size(item.bytes_cleaned)),
-                    Style::default().fg(Color::Green),
+                    Style::default().fg(crate::theme::th().success),
                 ),
                 Some(Status::Success(_)) => {
-                    Span::styled("✓ done", Style::default().fg(Color::Green))
+                    Span::styled("✓ done", Style::default().fg(crate::theme::th().success))
                 }
-                Some(Status::Error(_)) => Span::styled("✗ error", Style::default().fg(Color::Red)),
+                Some(Status::Error(_)) => {
+                    Span::styled("✗ error", Style::default().fg(crate::theme::th().error))
+                }
                 Some(Status::Pending) => {
-                    Span::styled("queued", Style::default().fg(Color::DarkGray))
+                    Span::styled("queued", Style::default().fg(crate::theme::th().muted))
                 }
                 None => match info {
                     Some(s) if s.error.is_some() => {
-                        Span::styled("scan failed", Style::default().fg(Color::Red))
+                        Span::styled("scan failed", Style::default().fg(crate::theme::th().error))
                     }
                     Some(s) if s.bytes > 0 => {
                         Span::styled(format_size(s.bytes), size_style(s.bytes))
                     }
-                    Some(_) => Span::styled("—", Style::default().fg(Color::DarkGray)),
+                    Some(_) => Span::styled("—", Style::default().fg(crate::theme::th().muted)),
                     None if app.board.is_scanning() => spinner_spans(app)
                         .into_iter()
                         .next()
@@ -833,20 +859,20 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
 
     let mut block = Block::default().title(title).borders(Borders::ALL);
     if app.filter_active {
-        block = block.border_style(Style::default().fg(Color::Cyan));
+        block = block.border_style(Style::default().fg(crate::theme::th().accent));
     }
     let block = block.title_bottom({
         let mut spans = scan_line(app).spans;
         spans.push(Span::styled(
             "   ~ moderate  ! caution",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(crate::theme::th().muted),
         ));
         spans.push(Span::styled(
             format!(
                 "   idle ≥ {} [ ]",
                 cleansys_core::engine::config::min_age_label(app.min_age_days)
             ),
-            Style::default().fg(Color::Cyan),
+            Style::default().fg(crate::theme::th().accent),
         ));
         Line::from(spans).right_aligned()
     });
@@ -860,7 +886,11 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
             "Nothing to clean here — already tidy ✨  (e: show empty)"
         };
         f.render_widget(
-            Paragraph::new(Span::styled(msg, Style::default().fg(Color::DarkGray))).block(block),
+            Paragraph::new(Span::styled(
+                msg,
+                Style::default().fg(crate::theme::th().muted),
+            ))
+            .block(block),
             area,
         );
         return;
@@ -887,7 +917,7 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
         .highlight_style(
             Style::default()
                 .add_modifier(Modifier::BOLD)
-                .bg(Color::DarkGray),
+                .bg(crate::theme::th().muted),
         )
         .highlight_symbol("> ");
 
@@ -901,29 +931,32 @@ fn render_item_detail(f: &mut Frame, app: &App, area: Rect) {
         let item = &app.categories[ci].items[ii];
         let info = app.board.get(ci, ii);
         let risk = match item.risk {
-            cleansys_core::Risk::Safe => ("safe", Color::Green),
-            cleansys_core::Risk::Moderate => ("moderate", Color::Yellow),
-            cleansys_core::Risk::Caution => ("CAUTION", Color::Red),
+            cleansys_core::Risk::Safe => ("safe", crate::theme::th().success),
+            cleansys_core::Risk::Moderate => ("moderate", crate::theme::th().warning),
+            cleansys_core::Risk::Caution => ("CAUTION", crate::theme::th().error),
         };
         let mut head = vec![
             Span::styled(
                 item.name.clone(),
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(crate::theme::th().accent)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw("  "),
             Span::styled(format!("[{}]", risk.0), Style::default().fg(risk.1)),
         ];
         if item.requires_root {
-            head.push(Span::styled(" [root]", Style::default().fg(Color::Red)));
+            head.push(Span::styled(
+                " [root]",
+                Style::default().fg(crate::theme::th().error),
+            ));
         }
         lines.push(Line::from(head));
         lines.push(Line::from(item.description.clone()));
         lines.push(Line::from(match info {
             Some(s) if s.error.is_some() => Span::styled(
                 format!("Scan failed: {}", s.error.clone().unwrap_or_default()),
-                Style::default().fg(Color::Red),
+                Style::default().fg(crate::theme::th().error),
             ),
             Some(s) if s.bytes > 0 => Span::styled(
                 format!("Would free {} in {} item(s)", format_size(s.bytes), s.items),
@@ -931,14 +964,17 @@ fn render_item_detail(f: &mut Frame, app: &App, area: Rect) {
             ),
             Some(_) => Span::styled(
                 "Nothing to clean right now",
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(crate::theme::th().muted),
             ),
-            None => Span::styled("Not measured yet…", Style::default().fg(Color::DarkGray)),
+            None => Span::styled(
+                "Not measured yet…",
+                Style::default().fg(crate::theme::th().muted),
+            ),
         }));
         if let Some(top) = info.and_then(|s| s.top_path.as_ref()) {
             lines.push(Line::from(Span::styled(
                 format!("Biggest: {top}"),
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(crate::theme::th().muted),
             )));
         }
     }
@@ -951,7 +987,7 @@ fn render_item_detail(f: &mut Frame, app: &App, area: Rect) {
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .borders(Borders::TOP)
-        .border_style(Style::default().fg(Color::DarkGray));
+        .border_style(Style::default().fg(crate::theme::th().muted));
 
     let inner_area = block.inner(area);
 
@@ -970,20 +1006,20 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             ]
         };
         let mut hints: Vec<Span> = Vec::new();
-        hints.extend(key("Space", "Sel", Color::Yellow));
-        hints.extend(key("Enter", "Run", Color::Green));
-        hints.extend(key("Tab", "Cat", Color::Blue));
-        hints.extend(key("r", "Rec", Color::Cyan));
-        hints.extend(key("S", "Sched", Color::Cyan));
-        hints.extend(key("L", "Log", Color::Cyan));
-        hints.extend(key("?", "Help", Color::Magenta));
-        hints.extend(key("q", "Quit", Color::Red));
+        hints.extend(key("Space", "Sel", crate::theme::th().warning));
+        hints.extend(key("Enter", "Run", crate::theme::th().success));
+        hints.extend(key("Tab", "Cat", crate::theme::th().accent));
+        hints.extend(key("r", "Rec", crate::theme::th().accent));
+        hints.extend(key("S", "Sched", crate::theme::th().accent));
+        hints.extend(key("L", "Log", crate::theme::th().accent));
+        hints.extend(key("?", "Help", crate::theme::th().accent));
+        hints.extend(key("q", "Quit", crate::theme::th().error));
         let mut status_spans = vec![
-            Span::styled("Selected: ", Style::default().fg(Color::White)),
+            Span::styled("Selected: ", Style::default().fg(crate::theme::th().text)),
             Span::styled(
                 n.to_string(),
                 Style::default()
-                    .fg(Color::Blue)
+                    .fg(crate::theme::th().accent)
                     .add_modifier(Modifier::BOLD),
             ),
         ];
@@ -993,7 +1029,7 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
                 "Idle ≥ {} ([ ])",
                 cleansys_core::engine::config::min_age_label(app.min_age_days)
             ),
-            Style::default().fg(Color::Cyan),
+            Style::default().fg(crate::theme::th().accent),
         ));
         status_spans.extend(to_free_spans(app));
         let status = Line::from(status_spans);
@@ -1018,24 +1054,26 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             Span::styled(
                 "User: ",
                 Style::default()
-                    .fg(Color::White)
+                    .fg(crate::theme::th().text)
                     .add_modifier(Modifier::BOLD),
             ),
             if app.is_root {
                 Span::styled(
                     "root",
-                    Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                    Style::default()
+                        .fg(crate::theme::th().error)
+                        .add_modifier(Modifier::BOLD),
                 )
             } else {
                 Span::styled(
                     "standard",
                     Style::default()
-                        .fg(Color::Green)
+                        .fg(crate::theme::th().success)
                         .add_modifier(Modifier::BOLD),
                 )
             },
             Span::raw("  •  "),
-            Span::styled("Selected: ", Style::default().fg(Color::White)),
+            Span::styled("Selected: ", Style::default().fg(crate::theme::th().text)),
             Span::styled(
                 // Live count of ticked cleaners.
                 format!(
@@ -1047,7 +1085,7 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
                         .count()
                 ),
                 Style::default()
-                    .fg(Color::Blue)
+                    .fg(crate::theme::th().accent)
                     .add_modifier(Modifier::BOLD),
             ),
         ];
@@ -1059,55 +1097,57 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             Span::styled(
                 "Space",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(crate::theme::th().warning)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw(": Select  "),
             Span::styled(
                 "Enter",
                 Style::default()
-                    .fg(Color::Green)
+                    .fg(crate::theme::th().success)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw(": Run  "),
             Span::styled(
                 "Tab",
                 Style::default()
-                    .fg(Color::Blue)
+                    .fg(crate::theme::th().accent)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw(": Category  "),
             Span::styled(
                 "r",
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(crate::theme::th().accent)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw(": Recommended  "),
             Span::styled(
                 "S",
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(crate::theme::th().accent)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw(": Schedule  "),
             Span::styled(
                 "L",
                 Style::default()
-                    .fg(Color::Cyan)
+                    .fg(crate::theme::th().accent)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw(": Log  "),
             Span::styled(
                 "?",
                 Style::default()
-                    .fg(Color::Magenta)
+                    .fg(crate::theme::th().accent)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::raw(": Help  "),
             Span::styled(
                 "q",
-                Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(crate::theme::th().error)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::raw(": Quit"),
         ])];
@@ -1135,7 +1175,7 @@ fn render_help(f: &mut Frame, area: Rect) {
         Line::from(vec![Span::styled(
             "🔍 Cleansys Help",
             Style::default()
-                .fg(Color::Cyan)
+                .fg(crate::theme::th().accent)
                 .add_modifier(Modifier::BOLD),
         )]),
         l(""),
@@ -1162,6 +1202,7 @@ fn render_help(f: &mut Frame, area: Rect) {
         l("  Progress, the outcome and the activity log appear under the list;"),
         l("  q / Esc cancels a running clean, Esc dismisses the summary, L toggles the log"),
         l("  R: Re-scan sizes      S: Schedule automatic cleaning"),
+        l("  T: Theme picker (System follows your OS light/dark; ↑/↓ previews, Esc closes)"),
         l(""),
         h("🔒 System Operations:"),
         l("  System cleaners need sudo/root: run 'sudo cleansys' or enter your"),
@@ -1204,7 +1245,7 @@ fn render_confirm_run(f: &mut Frame, app: &App, area: Rect) {
         Line::from(vec![Span::styled(
             "⚠️  Confirm Cleaning",
             Style::default()
-                .fg(Color::Yellow)
+                .fg(crate::theme::th().warning)
                 .add_modifier(Modifier::BOLD),
         )]),
         Line::from(vec![Span::raw("")]),
@@ -1221,7 +1262,7 @@ fn render_confirm_run(f: &mut Frame, app: &App, area: Rect) {
     if app.pending_run_selection.len() > 15 {
         lines.push(Line::from(vec![Span::styled(
             format!("  … and {} more", app.pending_run_selection.len() - 15),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(crate::theme::th().muted),
         )]));
     }
 
@@ -1229,7 +1270,7 @@ fn render_confirm_run(f: &mut Frame, app: &App, area: Rect) {
     lines.push(Line::from(vec![Span::styled(
         "Enter/y: Run now    Esc/n: Cancel",
         Style::default()
-            .fg(Color::Green)
+            .fg(crate::theme::th().success)
             .add_modifier(Modifier::BOLD),
     )]));
 
@@ -1238,7 +1279,7 @@ fn render_confirm_run(f: &mut Frame, app: &App, area: Rect) {
             Block::default()
                 .title("Confirm")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Yellow)),
+                .border_style(Style::default().fg(crate::theme::th().warning)),
         )
         .wrap(Wrap { trim: true });
 
@@ -1260,18 +1301,18 @@ fn render_schedule(f: &mut Frame, app: &App, area: Rect) {
         Line::from(vec![Span::styled(
             "⏰ Automatic cleaning",
             Style::default()
-                .fg(Color::Cyan)
+                .fg(crate::theme::th().accent)
                 .add_modifier(Modifier::BOLD),
         )]),
         Line::from(""),
         Line::from(match &app.schedule_installed {
             Some(b) => Span::styled(
                 format!("Status: ACTIVE via {b} — {}", d.describe()),
-                Style::default().fg(Color::Green),
+                Style::default().fg(crate::theme::th().success),
             ),
             None => Span::styled(
                 "Status: not scheduled",
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(crate::theme::th().muted),
             ),
         }),
     ];
@@ -1284,7 +1325,7 @@ fn render_schedule(f: &mut Frame, app: &App, area: Rect) {
                 l.cleaners_run,
                 if l.scheduled { ", scheduled" } else { "" }
             ),
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(crate::theme::th().muted),
         )));
     }
     lines.push(Line::from(""));
@@ -1332,8 +1373,8 @@ fn render_schedule(f: &mut Frame, app: &App, area: Rect) {
         let selected = i == app.schedule_field;
         let style = if selected {
             Style::default()
-                .fg(Color::Black)
-                .bg(Color::Cyan)
+                .fg(crate::theme::th().bg)
+                .bg(crate::theme::th().accent)
                 .add_modifier(Modifier::BOLD)
         } else {
             Style::default()
@@ -1352,22 +1393,22 @@ fn render_schedule(f: &mut Frame, app: &App, area: Rect) {
     lines.push(Line::from(format!("Will run: {}", d.describe())));
     lines.push(Line::from(Span::styled(
         "Unattended runs only touch user-land cleaners, skip apps that are open,",
-        Style::default().fg(Color::DarkGray),
+        Style::default().fg(crate::theme::th().muted),
     )));
     lines.push(Line::from(Span::styled(
         "and never include caution-risk cleaners unless you ticked them (Selected).",
-        Style::default().fg(Color::DarkGray),
+        Style::default().fg(crate::theme::th().muted),
     )));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         app.schedule_message.clone(),
-        Style::default().fg(Color::Yellow),
+        Style::default().fg(crate::theme::th().warning),
     )));
     lines.push(Line::from(""));
     lines.push(Line::from(Span::styled(
         "↑/↓ field   ←/→ change   Enter enable/update   d remove   Esc close",
         Style::default()
-            .fg(Color::Green)
+            .fg(crate::theme::th().success)
             .add_modifier(Modifier::BOLD),
     )));
 
@@ -1376,7 +1417,7 @@ fn render_schedule(f: &mut Frame, app: &App, area: Rect) {
             Block::default()
                 .title("Schedule")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan)),
+                .border_style(Style::default().fg(crate::theme::th().accent)),
         )
         .wrap(Wrap { trim: false });
     f.render_widget(Clear, popup);
@@ -1397,7 +1438,7 @@ fn render_preview(f: &mut Frame, app: &App, area: Rect) {
         Line::from(vec![Span::styled(
             "🔍 Preview (dry-run)",
             Style::default()
-                .fg(Color::Cyan)
+                .fg(crate::theme::th().accent)
                 .add_modifier(Modifier::BOLD),
         )]),
         Line::from(vec![Span::raw("")]),
@@ -1411,7 +1452,7 @@ fn render_preview(f: &mut Frame, app: &App, area: Rect) {
     if app.preview_results.is_empty() {
         lines.push(Line::from(vec![Span::styled(
             "Nothing to clean — all selected cleaners are already empty.",
-            Style::default().fg(Color::DarkGray),
+            Style::default().fg(crate::theme::th().muted),
         )]));
     }
 
@@ -1438,7 +1479,7 @@ fn render_preview(f: &mut Frame, app: &App, area: Rect) {
         if result.items.len() > 3 {
             lines.push(Line::from(vec![Span::styled(
                 format!("    … and {} more", result.items.len() - 3),
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(crate::theme::th().muted),
             )]));
         }
         lines.push(Line::from(vec![Span::raw("")]));
@@ -1447,7 +1488,7 @@ fn render_preview(f: &mut Frame, app: &App, area: Rect) {
     lines.push(Line::from(vec![Span::styled(
         "Enter/Esc/q: Close",
         Style::default()
-            .fg(Color::Green)
+            .fg(crate::theme::th().success)
             .add_modifier(Modifier::BOLD),
     )]));
 
@@ -1456,7 +1497,7 @@ fn render_preview(f: &mut Frame, app: &App, area: Rect) {
             Block::default()
                 .title("Preview")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Cyan)),
+                .border_style(Style::default().fg(crate::theme::th().accent)),
         )
         .wrap(Wrap { trim: true });
 
@@ -1474,7 +1515,7 @@ fn render_admin_notice(f: &mut Frame, area: Rect) {
         Line::from(vec![Span::styled(
             "⚠️  Administrator privileges required",
             Style::default()
-                .fg(Color::Yellow)
+                .fg(crate::theme::th().warning)
                 .add_modifier(Modifier::BOLD),
         )]),
         Line::from(vec![Span::raw("")]),
@@ -1488,7 +1529,7 @@ fn render_admin_notice(f: &mut Frame, area: Rect) {
         Line::from(vec![Span::styled(
             "Enter/Esc/q: Close",
             Style::default()
-                .fg(Color::Green)
+                .fg(crate::theme::th().success)
                 .add_modifier(Modifier::BOLD),
         )]),
     ];
@@ -1498,7 +1539,7 @@ fn render_admin_notice(f: &mut Frame, area: Rect) {
             Block::default()
                 .title("Administrator required")
                 .borders(Borders::ALL)
-                .border_style(Style::default().fg(Color::Yellow)),
+                .border_style(Style::default().fg(crate::theme::th().warning)),
         )
         .wrap(Wrap { trim: true });
 
@@ -1514,19 +1555,25 @@ fn tab_line(app: &App) -> Line<'static> {
             Span::styled(
                 format!(" {label} "),
                 Style::default()
-                    .fg(Color::Black)
-                    .bg(Color::Cyan)
+                    .fg(crate::theme::th().bg)
+                    .bg(crate::theme::th().accent)
                     .add_modifier(Modifier::BOLD),
             )
         } else {
-            Span::styled(format!(" {label} "), Style::default().fg(Color::Gray))
+            Span::styled(
+                format!(" {label} "),
+                Style::default().fg(crate::theme::th().text_secondary),
+            )
         }
     };
     Line::from(vec![
         tab("Settings (o)", app.info_tab == InfoTab::Settings),
         Span::raw(" "),
         tab("About (i)", app.info_tab == InfoTab::About),
-        Span::styled("   Tab: switch", Style::default().fg(Color::DarkGray)),
+        Span::styled(
+            "   Tab: switch",
+            Style::default().fg(crate::theme::th().muted),
+        ),
     ])
 }
 
@@ -1536,7 +1583,7 @@ fn render_info(f: &mut Frame, app: &mut App, area: Rect) {
     let block = Block::default()
         .title(format!(" {} ", cleansys_core::appinfo::title()))
         .borders(Borders::ALL)
-        .border_style(Style::default().fg(Color::Cyan));
+        .border_style(Style::default().fg(crate::theme::th().accent));
     let inner = block.inner(popup);
     f.render_widget(block, popup);
 
@@ -1567,10 +1614,13 @@ fn render_info(f: &mut Frame, app: &mut App, area: Rect) {
             "↑/↓ move · Enter: open link in your browser · Tab Settings · Esc close"
         }
     };
-    let msg_style = Style::default().fg(Color::Yellow);
+    let msg_style = Style::default().fg(crate::theme::th().warning);
     let lines = vec![
         Line::from(Span::styled(app.settings_message.clone(), msg_style)),
-        Line::from(Span::styled(hint, Style::default().fg(Color::DarkGray))),
+        Line::from(Span::styled(
+            hint,
+            Style::default().fg(crate::theme::th().muted),
+        )),
     ];
     f.render_widget(Paragraph::new(lines), chunks[2]);
 }
@@ -1580,19 +1630,19 @@ fn value_span(text: String, focused: bool) -> Span<'static> {
         Span::styled(
             format!("◂ {text} ▸"),
             Style::default()
-                .fg(Color::Cyan)
+                .fg(crate::theme::th().accent)
                 .add_modifier(Modifier::BOLD),
         )
     } else {
-        Span::styled(text, Style::default().fg(Color::Cyan))
+        Span::styled(text, Style::default().fg(crate::theme::th().accent))
     }
 }
 
 fn switch_span(on: bool) -> Span<'static> {
     if on {
-        Span::styled("[x] on ", Style::default().fg(Color::Green))
+        Span::styled("[x] on ", Style::default().fg(crate::theme::th().success))
     } else {
-        Span::styled("[ ] off", Style::default().fg(Color::DarkGray))
+        Span::styled("[ ] off", Style::default().fg(crate::theme::th().muted))
     }
 }
 
@@ -1606,7 +1656,7 @@ fn render_settings_tab(f: &mut Frame, app: &mut App, area: Rect) {
         ListItem::new(Line::from(Span::styled(
             t,
             Style::default()
-                .fg(Color::Yellow)
+                .fg(crate::theme::th().warning)
                 .add_modifier(Modifier::BOLD),
         )))
     };
@@ -1658,14 +1708,14 @@ fn render_settings_tab(f: &mut Frame, app: &mut App, area: Rect) {
                 Span::raw("  "),
                 Span::styled(
                     roots.get(*i).cloned().unwrap_or_default(),
-                    Style::default().fg(Color::White),
+                    Style::default().fg(crate::theme::th().text),
                 ),
             ]),
             SettingsRow::Exclude(i) => Line::from(vec![
                 Span::raw("  "),
                 Span::styled(
                     app.engine_cfg.exclude.get(*i).cloned().unwrap_or_default(),
-                    Style::default().fg(Color::White),
+                    Style::default().fg(crate::theme::th().text),
                 ),
             ]),
             SettingsRow::AddRoot | SettingsRow::AddExclude => {
@@ -1676,8 +1726,11 @@ fn render_settings_tab(f: &mut Frame, app: &mut App, area: Rect) {
                 };
                 match &app.settings_input {
                     Some(inp) if inp.kind == kind => Line::from(vec![
-                        Span::styled("  ＋ ", Style::default().fg(Color::Green)),
-                        Span::styled(format!("{}▏", inp.text), Style::default().fg(Color::White)),
+                        Span::styled("  ＋ ", Style::default().fg(crate::theme::th().success)),
+                        Span::styled(
+                            format!("{}▏", inp.text),
+                            Style::default().fg(crate::theme::th().text),
+                        ),
                     ]),
                     _ => Line::from(Span::styled(
                         if kind == InputKind::Root {
@@ -1685,7 +1738,7 @@ fn render_settings_tab(f: &mut Frame, app: &mut App, area: Rect) {
                         } else {
                             "  ＋ Add a pattern…"
                         },
-                        Style::default().fg(Color::Green),
+                        Style::default().fg(crate::theme::th().success),
                     )),
                 }
             }
@@ -1699,7 +1752,7 @@ fn render_settings_tab(f: &mut Frame, app: &mut App, area: Rect) {
         .highlight_style(
             Style::default()
                 .add_modifier(Modifier::BOLD)
-                .bg(Color::DarkGray),
+                .bg(crate::theme::th().muted),
         )
         .highlight_symbol("> ");
     f.render_stateful_widget(list, area, &mut app.list_info_state);
@@ -1712,12 +1765,12 @@ fn render_about_tab(f: &mut Frame, app: &mut App, area: Rect) {
     items.push(ListItem::new(Line::from(vec![Span::styled(
         format!("  {}", cleansys_core::appinfo::title()),
         Style::default()
-            .fg(Color::Cyan)
+            .fg(crate::theme::th().accent)
             .add_modifier(Modifier::BOLD),
     )])));
     items.push(ListItem::new(Line::from(Span::styled(
         format!("  {}", cleansys_core::appinfo::TAGLINE),
-        Style::default().fg(Color::Gray),
+        Style::default().fg(crate::theme::th().text_secondary),
     ))));
     items.push(ListItem::new(Line::raw("")));
     let first_row = items.len();
@@ -1725,17 +1778,17 @@ fn render_about_tab(f: &mut Frame, app: &mut App, area: Rect) {
         let is_link = cleansys_core::appinfo::is_link(value);
         let style = if is_link {
             Style::default()
-                .fg(Color::Cyan)
+                .fg(crate::theme::th().accent)
                 .add_modifier(Modifier::UNDERLINED)
         } else {
-            Style::default().fg(Color::White)
+            Style::default().fg(crate::theme::th().text)
         };
         let room = width.saturating_sub(18);
         let shown = shorten_left(value, room);
         items.push(ListItem::new(Line::from(vec![
             Span::styled(
                 format!("  {label:<14}"),
-                Style::default().fg(Color::DarkGray),
+                Style::default().fg(crate::theme::th().muted),
             ),
             Span::styled(shown, style),
         ])));
@@ -1747,8 +1800,79 @@ fn render_about_tab(f: &mut Frame, app: &mut App, area: Rect) {
         .highlight_style(
             Style::default()
                 .add_modifier(Modifier::BOLD)
-                .bg(Color::DarkGray),
+                .bg(crate::theme::th().muted),
         )
         .highlight_symbol("> ");
     f.render_stateful_widget(list, area, &mut app.list_info_state);
+}
+
+/// The theme picker popup: "System" plus every preset, with a colour swatch each.
+fn render_theme_picker(f: &mut Frame, app: &App, area: Rect) {
+    use ratatui::widgets::ListState;
+    let t = app.theme;
+    let h = area.height.saturating_sub(4).clamp(8, 24);
+    let w = 44.min(area.width);
+    let popup = Rect::new(
+        area.x + area.width.saturating_sub(w) / 2,
+        area.y + area.height.saturating_sub(h) / 2,
+        w,
+        h.min(area.height),
+    );
+    f.render_widget(Clear, popup);
+
+    let items: Vec<ListItem> = (0..crate::theme::PICKER_LEN)
+        .map(|i| {
+            let swatch = |c: cleansys_core::Rgb| {
+                Span::styled("■", Style::default().fg(Color::Rgb(c.r, c.g, c.b)))
+            };
+            // "System" previews the preset it currently resolves to.
+            let preview = if i == 0 {
+                cleansys_core::theme_by_index(cleansys_core::current_system_theme_index())
+            } else {
+                cleansys_core::theme_by_index(i - 1)
+            };
+            let active = i == app.picker_index();
+            ListItem::new(Line::from(vec![
+                swatch(preview.accent),
+                swatch(preview.success),
+                swatch(preview.warning),
+                Span::raw(" "),
+                Span::styled(
+                    crate::theme::picker_name(i),
+                    if active {
+                        Style::default().fg(t.accent).add_modifier(Modifier::BOLD)
+                    } else {
+                        Style::default().fg(t.text)
+                    },
+                ),
+            ]))
+        })
+        .collect();
+
+    let block = Block::default()
+        .title(Span::styled(
+            format!(
+                " 🎨 Theme · {}/{} ",
+                app.picker_index() + 1,
+                crate::theme::PICKER_LEN
+            ),
+            Style::default().fg(t.accent).add_modifier(Modifier::BOLD),
+        ))
+        .title_bottom(Span::styled(
+            " ↑/↓ preview · Esc/Enter close ",
+            Style::default().fg(t.muted),
+        ))
+        .borders(Borders::ALL)
+        .border_style(Style::default().fg(t.accent))
+        .style(Style::default().bg(t.surface).fg(t.text));
+    let list = List::new(items)
+        .block(block)
+        .highlight_style(
+            Style::default()
+                .bg(t.selection)
+                .add_modifier(Modifier::BOLD),
+        )
+        .highlight_symbol("▶ ");
+    let mut state = ListState::default().with_selected(Some(app.picker_index()));
+    f.render_stateful_widget(list, popup, &mut state);
 }

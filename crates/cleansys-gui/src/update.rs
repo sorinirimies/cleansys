@@ -359,9 +359,22 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
         }
 
         Message::ThemeChanged(idx) => {
-            if idx < cleansys_core::THEME_COUNT {
+            if idx == cleansys_core::THEME_COUNT {
+                // The "System" entry: follow the OS light/dark setting.
+                state.follow_system = true;
+                state.theme_index = cleansys_core::current_system_theme_index();
+                state.save_theme();
+            } else if idx < cleansys_core::THEME_COUNT {
+                state.follow_system = false;
                 state.theme_index = idx;
                 state.save_theme();
+            }
+            Task::none()
+        }
+
+        Message::SystemThemeTick => {
+            if state.follow_system {
+                state.theme_index = cleansys_core::current_system_theme_index();
             }
             Task::none()
         }
@@ -1182,6 +1195,36 @@ mod tests {
         let _ = update(&mut state, Message::ThemeChanged(target));
         assert_eq!(state.theme_index, target);
         assert_eq!(state.current_theme_name(), "Nord");
+    }
+
+    #[test]
+    fn theme_changed_to_system_follows_and_picking_preset_stops() {
+        let mut state = CleanSysGui::new();
+        let _ = update(
+            &mut state,
+            Message::ThemeChanged(cleansys_core::THEME_COUNT),
+        );
+        assert!(state.follow_system);
+        assert!(state.theme_index < cleansys_core::THEME_COUNT);
+        let nord = cleansys_core::theme_index_by_name("Nord");
+        let _ = update(&mut state, Message::ThemeChanged(nord));
+        assert!(!state.follow_system);
+        assert_eq!(state.theme_index, nord);
+    }
+
+    #[test]
+    fn system_tick_only_changes_theme_when_following() {
+        let mut state = CleanSysGui::new();
+        state.follow_system = false;
+        state.theme_index = 9;
+        let _ = update(&mut state, Message::SystemThemeTick);
+        assert_eq!(state.theme_index, 9);
+        state.follow_system = true;
+        let _ = update(&mut state, Message::SystemThemeTick);
+        assert_eq!(
+            state.theme_index,
+            cleansys_core::current_system_theme_index()
+        );
     }
 
     #[test]

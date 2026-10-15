@@ -15,6 +15,8 @@ pub enum Message {
     SwitchCategoryTab(usize),
     /// User picked a different theme from the theme selector.
     ThemeChanged(usize),
+    /// Periodic re-check of the OS appearance while following the system theme.
+    SystemThemeTick,
     /// User clicked "Run selected" — shows the confirmation dialog rather
     /// than cleaning immediately.
     RequestRun,

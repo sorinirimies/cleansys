@@ -55,6 +55,10 @@ pub use cleaners::{system_cleaners, user_cleaners};
 pub use model::{load_categories, select_recommended, CleanerCategory, CleanerItem, Risk, Status};
 pub use scan::{spawn_scan, EntryState, ScanBoard, ScanEntry, ScanInfo};
 pub use settings::{load_settings, save_settings, update_settings, Settings};
+pub use theme::system::{
+    current_system_theme_index, detect_system_dark, is_system_name, system_theme_index,
+    SYSTEM_THEME_NAME,
+};
 pub use theme::{theme_by_index, theme_index_by_name, AppTheme, Rgb, THEME_COUNT, THEME_NAMES};
 pub use utils::{
     check_root, confirm, format_size, get_size, print_error, print_header, remove_dir_all_parallel,

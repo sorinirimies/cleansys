@@ -31,6 +31,14 @@ struct Cli {
     #[arg(short, long)]
     verbose: bool,
 
+    /// Colour theme for the TUI (`System` follows the OS; see --list-themes). Remembered.
+    #[arg(long, value_name = "NAME", global = true)]
+    theme: Option<String>,
+
+    /// Print every theme name and exit
+    #[arg(long)]
+    list_themes: bool,
+
     #[command(subcommand)]
     command: Option<Commands>,
 }
@@ -440,6 +448,29 @@ fn run_config_cmd(action: ConfigCmd) -> Result<()> {
 
 fn main() -> Result<()> {
     let cli = Cli::parse();
+
+    if cli.list_themes {
+        println!("{}", cleansys_core::SYSTEM_THEME_NAME);
+        for n in cleansys_core::THEME_NAMES {
+            println!("{n}");
+        }
+        return Ok(());
+    }
+    if let Some(name) = &cli.theme {
+        match cleansys_tui::theme::find(name) {
+            Some(choice) => {
+                let saved = match choice {
+                    None => cleansys_core::SYSTEM_THEME_NAME.to_string(),
+                    Some(i) => cleansys_core::THEME_NAMES[i].to_string(),
+                };
+                let _ = cleansys_core::update_settings(|s| s.theme_name = Some(saved));
+            }
+            None => {
+                eprintln!("unknown theme '{name}' (try --list-themes)");
+                std::process::exit(2);
+            }
+        }
+    }
 
     setup_logger(cli.verbose);
     debug!(

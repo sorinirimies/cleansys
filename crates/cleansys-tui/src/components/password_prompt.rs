@@ -1,7 +1,7 @@
 use anyhow::Result;
 use ratatui::{
     layout::Rect,
-    style::{Color, Modifier, Style},
+    style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Wrap},
     Frame,
@@ -131,7 +131,7 @@ impl PasswordPrompt {
             Line::from(vec![Span::styled(
                 "🔒 System Cleaner Authentication",
                 Style::default()
-                    .fg(Color::Yellow)
+                    .fg(crate::theme::th().warning)
                     .add_modifier(Modifier::BOLD),
             )]),
             Line::from(vec![Span::raw("")]),
@@ -145,14 +145,14 @@ impl PasswordPrompt {
         // Add password input line with masked characters
         let password_display = "•".repeat(self.password_input.len());
         lines.push(Line::from(vec![
-            Span::styled("Password: ", Style::default().fg(Color::Cyan)),
+            Span::styled("Password: ", Style::default().fg(crate::theme::th().accent)),
             Span::styled(
                 password_display,
                 Style::default()
-                    .fg(Color::White)
+                    .fg(crate::theme::th().text)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::styled("_", Style::default().fg(Color::Yellow)),
+            Span::styled("_", Style::default().fg(crate::theme::th().warning)),
         ]));
 
         lines.push(Line::from(vec![Span::raw("")]));
@@ -161,7 +161,7 @@ impl PasswordPrompt {
         if let Some(error) = &self.error_message {
             lines.push(Line::from(vec![Span::styled(
                 format!("❌ {}", error),
-                Style::default().fg(Color::Red),
+                Style::default().fg(crate::theme::th().error),
             )]));
             lines.push(Line::from(vec![Span::raw("")]));
         }
@@ -170,7 +170,7 @@ impl PasswordPrompt {
         lines.push(Line::from(vec![Span::styled(
             "Press Enter to authenticate | ESC to cancel",
             Style::default()
-                .fg(Color::DarkGray)
+                .fg(crate::theme::th().muted)
                 .add_modifier(Modifier::ITALIC),
         )]));
 
@@ -179,12 +179,12 @@ impl PasswordPrompt {
                 Block::default()
                     .title("Authentication Required")
                     .borders(Borders::ALL)
-                    .border_style(Style::default().fg(Color::Yellow)),
+                    .border_style(Style::default().fg(crate::theme::th().warning)),
             )
             .wrap(Wrap { trim: true });
 
         // Clear the area behind the popup
-        let clear_block = Block::default().style(Style::default().bg(Color::Black));
+        let clear_block = Block::default().style(Style::default().bg(crate::theme::th().bg));
         f.render_widget(clear_block, popup_area);
 
         // Render the popup

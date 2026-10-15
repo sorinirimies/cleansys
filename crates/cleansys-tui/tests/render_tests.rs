@@ -431,7 +431,7 @@ fn highlight_columns(app: &mut App) -> Vec<u16> {
     for y in 0..buf.area.height {
         for x in 0..buf.area.width {
             let cell = &buf[(x, y)];
-            if cell.symbol() == "█" && cell.fg == ratatui::style::Color::LightGreen {
+            if cell.symbol() == "█" && cell.fg == app.theme.success_hi {
                 xs.push(x);
             }
         }
@@ -497,4 +497,32 @@ fn animation_counter_advances_with_frames() {
         app.update_animation();
     }
     assert!(app.anim_tick >= start + 3, "{} -> {}", start, app.anim_tick);
+}
+
+fn draw(app: &mut App) -> ratatui::buffer::Buffer {
+    let mut t = Terminal::new(TestBackend::new(100, 40)).unwrap();
+    t.draw(|f| ui(f, app)).unwrap();
+    t.backend().buffer().clone()
+}
+
+#[test]
+fn every_theme_renders_with_its_background() {
+    let mut app = app_with_categories();
+    for i in 0..cleansys_core::THEME_COUNT {
+        app.set_theme(i);
+        let buf = draw(&mut app);
+        assert_eq!(buf[(0, 0)].bg, app.theme.bg, "theme {i}");
+    }
+}
+
+#[test]
+fn theme_picker_renders_and_lists_system_first() {
+    let mut app = app_with_categories();
+    app.theme_picker_open = true;
+    let buf = draw(&mut app);
+    let text: String = (0..40)
+        .flat_map(|y| (0..100).map(move |x| (x, y)))
+        .map(|p| buf[p].symbol().to_string())
+        .collect();
+    assert!(text.contains("Theme") && text.contains("System"));
 }

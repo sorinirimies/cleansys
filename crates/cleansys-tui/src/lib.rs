@@ -25,6 +25,9 @@ pub mod menu;
 
 pub mod run;
 
+/// Colour themes (every core preset plus "follow system").
+pub mod theme;
+
 /// Rendering logic for the terminal UI.
 pub mod render;
 

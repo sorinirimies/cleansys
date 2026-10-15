@@ -31,14 +31,32 @@ pub fn all_themes() -> Vec<ThemeChoice> {
         .collect()
 }
 
+/// [`all_themes`] preceded by a "System" entry (index [`cleansys_core::THEME_COUNT`]).
+pub fn theme_choices() -> Vec<ThemeChoice> {
+    let mut v = vec![ThemeChoice {
+        index: cleansys_core::THEME_COUNT,
+        name: cleansys_core::SYSTEM_THEME_NAME,
+    }];
+    v.extend(all_themes());
+    v
+}
+
 /// Create a theme selector `pick_list()` widget.
 ///
 /// The widget displays the name of the current theme and, when opened, lists
 /// every theme returned by [`all_themes`]. Selecting a new entry emits
 /// [`Message::ThemeChanged`] with the chosen theme index.
-pub fn theme_selector(current_theme_index: usize) -> Element<'static, Message> {
-    let choices = all_themes();
-    let selected = choices.get(current_theme_index).cloned();
+pub fn theme_selector(
+    current_theme_index: usize,
+    follow_system: bool,
+) -> Element<'static, Message> {
+    let choices = theme_choices();
+    let selected = if follow_system {
+        choices.first().cloned()
+    } else {
+        // +1: the "System" entry is listed first.
+        choices.get(current_theme_index + 1).cloned()
+    };
 
     pick_list(choices, selected, |choice| {
         Message::ThemeChanged(choice.index)
@@ -56,6 +74,15 @@ mod tests {
     #[test]
     fn all_themes_matches_core_count() {
         assert_eq!(all_themes().len(), cleansys_core::THEME_COUNT);
+    }
+
+    #[test]
+    fn theme_choices_lead_with_system() {
+        let c = theme_choices();
+        assert_eq!(c.len(), cleansys_core::THEME_COUNT + 1);
+        assert_eq!(c[0].index, cleansys_core::THEME_COUNT);
+        assert_eq!(c[0].name, "System");
+        assert_eq!(c[1].index, 0);
     }
 
     #[test]

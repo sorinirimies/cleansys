@@ -866,3 +866,22 @@ fn saved_preferences_are_applied() {
     });
     assert!(!app.hide_empty && !app.confirmation_mode);
 }
+
+#[test]
+fn capital_t_opens_picker_keys_navigate_and_esc_closes() {
+    let mut app = App::new();
+    key(&mut app, KeyCode::Char('T'));
+    assert!(app.theme_picker_open);
+    key(&mut app, KeyCode::Down);
+    assert!(!app.follow_system || app.picker_index() == 0);
+    let before = app.picker_index();
+    key(&mut app, KeyCode::Down);
+    assert_eq!(
+        app.picker_index(),
+        (before + 1) % cleansys_tui::theme::PICKER_LEN
+    );
+    key(&mut app, KeyCode::Home);
+    assert!(app.follow_system);
+    key(&mut app, KeyCode::Esc);
+    assert!(!app.theme_picker_open);
+}

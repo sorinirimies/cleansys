@@ -228,7 +228,7 @@ fn header<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> Elemen
             schedule,
             settings_btn,
             about_btn,
-            theme_selector(state.theme_index),
+            theme_selector(state.theme_index, state.follow_system),
         ]
         .spacing(10)
         .align_y(Alignment::Center)
@@ -623,7 +623,7 @@ fn item_row<'a>(
                 .on_press(Message::ToggleExpand(cat_idx, item_idx)),
         );
     }
-    let mut left = column![name_row].spacing(3);
+    let mut left = column![name_row].spacing(3).width(Length::Fill);
     left = left.push(text(item.description.clone()).size(12).color(c.muted));
     if let Some(top) = info.and_then(|s| s.top_path.as_ref()) {
         left = left.push(text(format!("📁 {top}")).size(11).color(c.text_secondary));
@@ -632,7 +632,7 @@ fn item_row<'a>(
     // Expanded details: every path this cleaner would remove, each tickable.
     if let (true, Some(scan)) = (open, info) {
         let any_skippable = scan.entries.iter().any(|e| e.skippable);
-        let mut list = column![].spacing(2);
+        let mut list = column![].spacing(2).width(Length::Fill);
         if any_skippable {
             list = list.push(
                 row![
@@ -681,9 +681,14 @@ fn item_row<'a>(
             );
         }
         left = left.push(
-            container(scrollable(list.padding([0, 10])).height(Length::Shrink))
-                .max_height(320)
-                .padding([4, 0]),
+            container(
+                scrollable(list.padding([0, 10]))
+                    .width(Length::Fill)
+                    .height(Length::Shrink),
+            )
+            .width(Length::Fill)
+            .max_height(320)
+            .padding([4, 0]),
         );
     }
 
@@ -2237,6 +2242,13 @@ mod tests {
         state.is_running = true;
         state.operations_total = 4;
         state.operations_completed = 2;
+        let _ = view(&state);
+    }
+
+    #[test]
+    fn view_does_not_panic_when_following_system() {
+        let mut state = CleanSysGui::new();
+        state.follow_system = true;
         let _ = view(&state);
     }
 

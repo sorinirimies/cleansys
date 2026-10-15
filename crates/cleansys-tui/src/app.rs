@@ -119,6 +119,16 @@ pub struct App {
     /// Bytes freed so far by the current / last run.
     pub total_bytes_cleaned: u64,
     pub show_help: bool,
+    /// Index of the active preset in [`cleansys_core::THEME_NAMES`] (derived while following the system).
+    pub theme_index: usize,
+    /// Follow the OS light/dark setting instead of a fixed preset.
+    pub follow_system: bool,
+    /// Colours of the active theme (what every view reads).
+    pub theme: crate::theme::UiTheme,
+    /// Whether the theme picker popup is open.
+    pub theme_picker_open: bool,
+    /// Last time the OS appearance was polled (while following the system).
+    pub last_system_check: Instant,
     pub animation_frame: usize,
     /// Free-running animation counter (one step per ~100 ms): drives the spinner and the
     /// highlight that sweeps along progress bars.
@@ -217,6 +227,11 @@ impl App {
             operation_end_time: None,
             total_bytes_cleaned: 0,
             show_help: false,
+            theme_index: 0,
+            follow_system: false,
+            theme: crate::theme::UiTheme::by_index(0),
+            theme_picker_open: false,
+            last_system_check: Instant::now(),
             animation_frame: 0,
             anim_tick: 0,
             last_frame_time: Instant::now(),
@@ -403,8 +418,79 @@ impl App {
         }
     }
 
+    fn apply_theme_index(&mut self, index: usize) {
+        self.theme_index = index.min(cleansys_core::THEME_COUNT - 1);
+        self.theme = crate::theme::UiTheme::by_index(self.theme_index);
+    }
+
+    /// Pick preset `index` (stops following the system) and remember it.
+    pub fn set_theme(&mut self, index: usize) {
+        self.follow_system = false;
+        self.apply_theme_index(index);
+        self.save_theme();
+    }
+
+    /// Follow the OS light/dark setting and remember that.
+    pub fn set_follow_system(&mut self) {
+        self.follow_system = true;
+        self.apply_theme_index(cleansys_core::current_system_theme_index());
+        self.save_theme();
+    }
+
+    /// Position of the active choice in the picker (`0` = System).
+    pub fn picker_index(&self) -> usize {
+        if self.follow_system {
+            0
+        } else {
+            self.theme_index + 1
+        }
+    }
+
+    /// Select picker entry `i` (`0` = System, `n + 1` = preset `n`).
+    pub fn select_picker(&mut self, i: usize) {
+        let i = i.min(crate::theme::PICKER_LEN - 1);
+        if i == 0 {
+            self.set_follow_system();
+        } else {
+            self.set_theme(i - 1);
+        }
+    }
+
+    /// Move `delta` entries through the picker, wrapping.
+    pub fn cycle_theme(&mut self, delta: isize) {
+        let n = crate::theme::PICKER_LEN as isize;
+        let next = (self.picker_index() as isize + delta).rem_euclid(n) as usize;
+        self.select_picker(next);
+    }
+
+    /// Re-read the OS appearance (throttled) while following the system.
+    pub fn refresh_system_theme(&mut self) {
+        if !self.follow_system || self.last_system_check.elapsed().as_secs() < 3 {
+            return;
+        }
+        self.last_system_check = Instant::now();
+        self.apply_theme_index(cleansys_core::current_system_theme_index());
+    }
+
+    /// Persist the theme choice (no-op unless [`App::persist`]).
+    fn save_theme(&mut self) {
+        if !self.persist {
+            return;
+        }
+        let name = if self.follow_system {
+            cleansys_core::SYSTEM_THEME_NAME.to_string()
+        } else {
+            cleansys_core::THEME_NAMES[self.theme_index].to_string()
+        };
+        if let Err(e) = cleansys_core::update_settings(|s| s.theme_name = Some(name)) {
+            self.log(format!("❌ Could not save theme: {e}"));
+        }
+    }
+
     /// Apply saved UI preferences (called once at start-up).
     pub fn apply_settings(&mut self, s: &cleansys_core::Settings) {
+        self.follow_system = s.follow_system_theme();
+        self.apply_theme_index(s.theme_index());
         self.hide_empty = s.hide_empty();
         self.confirmation_mode = s.confirm_before_run();
     }
@@ -1211,6 +1297,7 @@ impl App {
 
     /// Advance the spinner animation (called every frame).
     pub fn update_animation(&mut self) {
+        self.refresh_system_theme();
         let now = Instant::now();
         if now.duration_since(self.last_frame_time).as_millis() > 100 {
             self.animation_frame = (self.animation_frame + 1) % 10;
@@ -1316,6 +1403,25 @@ impl App {
                 }
                 KeyCode::Esc | KeyCode::Char('n') => {
                     self.cancel_run_confirmation();
+                }
+                _ => {}
+            }
+            return Ok(false);
+        }
+
+        // Theme picker: moving the cursor applies (previews) and saves the theme.
+        if self.theme_picker_open {
+            match key.code {
+                KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab => self.cycle_theme(1),
+                KeyCode::Up | KeyCode::Char('k') | KeyCode::BackTab => self.cycle_theme(-1),
+                KeyCode::PageDown => self.cycle_theme(10),
+                KeyCode::PageUp => self.cycle_theme(-10),
+                KeyCode::Home | KeyCode::Char('g') => self.select_picker(0),
+                KeyCode::End | KeyCode::Char('G') => {
+                    self.select_picker(crate::theme::PICKER_LEN - 1)
+                }
+                KeyCode::Esc | KeyCode::Enter | KeyCode::Char('T') | KeyCode::Char('q') => {
+                    self.theme_picker_open = false;
                 }
                 _ => {}
             }
@@ -1437,6 +1543,10 @@ impl App {
                 if !self.show_help && !self.is_running {
                     self.expand_current();
                 }
+            }
+            // Theme picker
+            (KeyCode::Char('T'), _) if !self.show_help => {
+                self.theme_picker_open = true;
             }
             // Idle-day selector for project build output
             (KeyCode::Char('['), _) => {
@@ -1614,5 +1724,41 @@ impl App {
     pub fn toggle_confirmation_mode(&mut self) {
         self.confirmation_mode = !self.confirmation_mode;
         self.save_prefs();
+    }
+}
+
+#[cfg(test)]
+mod theme_tests {
+    use super::*;
+
+    #[test]
+    fn picker_cycles_through_system_then_presets_and_wraps() {
+        let mut app = App::new();
+        app.select_picker(0);
+        assert!(app.follow_system);
+        app.cycle_theme(1);
+        assert!(!app.follow_system);
+        assert_eq!(app.theme_index, 0);
+        app.cycle_theme(-1);
+        assert!(app.follow_system);
+        app.cycle_theme(-1);
+        assert_eq!(app.theme_index, cleansys_core::THEME_COUNT - 1);
+        assert_eq!(app.theme, crate::theme::UiTheme::by_index(app.theme_index));
+    }
+
+    #[test]
+    fn apply_settings_restores_theme_and_system() {
+        let mut app = App::new();
+        let nord = cleansys_core::theme_index_by_name("Nord");
+        app.apply_settings(&cleansys_core::Settings {
+            theme_name: Some("Nord".into()),
+            ..Default::default()
+        });
+        assert_eq!((app.theme_index, app.follow_system), (nord, false));
+        app.apply_settings(&cleansys_core::Settings {
+            theme_name: Some("System".into()),
+            ..Default::default()
+        });
+        assert!(app.follow_system);
     }
 }

@@ -41,10 +41,20 @@ impl Settings {
     /// Resolve the persisted theme name to an index via
     /// [`crate::theme::theme_index_by_name`], defaulting to `0`.
     pub fn theme_index(&self) -> usize {
+        match self.theme_name.as_deref() {
+            Some(n) if crate::theme::system::is_system_name(n) => {
+                crate::theme::system::current_system_theme_index()
+            }
+            Some(n) => crate::theme::theme_index_by_name(n),
+            None => 0,
+        }
+    }
+
+    /// Whether the theme follows the OS light/dark setting (`theme_name == "System"`).
+    pub fn follow_system_theme(&self) -> bool {
         self.theme_name
             .as_deref()
-            .map(crate::theme::theme_index_by_name)
-            .unwrap_or(0)
+            .is_some_and(crate::theme::system::is_system_name)
     }
 
     /// Whether empty cleaners are hidden after a scan (default: yes).
@@ -168,6 +178,17 @@ mod tests {
             };
             assert_eq!(s.saved_window_size(), None, "{bad:?}");
         }
+    }
+
+    #[test]
+    fn system_theme_name_follows_system() {
+        let s = Settings {
+            theme_name: Some("System".to_string()),
+            ..Default::default()
+        };
+        assert!(s.follow_system_theme());
+        assert!(s.theme_index() < crate::theme::THEME_COUNT);
+        assert!(!Settings::default().follow_system_theme());
     }
 
     #[test]
