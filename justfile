@@ -456,11 +456,20 @@ push-tags:
     git push origin --tags
 
 push-tags-all:
-    git push origin --tags
-    git push gitea --tags
-    git push gitea-nexus-lab --tags
-    git push gitea-starscream --tags
-    @echo "✅ Tags pushed to GitHub, Gitea, Gitea (nexus-lab), and Gitea Starscream!"
+    #!/usr/bin/env sh
+    failed=""; ok_=""; skipped=""
+    for r in origin gitea gitea-nexus-lab gitea-starscream; do
+        if ! git remote get-url "$r" >/dev/null 2>&1; then
+            echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"
+            skipped="$skipped $r"; continue
+        fi
+        echo "→ pushing tags to $r"
+        if git push "$r" --tags; then ok_="$ok_ $r"; else failed="$failed $r"; fi
+    done
+    echo ""
+    [ -n "$ok_" ] && echo "✅ Tags pushed to:$ok_"
+    [ -n "$skipped" ] && echo "ℹ️  Skipped (not configured):$skipped"
+    if [ -n "$failed" ]; then echo "⚠️  Failed:$failed"; exit 1; fi
 
 pull:
     git pull origin main
@@ -479,11 +488,17 @@ pull-gitea-starscream:
 # Pull from all remotes (continues on failure)
 pull-all:
     #!/usr/bin/env sh
+    git_try() {
+        r=$1; shift
+        if git remote get-url "$r" >/dev/null 2>&1; then "$@"; else echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; fi
+    }
+    skipped=""
     failed=""
-    git pull origin main             || failed="$failed origin"
-    git pull gitea main              || failed="$failed gitea"
-    git pull gitea-nexus-lab main     || failed="$failed gitea-nexus-lab"
-    git pull gitea-starscream main    || failed="$failed gitea-starscream"
+    git_try origin git pull origin main             || failed="$failed origin"
+    git_try gitea git pull gitea main              || failed="$failed gitea"
+    git_try gitea-nexus-lab git pull gitea-nexus-lab main     || failed="$failed gitea-nexus-lab"
+    git_try gitea-starscream git pull gitea-starscream main    || failed="$failed gitea-starscream"
+    if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
     if [ -n "$failed" ]; then
         echo "⚠️  Failed to pull from:$failed"
     else
@@ -493,11 +508,17 @@ pull-all:
 # Push the latest commit and all tags to every remote (no bump).
 push-release-all: check-all
     #!/usr/bin/env sh
+    git_try() {
+        r=$1; shift
+        if git remote get-url "$r" >/dev/null 2>&1; then "$@"; else echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; fi
+    }
+    skipped=""
     failed=""
-    git push --follow-tags origin main             || failed="$failed origin"
-    git push --follow-tags gitea main              || failed="$failed gitea"
-    git push --follow-tags gitea-nexus-lab main     || failed="$failed gitea-nexus-lab"
-    git push --follow-tags gitea-starscream main    || failed="$failed gitea-starscream"
+    git_try origin git push --follow-tags origin main             || failed="$failed origin"
+    git_try gitea git push --follow-tags gitea main              || failed="$failed gitea"
+    git_try gitea-nexus-lab git push --follow-tags gitea-nexus-lab main     || failed="$failed gitea-nexus-lab"
+    git_try gitea-starscream git push --follow-tags gitea-starscream main    || failed="$failed gitea-starscream"
+    if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
     if [ -n "$failed" ]; then
         echo "⚠️  Failed to push to:$failed"
     else
@@ -525,13 +546,19 @@ sync-gitea-starscream:
 # Force-sync all Gitea instances with GitHub (continues on failure)
 sync-all-gitea:
     #!/usr/bin/env sh
+    git_try() {
+        r=$1; shift
+        if git remote get-url "$r" >/dev/null 2>&1; then "$@"; else echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; fi
+    }
+    skipped=""
     failed=""
-    git push gitea main --force                  || failed="$failed gitea"
-    git push gitea --tags --force                || failed="$failed gitea-tags"
-    git push gitea-nexus-lab main --force        || failed="$failed gitea-nexus-lab"
-    git push gitea-nexus-lab --tags --force      || failed="$failed gitea-nexus-lab-tags"
-    git push gitea-starscream main --force       || failed="$failed gitea-starscream"
-    git push gitea-starscream --tags --force     || failed="$failed gitea-starscream-tags"
+    git_try gitea git push gitea main --force                  || failed="$failed gitea"
+    git_try gitea git push gitea --tags --force                || failed="$failed gitea-tags"
+    git_try gitea-nexus-lab git push gitea-nexus-lab main --force        || failed="$failed gitea-nexus-lab"
+    git_try gitea-nexus-lab git push gitea-nexus-lab --tags --force      || failed="$failed gitea-nexus-lab-tags"
+    git_try gitea-starscream git push gitea-starscream main --force       || failed="$failed gitea-starscream"
+    git_try gitea-starscream git push gitea-starscream --tags --force     || failed="$failed gitea-starscream-tags"
+    if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
     if [ -n "$failed" ]; then
         echo "⚠️  Failed to sync:$failed"
     else
@@ -575,12 +602,18 @@ release-gitea-starscream version: (bump version)
 # Bump, commit, tag, then push to all remotes.
 release-all version: (bump version)
     #!/usr/bin/env sh
+    git_try() {
+        r=$1; shift
+        if git remote get-url "$r" >/dev/null 2>&1; then "$@"; else echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; fi
+    }
+    skipped=""
     echo "Pushing release v{{version}} to all remotes…"
     failed=""
-    git push --follow-tags origin main             || failed="$failed origin"
-    git push --follow-tags gitea main              || failed="$failed gitea"
-    git push --follow-tags gitea-nexus-lab main     || failed="$failed gitea-nexus-lab"
-    git push --follow-tags gitea-starscream main    || failed="$failed gitea-starscream"
+    git_try origin git push --follow-tags origin main             || failed="$failed origin"
+    git_try gitea git push --follow-tags gitea main              || failed="$failed gitea"
+    git_try gitea-nexus-lab git push --follow-tags gitea-nexus-lab main     || failed="$failed gitea-nexus-lab"
+    git_try gitea-starscream git push --follow-tags gitea-starscream main    || failed="$failed gitea-starscream"
+    if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
     if [ -n "$failed" ]; then
         echo "⚠️  Release v{{version}} failed to push to:$failed"
     else
