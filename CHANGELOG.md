@@ -2,10 +2,16 @@
 
 All notable changes to this project will be documented in this file.
 
-## 0.8.3 - 2026-10-15
+## 0.8.4 - 2026-10-16
+### 📦 Other Changes
+- Exit web on page close; parent/child selection sync; TUI details Enter; GUI inline details; web details button
 ### 🔄 CI
 - ci: put cargo bin on PATH before rustup calls
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.8.2...v0.8.3
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-10-16
+- chore: bump version to 0.8.3
+- chore: sync Cargo.lock
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.8.2...v0.8.4
 ## 0.8.2 - 2026-10-15
 ### ✨ Features
 - feat(theme): add System theme that follows OS light/dark across core, gui, tui and web
