@@ -356,6 +356,15 @@ impl App {
             .map(|e| e.path.clone());
         if let Some(path) = target {
             self.board.toggle_entry(&path);
+            self.sync_parent_selection();
+        }
+    }
+
+    /// Keep the expanded cleaner's checkbox in step with its path ticks: ticking any
+    /// path selects the cleaner, unticking every path deselects it.
+    fn sync_parent_selection(&mut self) {
+        if let Some((c, i)) = self.expanded {
+            self.board.sync_item_to_entries(&mut self.categories, c, i);
         }
     }
 
@@ -363,6 +372,7 @@ impl App {
     pub fn entry_set_all(&mut self, on: bool) {
         if let Some((c, i)) = self.expanded {
             self.board.set_item_entries(c, i, on);
+            self.sync_parent_selection();
         }
     }
 
@@ -767,6 +777,7 @@ impl App {
             // Allow selection even for root items, will prompt for password later
             let item = &mut self.categories[ci].items[ii];
             item.selected = !item.selected;
+            self.board.sync_entries_to_item(&self.categories, ci, ii);
         }
     }
 
@@ -804,6 +815,7 @@ impl App {
             // Allow selection of all items, will handle root permissions later
             self.categories[ci].items[ii].selected = true;
         }
+        self.board.sync_all_entries_to_items(&self.categories);
     }
 
     /// Untick every cleaner currently listed.
@@ -811,6 +823,7 @@ impl App {
         for (ci, ii) in self.view_items() {
             self.categories[ci].items[ii].selected = false;
         }
+        self.board.sync_all_entries_to_items(&self.categories);
     }
 
     /// Select every item across every category (not just the active tab).
@@ -820,6 +833,7 @@ impl App {
                 item.selected = true;
             }
         }
+        self.board.sync_all_entries_to_items(&self.categories);
     }
 
     /// Deselect every item across every category (not just the active tab).
@@ -829,6 +843,7 @@ impl App {
                 item.selected = false;
             }
         }
+        self.board.sync_all_entries_to_items(&self.categories);
     }
 
     /// Gather selected cleaners and either show the confirmation overlay
@@ -1475,6 +1490,10 @@ impl App {
                 KeyCode::Char(' ') => self.entry_toggle(),
                 KeyCode::Char('a') => self.entry_set_all(true),
                 KeyCode::Char('n') => self.entry_set_all(false),
+                KeyCode::Enter => {
+                    self.collapse_details();
+                    self.request_run()?;
+                }
                 KeyCode::Left | KeyCode::Right | KeyCode::Esc | KeyCode::Char('q') => {
                     self.collapse_details();
                 }

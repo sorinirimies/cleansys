@@ -32,6 +32,7 @@ pub async fn document(
                 <title>(title)</title>
                 <link rel="stylesheet" href="/style.css">
                 <style>(css)</style>
+                <script src="/app.js" defer=""></script>
                 topcoat::dev::script()
             </head>
             <body><main>(child)

@@ -680,15 +680,12 @@ fn item_row<'a>(
                 .color(c.muted),
             );
         }
+        // Inline (no nested scroll area): the list's own scrollbar sat between the
+        // details and the status spinner. The page's single scrollbar handles it.
         left = left.push(
-            container(
-                scrollable(list.padding([0, 10]))
-                    .width(Length::Fill)
-                    .height(Length::Shrink),
-            )
-            .width(Length::Fill)
-            .max_height(320)
-            .padding([4, 0]),
+            container(list.padding([0, 10]))
+                .width(Length::Fill)
+                .padding([4, 0]),
         );
     }
 

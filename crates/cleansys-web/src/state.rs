@@ -169,7 +169,21 @@ impl Shared {
 
     /// Flip one entry in the details view.
     pub fn toggle_entry(&self, path: &str) {
-        self.lock().board.toggle_entry(path);
+        let mut g = self.lock();
+        g.board.toggle_entry(path);
+        let g = &mut *g;
+        let pos = (0..g.categories.len()).find_map(|ci| {
+            (0..g.categories[ci].items.len())
+                .find(|&ii| {
+                    g.board
+                        .get(ci, ii)
+                        .is_some_and(|s| s.entries.iter().any(|e| e.path == path))
+                })
+                .map(|ii| (ci, ii))
+        });
+        if let Some((ci, ii)) = pos {
+            g.board.sync_item_to_entries(&mut g.categories, ci, ii);
+        }
     }
 
     /// Tick/untick every entry of the cleaner with this id.
@@ -182,6 +196,8 @@ impl Shared {
             .find_map(|(ci, c)| c.items.iter().position(|i| i.id == id).map(|ii| (ci, ii)));
         if let Some((ci, ii)) = pos {
             g.board.set_item_entries(ci, ii, on);
+            let g = &mut *g;
+            g.board.sync_item_to_entries(&mut g.categories, ci, ii);
         }
     }
 
@@ -293,13 +309,17 @@ impl Shared {
     pub fn toggle(&self, id: &str) -> bool {
         let mut g = self.lock();
         let can_root = g.is_root || g.elevation_allowed;
-        for item in g.categories.iter_mut().flat_map(|c| c.items.iter_mut()) {
-            if item.id == id {
-                if item.requires_root && !can_root {
-                    return false;
+        let g = &mut *g;
+        for (ci, c) in g.categories.iter_mut().enumerate() {
+            for (ii, item) in c.items.iter_mut().enumerate() {
+                if item.id == id {
+                    if item.requires_root && !can_root {
+                        return false;
+                    }
+                    item.selected = !item.selected;
+                    g.board.sync_entries_to_item(&g.categories, ci, ii);
+                    return true;
                 }
-                item.selected = !item.selected;
-                return true;
             }
         }
         false
@@ -323,6 +343,8 @@ impl Shared {
         for item in g.categories.iter_mut().flat_map(|c| c.items.iter_mut()) {
             item.selected = false;
         }
+        let g = &mut *g;
+        g.board.sync_all_entries_to_items(&g.categories);
     }
 
     /// Tick (or untick) every selectable cleaner in one category.
@@ -336,6 +358,8 @@ impl Shared {
                 }
             }
         }
+        let g = &mut *g;
+        g.board.sync_all_entries_to_items(&g.categories);
     }
 
     // ── views ──────────────────────────────────────────────────────

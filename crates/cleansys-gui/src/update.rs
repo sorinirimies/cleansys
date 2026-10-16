@@ -6,6 +6,22 @@ use iced::Task;
 use crate::message::Message;
 use crate::state::CleanSysGui;
 
+/// After a path tick: re-derive the owning cleaner's checkbox from its paths.
+fn sync_parent_of_path(state: &mut CleanSysGui, path: &str) {
+    let owner = state.expanded.iter().copied().find(|&(c, i)| {
+        state
+            .board
+            .get(c, i)
+            .is_some_and(|s| s.entries.iter().any(|e| e.path == path))
+    });
+    if let Some((c, i)) = owner {
+        state
+            .board
+            .sync_item_to_entries(&mut state.categories, c, i);
+        state.save_selections();
+    }
+}
+
 /// Handle a [`Message`], mutating `state` and returning any follow-up work.
 pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
     match message {
@@ -17,6 +33,9 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             {
                 item.selected = !item.selected;
             }
+            state
+                .board
+                .sync_entries_to_item(&state.categories, cat_idx, item_idx);
             state.save_selections();
             Task::none()
         }
@@ -27,6 +46,7 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
                     item.selected = true;
                 }
             }
+            state.board.sync_all_entries_to_items(&state.categories);
             state.save_selections();
             Task::none()
         }
@@ -37,6 +57,7 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
                     item.selected = false;
                 }
             }
+            state.board.sync_all_entries_to_items(&state.categories);
             state.save_selections();
             Task::none()
         }
@@ -47,6 +68,7 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
                     item.selected = false;
                 }
             }
+            state.board.sync_all_entries_to_items(&state.categories);
             state.save_selections();
             Task::none()
         }
@@ -247,12 +269,17 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
         Message::ToggleEntry(path) => {
             if !state.is_running {
                 state.board.toggle_entry(&path);
+                sync_parent_of_path(state, &path);
             }
             Task::none()
         }
         Message::SetEntries(c, i, on) => {
             if !state.is_running {
                 state.board.set_item_entries(c, i, on);
+                state
+                    .board
+                    .sync_item_to_entries(&mut state.categories, c, i);
+                state.save_selections();
             }
             Task::none()
         }

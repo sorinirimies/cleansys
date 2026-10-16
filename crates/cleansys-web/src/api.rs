@@ -4,7 +4,7 @@ use topcoat::{
     Result,
     context::{Cx, app_context},
     router::{
-        content::{Css, Json},
+        content::{Css, Js, Json},
         route,
     },
 };
@@ -92,4 +92,41 @@ async fn themes() -> Result<Json<serde_json::Value>> {
 #[route(GET "/style.css")]
 async fn style() -> Result<Css<&'static str>> {
     Ok(Css(CSS))
+}
+
+/// Page-lifetime tracking: the UI is tied to its browser page. Each page load says
+/// hello; closing a page says bye, and if no page says hello within the grace
+/// period (reloads / navigation send bye then hello) the server exits.
+static HELLOS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+const GRACE: std::time::Duration = std::time::Duration::from_secs(5);
+
+const PAGE_JS: &str = "(function(){\
+var p=function(u){try{navigator.sendBeacon(u)}catch(e){fetch(u,{method:'POST',keepalive:true})}};\
+p('/api/hello');\
+addEventListener('pageshow',function(e){if(e.persisted)p('/api/hello')});\
+addEventListener('pagehide',function(){p('/api/bye')});\
+})();";
+
+#[route(GET "/app.js")]
+async fn app_js() -> Result<Js<&'static str>> {
+    Ok(Js(PAGE_JS))
+}
+
+#[route(POST "/api/hello")]
+async fn hello() -> Result<Json<&'static str>> {
+    HELLOS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+    Ok(Json("ok"))
+}
+
+#[route(POST "/api/bye")]
+async fn bye() -> Result<Json<&'static str>> {
+    let seen = HELLOS.load(std::sync::atomic::Ordering::SeqCst);
+    tokio::spawn(async move {
+        tokio::time::sleep(GRACE).await;
+        if HELLOS.load(std::sync::atomic::Ordering::SeqCst) == seen {
+            println!("cleansys-web: page closed, exiting.");
+            std::process::exit(0);
+        }
+    });
+    Ok(Json("ok"))
 }

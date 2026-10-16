@@ -126,6 +126,45 @@ impl ScanBoard {
         true
     }
 
+    /// A cleaner's own checkbox overrides its paths: make every path follow `item.selected`.
+    pub fn sync_entries_to_item(
+        &mut self,
+        categories: &[CleanerCategory],
+        cat: usize,
+        item: usize,
+    ) {
+        if let Some(it) = categories.get(cat).and_then(|c| c.items.get(item)) {
+            self.set_item_entries(cat, item, it.selected);
+        }
+    }
+
+    /// [`Self::sync_entries_to_item`] for every cleaner (after bulk select / deselect).
+    pub fn sync_all_entries_to_items(&mut self, categories: &[CleanerCategory]) {
+        for (ci, c) in categories.iter().enumerate() {
+            for ii in 0..c.items.len() {
+                self.sync_entries_to_item(categories, ci, ii);
+            }
+        }
+    }
+
+    /// After a path was (un)ticked: a cleaner with any ticked path is selected, one with
+    /// every path unticked is not.
+    pub fn sync_item_to_entries(
+        &self,
+        categories: &mut [CleanerCategory],
+        cat: usize,
+        item: usize,
+    ) {
+        let Some(it) = categories.get_mut(cat).and_then(|c| c.items.get_mut(item)) else {
+            return;
+        };
+        match self.entry_state(cat, item) {
+            EntryState::Nothing => it.selected = false,
+            EntryState::All | EntryState::Partial => it.selected = true,
+            EntryState::NoEntries => {}
+        }
+    }
+
     /// Tick or untick every skippable entry of one cleaner.
     pub fn set_item_entries(&mut self, cat: usize, item: usize, on: bool) {
         let paths: Vec<String> = self
@@ -557,5 +596,52 @@ mod tests {
         assert_eq!(b.entry_state(0, 0), EntryState::Nothing);
         b.set_item_entries(0, 0, true);
         assert_eq!(b.item_selected_bytes(0, 0), 100);
+    }
+
+    #[test]
+    fn parent_follows_its_paths_and_overrides_them() {
+        let mut cats = vec![CleanerCategory {
+            name: "c".into(),
+            description: String::new(),
+            items: vec![item("a", 0)],
+        }];
+        let mut b = ScanBoard::new(&cats);
+        let e = |p: &str| ScanEntry {
+            path: p.into(),
+            bytes: 1,
+            label: String::new(),
+            skippable: true,
+        };
+        b.start(1);
+        b.record(
+            0,
+            0,
+            ScanInfo {
+                bytes: 2,
+                items: 2,
+                entries: vec![e("/a"), e("/b")],
+                ..ScanInfo::default()
+            },
+        );
+        cats[0].items[0].selected = true;
+        b.toggle_entry("/a");
+        b.sync_item_to_entries(&mut cats, 0, 0);
+        assert!(cats[0].items[0].selected, "one path left ticked");
+        b.toggle_entry("/b");
+        b.sync_item_to_entries(&mut cats, 0, 0);
+        assert!(
+            !cats[0].items[0].selected,
+            "all paths unticked -> parent off"
+        );
+        b.toggle_entry("/b");
+        b.sync_item_to_entries(&mut cats, 0, 0);
+        assert!(cats[0].items[0].selected, "a path ticked -> parent on");
+        cats[0].items[0].selected = false;
+        b.sync_entries_to_item(&cats, 0, 0);
+        assert_eq!(
+            b.entry_state(0, 0),
+            EntryState::Nothing,
+            "parent off -> paths off"
+        );
     }
 }

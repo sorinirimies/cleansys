@@ -71,8 +71,8 @@ label.item input[type=checkbox] { width:18px; height:18px; accent-color:var(--ac
 .size.mid b { color:var(--warn); }
 .size.none { color:var(--dim); }
 .itemwrap { display:flex; flex-direction:column; }
-a.more { font-size:12px; color:var(--fg2); text-decoration:none; padding:3px 12px 0; align-self:flex-start; }
-a.more:hover { color:var(--accent); }
+a.more { font-size:12px; color:var(--fg); text-decoration:none; padding:4px 12px; margin:2px 0 0 12px; border:1px solid var(--line); border-radius:6px; align-self:flex-start; }
+a.more:hover { color:var(--accent); border-color:var(--accent); }
 .entries { margin:4px 0 4px 18px; padding:8px 10px; border-left:2px solid var(--line); display:flex; flex-direction:column; gap:3px; max-height:420px; overflow:auto; }
 .entries .bulk { display:flex; gap:6px; margin-bottom:4px; }
 .entries form { margin:0; }
