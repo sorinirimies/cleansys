@@ -21,17 +21,17 @@ pub fn install_window_menu() -> bool {
         return false;
     };
     let app = NSApplication::sharedApplication(mtm);
-    // SAFETY (every `unsafe` below): we hold a `MainThreadMarker`, so AppKit is being
+    // SAFETY (the remaining `unsafe`): we hold a `MainThreadMarker`, so AppKit is being
     // used on the main thread as it requires; the selectors are standard
     // `NSWindow`/`NSApplication` actions and the titles are valid, non-null strings.
-    if unsafe { app.windowsMenu() }.is_some() {
+    if app.windowsMenu().is_some() {
         return true;
     }
-    let Some(main_menu) = (unsafe { app.mainMenu() }) else {
+    let Some(main_menu) = app.mainMenu() else {
         return false;
     };
 
-    let menu = unsafe { NSMenu::initWithTitle(mtm.alloc(), ns_string!("Window")) };
+    let menu = NSMenu::initWithTitle(mtm.alloc(), ns_string!("Window"));
     let item = |title, action, key| unsafe {
         NSMenuItem::initWithTitle_action_keyEquivalent(mtm.alloc(), title, Some(action), key)
     };
@@ -56,6 +56,6 @@ pub fn install_window_menu() -> bool {
     let bar_item = NSMenuItem::new(mtm);
     bar_item.setSubmenu(Some(&menu));
     main_menu.addItem(&bar_item);
-    unsafe { app.setWindowsMenu(Some(&menu)) };
+    app.setWindowsMenu(Some(&menu));
     true
 }

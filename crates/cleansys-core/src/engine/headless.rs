@@ -94,6 +94,20 @@ fn category_matches(c: &CleanerCategory, wanted: &str) -> bool {
 
 /// Resolve a [`Selection`] against `categories` (consumed).
 pub fn select(categories: Vec<CleanerCategory>, sel: &Selection) -> Result<Vec<Job>> {
+    let settings = if sel.saved {
+        crate::load_settings().unwrap_or_default()
+    } else {
+        Default::default()
+    };
+    select_with(categories, sel, &settings)
+}
+
+/// [`select`] with explicit saved `settings` (for `sel.saved`).
+fn select_with(
+    categories: Vec<CleanerCategory>,
+    sel: &Selection,
+    saved_settings: &crate::Settings,
+) -> Result<Vec<Job>> {
     for id in &sel.ids {
         if !categories
             .iter()
@@ -108,11 +122,6 @@ pub fn select(categories: Vec<CleanerCategory>, sel: &Selection) -> Result<Vec<J
             bail!("unknown category '{w}' (see `cleansys list`)");
         }
     }
-    let saved_settings = if sel.saved {
-        crate::load_settings().unwrap_or_default()
-    } else {
-        Default::default()
-    };
     let mut jobs = Vec::new();
     for cat in categories {
         let cat_hit = sel.categories.iter().any(|w| category_matches(&cat, w));
@@ -468,6 +477,28 @@ pub fn run_scheduled() -> Result<u64> {
 mod tests {
     use super::*;
     use crate::model::load_categories;
+
+    #[test]
+    fn saved_selects_exactly_the_remembered_cleaners() {
+        let cats = load_categories();
+        let cat = &cats[0];
+        let item = &cat.items[0];
+        let settings = crate::Settings {
+            selected_cleaners: vec![crate::Settings::selection_key(&cat.name, &item.name)],
+            ..Default::default()
+        };
+        let sel = Selection {
+            saved: true,
+            ..Default::default()
+        };
+        let jobs = select_with(load_categories(), &sel, &settings).unwrap();
+        assert_eq!(jobs.len(), 1);
+        assert_eq!(jobs[0].id, item.id);
+        let off = Selection::default();
+        assert!(select_with(load_categories(), &off, &settings)
+            .unwrap()
+            .is_empty());
+    }
 
     #[test]
     fn recommended_is_safe_user_land_only() {
