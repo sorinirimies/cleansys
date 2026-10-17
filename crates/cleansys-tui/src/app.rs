@@ -294,7 +294,7 @@ impl App {
         let mut finished = false;
         if let Some(rx) = &self.scan_rx {
             while let Ok((ci, ii, info)) = rx.try_recv() {
-                finished |= self.board.record(ci, ii, info);
+                finished |= self.board.record_synced(&self.categories, ci, ii, info);
                 changed = true;
             }
         }

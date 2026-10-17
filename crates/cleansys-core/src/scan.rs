@@ -243,6 +243,20 @@ impl ScanBoard {
         self.pending == 0
     }
 
+    /// [`Self::record`], then make the new entries follow the cleaner's checkbox
+    /// (an unticked cleaner starts with all paths unticked).
+    pub fn record_synced(
+        &mut self,
+        categories: &[CleanerCategory],
+        cat: usize,
+        item: usize,
+        info: ScanInfo,
+    ) -> bool {
+        let done = self.record(cat, item, info);
+        self.sync_entries_to_item(categories, cat, item);
+        done
+    }
+
     pub fn is_scanning(&self) -> bool {
         self.pending > 0
     }
@@ -359,7 +373,7 @@ impl ScanBoard {
     /// finished scan found empty — nothing to gain from ticking those.
     /// Returns how many cleaners are now ticked.
     pub fn select_recommended(
-        &self,
+        &mut self,
         categories: &mut [CleanerCategory],
         include_root: bool,
     ) -> usize {
@@ -378,6 +392,7 @@ impl ScanBoard {
                 n += usize::from(item.selected);
             }
         }
+        self.sync_all_entries_to_items(categories);
         n
     }
 
@@ -643,5 +658,70 @@ mod tests {
             EntryState::Nothing,
             "parent off -> paths off"
         );
+    }
+
+    #[test]
+    fn fresh_scan_entries_follow_unticked_parent() {
+        let mut cats = vec![CleanerCategory {
+            name: "c".into(),
+            description: String::new(),
+            items: vec![item("a", 0), item("b", 0)],
+        }];
+        let info = || ScanInfo {
+            bytes: 2,
+            items: 2,
+            entries: ["/p", "/q"]
+                .map(|p| ScanEntry {
+                    path: p.into(),
+                    bytes: 1,
+                    label: String::new(),
+                    skippable: true,
+                })
+                .to_vec(),
+            ..ScanInfo::default()
+        };
+        let mut b = ScanBoard::new(&cats);
+        cats[0].items[0].selected = false;
+        cats[0].items[1].selected = true;
+        b.start(2);
+        b.record_synced(&cats, 0, 0, info());
+        assert_eq!(b.entry_state(0, 0), EntryState::Nothing, "unticked parent");
+        b.record_synced(&cats, 0, 1, info());
+        assert_eq!(b.entry_state(0, 1), EntryState::All, "ticked parent");
+    }
+
+    #[test]
+    fn select_recommended_resyncs_entries() {
+        let mut cats = vec![CleanerCategory {
+            name: "c".into(),
+            description: String::new(),
+            items: vec![item("a", 0)],
+        }];
+        let mut b = ScanBoard::new(&cats);
+        b.start(1);
+        b.record(
+            0,
+            0,
+            ScanInfo {
+                bytes: 1,
+                items: 1,
+                entries: vec![ScanEntry {
+                    path: "/p".into(),
+                    bytes: 1,
+                    label: String::new(),
+                    skippable: true,
+                }],
+                ..ScanInfo::default()
+            },
+        );
+        cats[0].items[0].selected = false;
+        b.select_recommended(&mut cats, false);
+        let on = cats[0].items[0].selected;
+        let want = if on {
+            EntryState::All
+        } else {
+            EntryState::Nothing
+        };
+        assert_eq!(b.entry_state(0, 0), want, "paths mirror the cleaner");
     }
 }

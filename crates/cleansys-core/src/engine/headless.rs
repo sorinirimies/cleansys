@@ -31,6 +31,10 @@ pub struct Selection {
     pub recommended: bool,
     /// With `recommended`: also `moderate` ones.
     pub include_moderate: bool,
+    /// The cleaners ticked in the GUI/TUI/web last time (saved settings).
+    pub saved: bool,
+    /// Paths (and everything under them) that must never be removed or counted.
+    pub exclude: Vec<std::path::PathBuf>,
 }
 
 /// One runnable cleaner.
@@ -104,11 +108,17 @@ pub fn select(categories: Vec<CleanerCategory>, sel: &Selection) -> Result<Vec<J
             bail!("unknown category '{w}' (see `cleansys list`)");
         }
     }
+    let saved_settings = if sel.saved {
+        crate::load_settings().unwrap_or_default()
+    } else {
+        Default::default()
+    };
     let mut jobs = Vec::new();
     for cat in categories {
         let cat_hit = sel.categories.iter().any(|w| category_matches(&cat, w));
         for item in cat.items {
-            let explicit = sel.ids.contains(&item.id);
+            let explicit = sel.ids.contains(&item.id)
+                || (sel.saved && saved_settings.is_selected(&cat.name, &item.name));
             let by_cat = cat_hit && (sel.include_caution || item.risk != Risk::Caution);
             let by_all = sel.all && (sel.include_caution || item.risk != Risk::Caution);
             let by_recommended = sel.recommended
@@ -316,20 +326,30 @@ pub fn run_selection(sel: &Selection, opts: RunOptions, json: bool) -> Result<u6
     let jobs = select(load_categories(), sel)?;
     if jobs.is_empty() {
         print_warning(
-            "Nothing selected. Try `cleansys auto`, --recommended, --all, --category or --id.",
+            "Nothing selected. Try `cleansys auto`, --recommended, --saved, --all, --category or --id.",
         );
         return Ok(0);
     }
     if opts.dry_run && !json {
         eprintln!("Scanning {} cleaner(s)…", jobs.len());
     }
+    super::skip::set_skipped(sel.exclude.iter().cloned());
     let outcomes = execute(&jobs, opts);
+    super::skip::clear_skipped();
     if json {
         println!("{}", serde_json::to_string_pretty(&outcomes)?);
     } else {
         print_outcomes(&outcomes, opts.dry_run, opts.dry_run);
     }
     Ok(outcomes.iter().map(|o| o.bytes).sum())
+}
+
+/// Clears the process-wide skip set when dropped (covers early returns).
+struct ClearSkip;
+impl Drop for ClearSkip {
+    fn drop(&mut self) {
+        super::skip::clear_skipped();
+    }
 }
 
 /// `auto`: scan the recommended set, show what would be freed, ask once, clean.
@@ -340,6 +360,8 @@ pub fn run_auto(extra: &Selection, yes: bool, dry_run: bool, json: bool) -> Resu
     if !json {
         eprintln!("Scanning {} cleaner(s)…", jobs.len());
     }
+    super::skip::set_skipped(sel.exclude.iter().cloned());
+    let _guard = ClearSkip;
     let preview = execute(&jobs, RunOptions::preview());
     let reclaimable: u64 = preview.iter().map(|o| o.bytes).sum();
 

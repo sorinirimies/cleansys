@@ -290,11 +290,16 @@ impl Shared {
     /// Drain finished scan results. Call on every request.
     pub fn poll(&self) {
         let mut g = self.lock();
-        let Inner { board, scan_rx, .. } = &mut *g;
+        let Inner {
+            board,
+            scan_rx,
+            categories,
+            ..
+        } = &mut *g;
         let mut finished = false;
         if let Some(rx) = scan_rx.as_ref() {
             while let Ok((c, i, info)) = rx.try_recv() {
-                finished |= board.record(c, i, info);
+                finished |= board.record_synced(categories, c, i, info);
             }
         }
         if finished {

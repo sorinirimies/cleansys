@@ -257,6 +257,7 @@ untick individual paths. The classic case is *Rust target/ Directories*: expand 
 - Each cleaner lists its 300 biggest paths (the rest are noted as *"… and N smaller not listed"*).
 - Cleaners that run a command (e.g. `docker prune`) show their paths for information but are removed as a whole — the list says so.
 - Selections are for the current scan; a re-scan resets them.
+- A cleaner's checkbox and its paths stay in sync: opening an **unticked** cleaner shows all its paths unticked; ticking any one path ticks the cleaner, and unticking the last one unticks it.
 
 **Idle-days selector.** Project build output (`target/`, `node_modules`, …) is only offered once its
 project has been untouched for *N* days (default 14) — so a category can look empty while you're actively
@@ -269,8 +270,10 @@ working. Change it right in the app, no config file needed: **TUI** `[` / `]`, *
 ```bash
 cleansys auto [-n] [-y] [--json]        # recommended set: scan → show → confirm once → clean
 cleansys list                           # all cleaners, grouped like the UIs, with ids
-cleansys scan   [selection] [--json]    # preview only
-cleansys clean  [selection] [-n] [-y]   # run (prompts per item unless -y)
+cleansys scan   [selection] [--json]    # preview only (alias: `rescan` — run it any time, results are never cached)
+cleansys clean  [selection] [-n] [-y] [--rescan]   # run (prompts per item unless -y); --rescan shows what's left
+cleansys auto   [-y] [--rescan]         # same --rescan after the auto clean
+cleansys scan|clean|auto -x <path>      # never touch a path (details-view "untick", repeatable)
 cleansys schedule install|show|remove|run-now
 cleansys config show|add-root|remove-root|exclude|min-age
 cleansys user|system [-y]               # the classic one-shot runners
@@ -278,13 +281,17 @@ cleansys menu                           # plain-text menu
 ```
 
 *Selection* flags: `-i <id>` (repeatable) · `-c <category>` (repeatable; also `user` / `system`) · `-a/--all` ·
-`-r/--recommended` · `--moderate` · `--include-caution`. `caution` cleaners are only included when you name them with
-`-i` or pass `--include-caution`.
+`-r/--recommended` · `--moderate` · `--include-caution` · `--saved` (the cleaners last ticked in the TUI/GUI/web).
+`caution` cleaners are only included when you name them with `-i` or pass `--include-caution`.
+
+*Exclusion*: `-x/--exclude <path>` (repeatable) keeps a path — and everything under it — out of the preview and the
+run, the CLI equivalent of unticking a path in **Details**. Works with `scan`, `clean` and `auto`.
 
 ```bash
 cleansys scan -c user                                  # all user-land categories
 cleansys scan -c "AI & LLM Caches" --include-caution
 cleansys clean -i proj-rust -i dev-gradle-caches -n    # dry run
+cleansys clean --saved -x ~/code/keep-me/target -y     # last ticked cleaners, minus one project
 cleansys scan --all --json | jq '.[] | select(.bytes>1e9) | .name'
 ```
 

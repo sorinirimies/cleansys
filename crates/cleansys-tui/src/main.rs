@@ -59,7 +59,8 @@ enum Commands {
     },
     /// List all available cleaners
     List,
-    /// Preview what cleaners would free (deletes nothing)
+    /// Preview what cleaners would free (deletes nothing); run again any time to rescan
+    #[command(visible_alias = "rescan")]
     Scan {
         #[command(flatten)]
         select: SelectArgs,
@@ -80,6 +81,9 @@ enum Commands {
         /// Machine-readable JSON output
         #[arg(long)]
         json: bool,
+        /// Rescan afterwards and show what is still reclaimable
+        #[arg(long)]
+        rescan: bool,
         /// Used by the OS scheduler: follow the saved schedule, never prompt
         #[arg(long, hide = true)]
         scheduled: bool,
@@ -107,6 +111,9 @@ enum Commands {
         /// Machine-readable JSON output
         #[arg(long)]
         json: bool,
+        /// Rescan afterwards and show what is still reclaimable
+        #[arg(long)]
+        rescan: bool,
     },
     /// Interactive menu to select specific cleaners (text-based)
     Menu,
@@ -179,6 +186,12 @@ struct SelectArgs {
     /// Also include caution-risk cleaners (models, session histories)
     #[arg(long)]
     include_caution: bool,
+    /// The cleaners ticked last time in the GUI/TUI/web
+    #[arg(long)]
+    saved: bool,
+    /// Never touch this path or anything under it (repeatable)
+    #[arg(short = 'x', long = "exclude", value_name = "PATH")]
+    exclude: Vec<std::path::PathBuf>,
 }
 
 impl From<SelectArgs> for cleansys_core::engine::headless::Selection {
@@ -190,6 +203,8 @@ impl From<SelectArgs> for cleansys_core::engine::headless::Selection {
             all: a.all,
             recommended: a.recommended,
             include_moderate: a.moderate,
+            saved: a.saved,
+            exclude: a.exclude,
         }
     }
 }
@@ -532,6 +547,7 @@ fn main() -> Result<()> {
             yes,
             dry_run,
             json,
+            rescan,
         }) => {
             if !json {
                 print_header(if dry_run { "CLEAN (dry run)" } else { "CLEAN" });
@@ -543,13 +559,23 @@ fn main() -> Result<()> {
             } else {
                 cleansys_core::RunOptions::execute_with_confirmation()
             };
-            cleansys_core::engine::headless::run_selection(&select.into(), opts, json)?;
+            let sel: cleansys_core::engine::headless::Selection = select.into();
+            cleansys_core::engine::headless::run_selection(&sel, opts, json)?;
+            if rescan && !dry_run && !json {
+                print_header("RESCAN (preview)");
+                cleansys_core::engine::headless::run_selection(
+                    &sel,
+                    cleansys_core::RunOptions::preview(),
+                    false,
+                )?;
+            }
         }
         Some(Commands::Auto {
             select,
             yes,
             dry_run,
             json,
+            rescan,
             scheduled,
         }) => {
             if scheduled {
@@ -558,7 +584,17 @@ fn main() -> Result<()> {
                 if !json {
                     print_header("AUTO CLEAN");
                 }
-                cleansys_core::engine::headless::run_auto(&select.into(), yes, dry_run, json)?;
+                let mut sel: cleansys_core::engine::headless::Selection = select.into();
+                cleansys_core::engine::headless::run_auto(&sel, yes, dry_run, json)?;
+                if rescan && !dry_run && !json {
+                    print_header("RESCAN (preview)");
+                    sel.recommended = true;
+                    cleansys_core::engine::headless::run_selection(
+                        &sel,
+                        cleansys_core::RunOptions::preview(),
+                        false,
+                    )?;
+                }
             }
         }
         Some(Commands::Schedule { action }) => run_schedule_cmd(action)?,
@@ -574,4 +610,32 @@ fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn cli_parses_exclude_saved_and_rescan() {
+        let c = Cli::try_parse_from([
+            "cleansys", "clean", "--saved", "-x", "/a", "-x", "/b", "--rescan",
+        ])
+        .unwrap();
+        match c.command {
+            Some(Commands::Clean { select, rescan, .. }) => {
+                assert!(select.saved && rescan);
+                let sel: cleansys_core::engine::headless::Selection = select.into();
+                assert_eq!(sel.exclude.len(), 2);
+                assert!(sel.saved);
+            }
+            _ => panic!("expected clean"),
+        }
+    }
+
+    #[test]
+    fn rescan_is_an_alias_of_scan() {
+        let c = Cli::try_parse_from(["cleansys", "rescan", "--all"]).unwrap();
+        assert!(matches!(c.command, Some(Commands::Scan { .. })));
+    }
 }

@@ -312,7 +312,10 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
         Message::ScanAll => start_scan(state),
         Message::ScanItemFinished(cat_idx, item_idx, result) => {
             let info = cleansys_core::ScanInfo::from_result(result);
-            if state.board.record(cat_idx, item_idx, info) {
+            if state
+                .board
+                .record_synced(&state.categories, cat_idx, item_idx, info)
+            {
                 state.ensure_active_visible();
                 let total = state.total_reclaimable();
                 state.push_log(format!(
