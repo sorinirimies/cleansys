@@ -28,10 +28,13 @@ input:focus, select:focus, button:focus-visible, a:focus-visible { outline:2px s
 .badge.user { background:var(--ok); color:#10131c; }
 .badge.mod { background:var(--warn); color:#10131c; }
 .badge.caut { background:var(--err); color:#10131c; }
-.btn, button { display:inline-flex; align-items:center; gap:6px; background:var(--panel); color:var(--fg); border:1px solid var(--line); border-radius:7px; padding:7px 12px; font:inherit; cursor:pointer; white-space:nowrap; }
-.btn:hover, button:hover { border-color:var(--accent); text-decoration:none; }
-.btn.primary, button.primary { background:var(--accent); color:#10131c; border-color:var(--accent); font-weight:600; }
-.btn.danger, button.danger { background:var(--err); color:#10131c; border-color:var(--err); font-weight:600; }
+.btn, button { display:inline-flex; align-items:center; gap:6px; background:color-mix(in srgb, var(--accent) 12%, var(--panel)); color:var(--fg); border:1px solid color-mix(in srgb, var(--accent) 50%, var(--line)); border-radius:7px; padding:8px 14px; font:inherit; cursor:pointer; white-space:nowrap; }
+.btn:hover, button:hover { border-color:var(--accent); background:color-mix(in srgb, var(--accent) 28%, var(--panel)); text-decoration:none; }
+.btn:active, button:active { background:color-mix(in srgb, var(--accent) 42%, var(--panel)); }
+.btn.primary, button.primary { background:var(--accent); color:#10131c; border-color:var(--accent); font-weight:600; box-shadow:0 2px 10px color-mix(in srgb, var(--accent) 40%, transparent); }
+.btn.primary:hover, button.primary:hover { background:color-mix(in srgb, var(--accent) 82%, #fff); }
+.btn.danger, button.danger { background:var(--err); color:#10131c; border-color:var(--err); font-weight:600; box-shadow:0 2px 10px color-mix(in srgb, var(--err) 40%, transparent); }
+.btn.danger:hover, button.danger:hover { background:color-mix(in srgb, var(--err) 82%, #fff); }
 .btn[aria-disabled=true], button:disabled { opacity:.45; cursor:not-allowed; pointer-events:none; }
 
 /* ── layout: sidebar + list ── */
@@ -105,7 +108,12 @@ table.kv td { padding:5px 0; word-break:break-all; }
 
 /* ── action bar ── */
 .bar { position:sticky; bottom:0; margin:0 -16px; padding:10px 16px 14px; background:linear-gradient(to top, var(--bg) 70%, transparent); z-index:5; }
-.bar .inner { display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
+.bar .inner button, .bar .inner .btn { background:color-mix(in srgb, var(--accent) 12%, var(--panel)); border-color:color-mix(in srgb, var(--accent) 50%, var(--line)); padding:8px 14px; }
+.bar .inner button:hover, .bar .inner .btn:hover { background:color-mix(in srgb, var(--accent) 28%, var(--panel)); border-color:var(--accent); }
+.bar .inner button:active, .bar .inner .btn:active { background:color-mix(in srgb, var(--accent) 42%, var(--panel)); }
+.bar .inner .primary, .bar .inner button.primary { background:var(--accent); border-color:var(--accent); padding:9px 18px; box-shadow:0 2px 10px color-mix(in srgb, var(--accent) 40%, transparent); }
+.bar .inner .primary:hover, .bar .inner button.primary:hover { background:color-mix(in srgb, var(--accent) 82%, #fff); }
+.bar .inner { box-shadow:0 -4px 16px rgba(0,0,0,.25); display:flex; flex-wrap:wrap; align-items:center; gap:8px 10px; background:var(--panel); border:1px solid var(--line); border-radius:10px; padding:10px 12px; }
 .bar .sum { flex:1 1 220px; min-width:0; }
 .bar .sum b { font-size:15px; }
 .bar .sum small { display:block; color:var(--dim); }

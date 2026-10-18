@@ -161,7 +161,7 @@ fn header<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> Elemen
     } else {
         button(text("✕").size(13))
             .padding([6, 10])
-            .style(button::secondary)
+            .style(action_button_style(c))
             .on_press(Message::ClearSearch)
             .into()
     };
@@ -173,7 +173,7 @@ fn header<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> Elemen
     };
     let schedule = button(text(schedule_label).size(13))
         .padding([8, 12])
-        .style(button::secondary)
+        .style(action_button_style(c))
         .on_press_maybe((!(state.is_running)).then_some(Message::OpenSchedule));
 
     let (settings_label, about_label) = if layout == Layout::Narrow {
@@ -183,13 +183,13 @@ fn header<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> Elemen
     };
     let settings_btn = button(text(settings_label).size(13))
         .padding([8, 12])
-        .style(button::secondary)
+        .style(action_button_style(c))
         .on_press_maybe(
             (!state.is_running).then_some(Message::OpenSettings(SettingsTab::Settings)),
         );
     let about_btn = button(text(about_label).size(13))
         .padding([8, 12])
-        .style(button::secondary)
+        .style(action_button_style(c))
         .on_press(Message::OpenSettings(SettingsTab::About));
 
     let title = row![
@@ -452,11 +452,11 @@ fn category_header<'a>(
         row![
             button(text("All").size(12))
                 .padding([4, 10])
-                .style(button::secondary)
+                .style(action_button_style(c))
                 .on_press(Message::SelectAllCategory(cat_idx)),
             button(text("None").size(12))
                 .padding([4, 10])
-                .style(button::secondary)
+                .style(action_button_style(c))
                 .on_press(Message::DeselectAllCategory(cat_idx)),
         ]
         .spacing(6)
@@ -638,11 +638,11 @@ fn item_row<'a>(
                 row![
                     button(text("Select all").size(11))
                         .padding([2, 8])
-                        .style(button::secondary)
+                        .style(action_button_style(c))
                         .on_press(Message::SetEntries(cat_idx, item_idx, true)),
                     button(text("Select none").size(11))
                         .padding([2, 8])
-                        .style(button::secondary)
+                        .style(action_button_style(c))
                         .on_press(Message::SetEntries(cat_idx, item_idx, false)),
                     text("ticked paths are cleaned when this cleaner runs")
                         .size(11)
@@ -850,8 +850,8 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
         format!("🧹 Clean {selected}")
     };
     let clean = button(text(clean_label).size(14))
-        .padding([10, 18])
-        .style(button::primary)
+        .padding([10, 20])
+        .style(clean_button_style(c))
         .on_press_maybe((!busy && selected > 0).then_some(Message::RequestRun));
 
     // Small secondary button with a hover tooltip (essential when compact
@@ -860,8 +860,8 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
         |label: &str, tip: &'static str, msg: Message, enabled: bool| -> Element<'a, Message> {
             tooltip(
                 button(text(label.to_string()).size(12))
-                    .padding([6, 10])
-                    .style(button::secondary)
+                    .padding([7, 12])
+                    .style(action_button_style(c))
                     .on_press_maybe(enabled.then_some(msg)),
                 container(text(tip).size(12))
                     .padding(6)
@@ -1022,10 +1022,12 @@ fn log_panel<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message
     let has_content = !state.logs.is_empty();
     let clear = button(text("Clear").size(11))
         .padding([3, 10])
-        .style(if has_content {
-            button::primary
-        } else {
-            button::secondary
+        .style(move |t: &iced::Theme, s: button::Status| {
+            if has_content {
+                clean_button_style(c)(t, s)
+            } else {
+                action_button_style(c)(t, s)
+            }
         })
         .on_press_maybe(has_content.then_some(Message::ClearLog));
 
@@ -1099,6 +1101,79 @@ fn log_panel<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Message
 
 // ── Small shared widgets ─────────────────────────────────────────────────────
 
+fn mix(a: Color, b: Color, t: f32) -> Color {
+    Color {
+        r: a.r + (b.r - a.r) * t,
+        g: a.g + (b.g - a.g) * t,
+        b: a.b + (b.b - a.b) * t,
+        a: 1.0,
+    }
+}
+
+/// Clearly outlined action-bar button: tinted fill, accent border, strong
+/// hover/press feedback, visibly dimmed when disabled.
+fn action_button_style(c: ThemeColors) -> impl Fn(&iced::Theme, button::Status) -> button::Style {
+    move |_t, status| {
+        let (bg, border, text) = match status {
+            button::Status::Active => (
+                mix(c.surface, c.accent, 0.12),
+                mix(c.border, c.accent, 0.55),
+                c.text_primary,
+            ),
+            button::Status::Hovered => (mix(c.surface, c.accent, 0.28), c.accent, c.text_primary),
+            button::Status::Pressed => (mix(c.surface, c.accent, 0.42), c.accent, c.text_primary),
+            button::Status::Disabled => (
+                mix(c.surface, c.bg, 0.4),
+                mix(c.border, c.bg, 0.4),
+                mix(c.muted, c.bg, 0.4),
+            ),
+        };
+        button::Style {
+            background: Some(bg.into()),
+            text_color: text,
+            border: iced::Border {
+                color: border,
+                width: 1.0,
+                radius: 7.0.into(),
+            },
+            ..Default::default()
+        }
+    }
+}
+
+/// Prominent solid accent button for the main "Clean" action.
+fn clean_button_style(c: ThemeColors) -> impl Fn(&iced::Theme, button::Status) -> button::Style {
+    move |_t, status| {
+        // Pick readable text for the accent fill.
+        let lum = 0.299 * c.accent.r + 0.587 * c.accent.g + 0.114 * c.accent.b;
+        let on_accent = if lum > 0.6 {
+            Color::from_rgb(0.06, 0.07, 0.1)
+        } else {
+            Color::WHITE
+        };
+        let (bg, text) = match status {
+            button::Status::Active => (c.accent, on_accent),
+            button::Status::Hovered => (mix(c.accent, Color::WHITE, 0.18), on_accent),
+            button::Status::Pressed => (mix(c.accent, Color::BLACK, 0.2), on_accent),
+            button::Status::Disabled => (mix(c.surface, c.accent, 0.2), mix(c.muted, c.bg, 0.3)),
+        };
+        button::Style {
+            background: Some(bg.into()),
+            text_color: text,
+            border: iced::Border {
+                color: if matches!(status, button::Status::Disabled) {
+                    mix(c.border, c.bg, 0.4)
+                } else {
+                    mix(c.accent, Color::WHITE, 0.35)
+                },
+                width: 1.0,
+                radius: 7.0.into(),
+            },
+            ..Default::default()
+        }
+    }
+}
+
 /// A reusable "elevated surface" container style (cards, panels) tinted by
 /// the active theme.
 fn surface_style(c: ThemeColors) -> impl Fn(&iced::Theme) -> container::Style {
@@ -1168,11 +1243,11 @@ fn password_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, M
         row![
             button(text("Authenticate"))
                 .padding([8, 16])
-                .style(button::primary)
+                .style(clean_button_style(c))
                 .on_press(Message::PasswordSubmit),
             button(text("Cancel"))
                 .padding([8, 16])
-                .style(button::secondary)
+                .style(action_button_style(c))
                 .on_press(Message::PasswordCancel),
         ]
         .spacing(12),
@@ -1275,11 +1350,11 @@ fn confirm_run_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a
         row![
             button(text("Run now"))
                 .padding([8, 16])
-                .style(button::primary)
+                .style(clean_button_style(c))
                 .on_press(Message::ConfirmRun),
             button(text("Cancel"))
                 .padding([8, 16])
-                .style(button::secondary)
+                .style(action_button_style(c))
                 .on_press(Message::CancelRunRequest),
         ]
         .spacing(12),
@@ -1327,11 +1402,11 @@ fn admin_notice_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'
         row![
             button(text("Relaunch as Administrator"))
                 .padding([8, 16])
-                .style(button::primary)
+                .style(clean_button_style(c))
                 .on_press(Message::RelaunchAsAdmin),
             button(text("Cancel"))
                 .padding([8, 16])
-                .style(button::secondary)
+                .style(action_button_style(c))
                 .on_press(Message::AdminNoticeAcknowledged),
         ]
         .spacing(12),
@@ -1547,11 +1622,11 @@ fn schedule_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, M
     let buttons = row![
         button(text(enable_label))
             .padding([8, 16])
-            .style(button::primary)
+            .style(clean_button_style(c))
             .on_press(Message::ScheduleApply),
         button(text("Remove"))
             .padding([8, 16])
-            .style(button::secondary)
+            .style(action_button_style(c))
             .on_press_maybe(
                 state
                     .schedule_installed
@@ -1561,7 +1636,7 @@ fn schedule_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, M
         Space::new().width(Length::Fill),
         button(text("Close"))
             .padding([8, 16])
-            .style(button::secondary)
+            .style(action_button_style(c))
             .on_press(Message::CloseSchedule),
     ]
     .spacing(10);
@@ -1662,7 +1737,7 @@ fn preview_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Me
         scrollable(column(rows).spacing(4)).height(Length::Fixed(280.0)),
         row![button(text("Close"))
             .padding([8, 16])
-            .style(button::secondary)
+            .style(action_button_style(c))
             .on_press(Message::ClosePreview),],
     ]
     .spacing(12)
@@ -1846,10 +1921,12 @@ fn settings_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, M
     let tab_btn = |label: &'static str, tab: SettingsTab| {
         button(text(label).size(13))
             .padding([6, 14])
-            .style(if state.settings_tab == tab {
-                button::primary
-            } else {
-                button::secondary
+            .style(move |t: &iced::Theme, s: button::Status| {
+                if state.settings_tab == tab {
+                    clean_button_style(c)(t, s)
+                } else {
+                    action_button_style(c)(t, s)
+                }
             })
             .on_press(Message::SettingsTabSelected(tab))
     };
@@ -1876,7 +1953,7 @@ fn settings_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, M
             .width(Length::Fill),
         button(text("Close"))
             .padding([8, 16])
-            .style(button::secondary)
+            .style(action_button_style(c))
             .on_press(Message::CloseSettings),
     ]
     .spacing(10)
@@ -1947,7 +2024,7 @@ fn settings_tab_body<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a,
     let small = |label: &'static str, msg: Message| {
         button(text(label).size(12))
             .padding([6, 12])
-            .style(button::secondary)
+            .style(action_button_style(c))
             .on_press(msg)
     };
     let window_section = column![
@@ -2046,7 +2123,7 @@ fn settings_tab_body<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a,
                     .width(Length::Fill),
                 button(text("Remove").size(12))
                     .padding([4, 10])
-                    .style(button::secondary)
+                    .style(action_button_style(c))
                     .on_press(Message::RemoveRoot(i)),
             ]
             .spacing(10)
@@ -2063,7 +2140,7 @@ fn settings_tab_body<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a,
                 .width(Length::Fill),
             button(text("Add").size(12))
                 .padding([6, 14])
-                .style(button::primary)
+                .style(clean_button_style(c))
                 .on_press(Message::AddRoot),
         ]
         .spacing(10)
@@ -2080,7 +2157,7 @@ fn settings_tab_body<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a,
                     .width(Length::Fill),
                 button(text("Remove").size(12))
                     .padding([4, 10])
-                    .style(button::secondary)
+                    .style(action_button_style(c))
                     .on_press(Message::RemoveExclude(i)),
             ]
             .spacing(10)
@@ -2100,7 +2177,7 @@ fn settings_tab_body<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a,
             .width(Length::Fill),
             button(text("Add").size(12))
                 .padding([6, 14])
-                .style(button::primary)
+                .style(clean_button_style(c))
                 .on_press(Message::AddExclude),
         ]
         .spacing(10)
