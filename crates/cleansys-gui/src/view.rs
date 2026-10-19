@@ -883,12 +883,33 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
         Message::DeselectAllEverywhere,
         !busy,
     );
-    let rescan = small(
-        if compact { "⟳" } else { "⟳ Rescan" },
-        "Measure what every cleaner can free again",
-        Message::ScanAll,
-        !busy && !scanning,
-    );
+    let rescan: Element<'a, Message> = if scanning {
+        // Stays greyed out (no on_press) while the ring spins in place of the glyph.
+        tooltip(
+            button(
+                row![
+                    ring(&c, state.anim_tick, 13.0),
+                    text(if compact { "" } else { "Rescan" }).size(12)
+                ]
+                .spacing(if compact { 0 } else { 6 })
+                .align_y(Alignment::Center),
+            )
+            .padding([7, 12])
+            .style(action_button_style(c)),
+            container(text("Scanning…").size(12))
+                .padding(6)
+                .style(container::rounded_box),
+            tooltip::Position::Top,
+        )
+        .into()
+    } else {
+        small(
+            if compact { "⟳" } else { "⟳ Rescan" },
+            "Measure what every cleaner can free again",
+            Message::ScanAll,
+            !busy,
+        )
+    };
     let preview = small(
         if compact { "🔍" } else { "🔍 Preview" },
         "Show exactly what would be removed (deletes nothing)",

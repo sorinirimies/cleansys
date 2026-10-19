@@ -304,7 +304,11 @@ pub async fn action_bar(
                     if !hide { <input type="hidden" name="hide" value="0"> }
                     <button name="op" value="recommended" title="Tick only the safe, user-land cleaners that have something to free"><span class="ico">"✨"</span><span class="lbl">"✨ Recommended"</span></button>
                     <button name="op" value="none" title="Untick everything"><span class="ico">"☐"</span><span class="lbl">"Select none"</span></button>
-                    <button name="op" value="rescan" title="Measure what every cleaner can free again"><span class="ico">"⟳"</span><span class="lbl">"⟳ Rescan"</span></button>
+                    if snap.scanning {
+                        <button name="op" value="rescan" disabled=("disabled") title="Scanning…"><span class="ico">spinner()</span><span class="lbl">spinner() " Rescan"</span></button>
+                    } else {
+                        <button name="op" value="rescan" title="Measure what every cleaner can free again"><span class="ico">"⟳"</span><span class="lbl">"⟳ Rescan"</span></button>
+                    }
                 </form>
                 <form method="post" action="/min-age" class="age" title="Project build output (target/, node_modules, …) is only offered when its project was untouched this long">
                     <input type="hidden" name="back" value=(back.clone())>
