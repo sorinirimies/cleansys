@@ -164,7 +164,10 @@ mod tests {
                         // children get removed one by one (each re-checked at
                         // delete time), so only require it to be a real
                         // directory prefix, not a bare filesystem root.
-                        assert!(p.components().count() >= 3, "{}: {t} too broad", s.id);
+                        // Judge breadth by the whole pattern (e.g. `/mnt/*/.Trash-*/files/*`),
+                        // not just the literal prefix (`/mnt/`).
+                        let full = std::path::Path::new(&expanded);
+                        assert!(full.components().count() >= 3, "{}: {t} too broad", s.id);
                     } else {
                         assert!(!safety::is_protected(&p), "{}: {t} protected", s.id);
                     }
