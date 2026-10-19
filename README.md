@@ -26,8 +26,8 @@ from a **terminal UI**, a **desktop GUI**, a **local web UI** or the **command l
 
 ## ✨ Highlights
 
-- **See before you delete** — every cleaner is measured in the background, biggest first; preview (`d` / 🔍) lists exact paths.
-- **~190 cleaners** — browsers, apps, IDEs, Gradle/Cargo/npm, Docker, AI/LLM caches, OS logs and more. See [What it cleans](#-what-it-cleans).
+- **See before you delete** — every cleaner is measured in the background, in parallel (sizes are cached per scan and the slowest cleaners start first), biggest first; preview (`d` / 🔍) lists exact paths.
+- **~230 cleaners** — browsers, apps, IDEs, Gradle/Cargo/npm, Docker, AI/LLM caches, OS logs and more. See [What it cleans](#-what-it-cleans).
 - **Project build output** — `target/`, `node_modules/`, `.venv/`… next to a marker file, by default only in projects idle for 14 days.
 - **Smart selection** — `r` / ✨ *Recommended* ticks only safe, user-land cleaners with something to free; expand any cleaner to [untick single paths](#details--fine-grained-selection).
 - **Risk levels** — `safe`, `moderate` (`~`), `caution` (`!`, never in bulk or unattended runs); root cleaners sit in a separate section and nothing asks for sudo until you run it.
@@ -163,12 +163,12 @@ Cleaners are grouped into categories; the UIs list **user-land categories first,
 | Category | Examples |
 |----------|----------|
 | **User Land Cleaners** | Browser/app/thumbnail caches, temp files, package-manager caches, Trash |
-| **Developer Caches** | Gradle (caches, wrapper), Android SDK & Studio, Maven, Cargo git/src, sccache, npm/yarn/pnpm/bun, Go, uv/Poetry, Bazel, Playwright/Cypress, VS Code/Cursor/Windsurf, Xcode, Ruby, NuGet, ccache… |
+| **Developer Caches** | Gradle (caches, wrapper), Android SDK & Studio, Maven, Cargo git/src, sccache, npm/yarn/pnpm/bun, Go, uv/Poetry, Bazel, Playwright/Cypress, node-gyp/Expo, ESLint/Nx/Turbo, rustup temp, Hex, opam, Zed, VS Code/Cursor/Windsurf, Xcode, Ruby, NuGet, ccache… |
 | **Project Build Artifacts** | Rust `target/`, Gradle/Android `build/` + `.gradle/` + `.cxx`, Maven, `node_modules`, Next/Nuxt/Vite caches, Python caches & venvs, SwiftPM, CocoaPods, .NET `bin/obj`, Flutter, Zig, CMake, Terraform |
 | **AI & LLM Caches** | Hugging Face, PyTorch/Keras, Ollama, LM Studio/GPT4All/Jan, Claude Code, Codex/Gemini CLI, agent session histories, code-index caches |
 | **Web Browsers** | Cache, cookies & site data, history, sessions — Chrome, Chromium, Brave, Edge, Vivaldi, Opera, Arc, Firefox, LibreWolf, Zen, Safari |
 | **Applications / Games** | Slack, Discord, Teams, Signal, Spotify, Zoom, Telegram, Office, Adobe, JetBrains logs · Steam shader cache, Epic, Lutris/Heroic, Wine, GPU shader caches |
-| **System Maintenance** | Linux: APT lists/autoremove, rotated logs, journal vacuum, core dumps, snap/flatpak · macOS: DNS flush, Quick Look, update leftovers, Time Machine snapshots, iOS backups · Windows: Prefetch, WER, CBS logs, thumbnail cache, DISM cleanup |
+| **System Maintenance** | Linux: APT/DNF/pacman/zypper cleanup, rotated logs, journal vacuum, core dumps, snap/flatpak (old revisions), print spool, `fstrim` · macOS: DNS flush, Quick Look, update leftovers, Time Machine snapshots, iOS backups & firmware, old *Install macOS* apps, Rosetta cache, periodic scripts · Windows: Prefetch, WER, CBS logs, Defender history, shader/Store caches, DISM cleanup, hibernation file · everywhere: installer files in `~/Downloads` |
 | **Containers & Virtualization** | Docker/Podman prune, Flatpak unused runtimes, Nix GC, Conda, Kubernetes/Helm caches, Vagrant boxes |
 | **Privacy Traces** | Recent-file lists, shell/REPL/editor histories |
 | **System Cleaners** *(root)* | Package-manager caches, logs, old kernels, crash reports, Homebrew/Xcode/Simulator (macOS), Windows Update cache, Recycle Bin |

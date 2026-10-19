@@ -169,7 +169,12 @@ fn run_one(job: &Job, opts: RunOptions) -> Outcome {
         out.status = OutcomeStatus::Skipped("needs root (re-run with sudo)".into());
         return out;
     }
-    match (job.function)(opts) {
+    let t0 = std::time::Instant::now();
+    let r = (job.function)(opts);
+    if std::env::var_os("CLEANSYS_SCAN_TIMING").is_some() {
+        eprintln!("scan {:>8.0?} {}", t0.elapsed(), job.id);
+    }
+    match r {
         Ok(res) => {
             out.bytes = res.total_bytes;
             out.items = res
@@ -195,6 +200,12 @@ pub fn execute(jobs: &[Job], opts: RunOptions) -> Vec<Outcome> {
     if !opts.dry_run || jobs.len() < 2 {
         return jobs.iter().map(|j| run_one(j, opts)).collect();
     }
+    crate::utils::clear_size_cache();
+    // Slowest cleaners (per the previous scan) start first so none is left as a long tail.
+    let history = crate::scan::load_scan_times();
+    let mut order: Vec<usize> = (0..jobs.len()).collect();
+    order.sort_by_key(|&i| std::cmp::Reverse(history.get(&jobs[i].id).copied().unwrap_or(0)));
+    let times = Mutex::new(std::collections::HashMap::<String, u64>::new());
     let next = AtomicUsize::new(0);
     let slots: Vec<Mutex<Option<Outcome>>> = jobs.iter().map(|_| Mutex::new(None)).collect();
     let workers = std::env::var("CLEANSYS_SCAN_THREADS")
@@ -209,15 +220,22 @@ pub fn execute(jobs: &[Job], opts: RunOptions) -> Vec<Outcome> {
     std::thread::scope(|s| {
         for _ in 0..workers {
             s.spawn(|| loop {
-                let i = next.fetch_add(1, Ordering::SeqCst);
-                if i >= jobs.len() {
+                let n = next.fetch_add(1, Ordering::SeqCst);
+                if n >= jobs.len() {
                     break;
                 }
+                let i = order[n];
+                let t0 = std::time::Instant::now();
                 let r = run_one(&jobs[i], opts);
+                times
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(jobs[i].id.clone(), t0.elapsed().as_millis() as u64);
                 *slots[i].lock().unwrap_or_else(|e| e.into_inner()) = Some(r);
             });
         }
     });
+    crate::scan::save_scan_times(&times.into_inner().unwrap_or_else(|e| e.into_inner()));
     slots
         .into_iter()
         .filter_map(|m| m.into_inner().unwrap_or_else(|e| e.into_inner()))

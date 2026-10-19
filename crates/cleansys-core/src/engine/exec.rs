@@ -33,6 +33,9 @@ pub fn run_spec_with(
         }
     }
     let mut result = CleaningResult::new();
+    if !opts.dry_run {
+        crate::utils::clear_size_cache();
+    }
     for action in &spec.actions {
         match action {
             Action::Delete {
@@ -72,7 +75,12 @@ pub fn run_spec_with(
                             vec![path.clone()]
                         };
                         let recreate_here = *recreate && !*contents_only && !*files_only;
-                        for t in targets.into_iter().filter(|t| filter.accepts(t)) {
+                        let targets: Vec<PathBuf> =
+                            targets.into_iter().filter(|t| filter.accepts(t)).collect();
+                        if opts.dry_run {
+                            crate::utils::prewarm_sizes(&targets);
+                        }
+                        for t in targets {
                             remove_path(
                                 &mut result,
                                 &t,
@@ -102,7 +110,12 @@ pub fn run_spec_with(
                 label,
             } => {
                 let label = label.as_deref().unwrap_or(&spec.name);
-                for (project, artifact) in find_project_artifacts(markers, artifacts, cfg) {
+                let found = find_project_artifacts(markers, artifacts, cfg);
+                if opts.dry_run {
+                    let arts: Vec<PathBuf> = found.iter().map(|(_, a)| a.clone()).collect();
+                    crate::utils::prewarm_sizes(&arts);
+                }
+                for (project, artifact) in found {
                     let name = project
                         .file_name()
                         .map(|n| n.to_string_lossy().into_owned())
@@ -224,7 +237,11 @@ pub(crate) fn remove_path(
 
     let is_symlink = meta.file_type().is_symlink();
     let is_dir = meta.is_dir() && !is_symlink;
-    let size = get_size(&path.to_string_lossy())?;
+    let size = if opts.dry_run {
+        crate::utils::get_size_cached(path)
+    } else {
+        get_size(&path.to_string_lossy())?
+    };
     if size == 0 && !is_symlink {
         return Ok(());
     }

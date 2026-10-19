@@ -269,6 +269,52 @@ pub fn get_size(path: &str) -> Result<u64> {
     Ok(dir_size(std::path::Path::new(path), 0, MAX_DEPTH))
 }
 
+type SizeCache =
+    std::sync::Mutex<std::collections::HashMap<std::path::PathBuf, (std::time::Instant, u64)>>;
+
+fn size_cache() -> &'static SizeCache {
+    static C: std::sync::OnceLock<SizeCache> = std::sync::OnceLock::new();
+    C.get_or_init(Default::default)
+}
+
+/// Safety net: a cached size older than this is measured again.
+const SIZE_CACHE_TTL: std::time::Duration = std::time::Duration::from_secs(120);
+
+/// Forget every remembered size. Call before a fresh scan and after anything is deleted.
+pub fn clear_size_cache() {
+    if let Ok(mut c) = size_cache().lock() {
+        c.clear();
+    }
+}
+
+/// Like [`get_size`] but remembers the result, so cleaners whose targets overlap
+/// (or that are measured twice in one scan) walk each tree only once.
+pub fn get_size_cached(path: &std::path::Path) -> u64 {
+    if let Ok(c) = size_cache().lock() {
+        if let Some((at, n)) = c.get(path) {
+            if at.elapsed() < SIZE_CACHE_TTL {
+                return *n;
+            }
+        }
+    }
+    let n = dir_size(path, 0, 512);
+    if let Ok(mut c) = size_cache().lock() {
+        c.insert(path.to_path_buf(), (std::time::Instant::now(), n));
+    }
+    n
+}
+
+/// Measure many paths concurrently into the size cache (many small trees are far
+/// faster this way than one after another).
+pub fn prewarm_sizes(paths: &[std::path::PathBuf]) {
+    use rayon::prelude::*;
+    if paths.len() > 1 {
+        paths.par_iter().for_each(|p| {
+            get_size_cached(p);
+        });
+    }
+}
+
 /// Directory levels (from the root) that fan out across threads. Deeper levels are
 /// walked sequentially: by then there is plenty of parallelism and the overhead of
 /// splitting tiny directories would only cost time.
@@ -369,5 +415,38 @@ fn dir_total(path: &std::path::Path, depth: u32, max_depth: u32) -> u64 {
             .reduce(|| 0, u64::saturating_add)
     } else {
         entries.iter().map(one).fold(0, u64::saturating_add)
+    }
+}
+
+#[cfg(test)]
+mod cache_tests {
+    use super::*;
+
+    #[test]
+    fn get_size_cached_matches_a_fresh_walk() {
+        let d = tempfile::tempdir().unwrap();
+        std::fs::create_dir(d.path().join("sub")).unwrap();
+        std::fs::write(d.path().join("a.bin"), vec![0u8; 100]).unwrap();
+        std::fs::write(d.path().join("sub/b.bin"), vec![0u8; 50]).unwrap();
+        assert_eq!(get_size_cached(d.path()), 150);
+        assert_eq!(get_size_cached(d.path()), 150, "second call is stable");
+        assert_eq!(get_size_cached(&d.path().join("missing")), 0);
+    }
+
+    #[test]
+    fn prewarm_sizes_measures_every_path() {
+        let d = tempfile::tempdir().unwrap();
+        let dirs: Vec<_> = (0..4usize)
+            .map(|n| {
+                let p = d.path().join(format!("d{n}"));
+                std::fs::create_dir(&p).unwrap();
+                std::fs::write(p.join("f"), vec![0u8; (n + 1) * 10]).unwrap();
+                p
+            })
+            .collect();
+        prewarm_sizes(&dirs);
+        for (n, p) in dirs.iter().enumerate() {
+            assert_eq!(get_size_cached(p), ((n + 1) * 10) as u64);
+        }
     }
 }

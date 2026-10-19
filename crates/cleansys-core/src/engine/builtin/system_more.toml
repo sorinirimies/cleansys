@@ -1,0 +1,355 @@
+# Additional OS-level cleaners (Linux / macOS / Windows) plus a few cross-platform ones.
+# Root-only entries use `sudo` when cleansys is not already elevated; previews never need it.
+
+# ───────────────────────────── Cross-platform ─────────────────────────────
+
+[[cleaner]]
+id = "sys-all-download-installers"
+name = "Installer Files in Downloads"
+description = "Disk images, installers and archives of installers left in ~/Downloads (.dmg .pkg .iso .msi .exe .deb .rpm .AppImage)"
+category = "System Maintenance"
+risk = "caution"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/Downloads/*.dmg", "~/Downloads/*.pkg", "~/Downloads/*.iso", "~/Downloads/*.msi", "~/Downloads/*.exe", "~/Downloads/*.deb", "~/Downloads/*.rpm", "~/Downloads/*.AppImage", "~/Downloads/*.DMG", "~/Downloads/*.ISO", "~/Downloads/*.EXE", "~/Downloads/*.MSI"]
+label = "Installer"
+
+# ───────────────────────────── Linux ─────────────────────────────
+
+[[cleaner]]
+id = "sys-lin-dnf-autoremove"
+name = "DNF Autoremove (unused packages)"
+description = "Remove dependencies that nothing needs any more (dnf autoremove)"
+category = "System Maintenance"
+os = ["linux"]
+requires_root = true
+risk = "caution"
+[[cleaner.action]]
+type = "command"
+program = "dnf"
+args = ["autoremove", "-y"]
+sudo = true
+label = "dnf autoremove"
+
+[[cleaner]]
+id = "sys-lin-dnf-system-upgrade"
+name = "DNF System-Upgrade Leftovers"
+description = "Downloaded packages of an offline system upgrade"
+category = "System Maintenance"
+os = ["linux"]
+requires_root = true
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["/var/lib/system-upgrade/*", "/var/lib/dnf/system-upgrade/*"]
+label = "System upgrade data"
+
+[[cleaner]]
+id = "sys-lin-pacman-orphans-cache"
+name = "Pacman Cache (uninstalled packages)"
+description = "paccache -ruk0: package files of packages that are no longer installed"
+category = "System Maintenance"
+os = ["linux"]
+requires_root = true
+risk = "moderate"
+[[cleaner.action]]
+type = "command"
+program = "paccache"
+args = ["-ruk0"]
+sudo = true
+measure = ["/var/cache/pacman/pkg"]
+label = "paccache"
+
+[[cleaner]]
+id = "sys-lin-zypper-clean"
+name = "Zypper Cache"
+description = "zypper clean --all"
+category = "System Maintenance"
+os = ["linux"]
+requires_root = true
+[[cleaner.action]]
+type = "command"
+program = "zypper"
+args = ["--non-interactive", "clean", "--all"]
+sudo = true
+measure = ["/var/cache/zypp"]
+label = "zypper clean"
+
+[[cleaner]]
+id = "sys-lin-snap-old-revisions"
+name = "Snap Old Revisions"
+description = "Disabled (superseded) snap revisions kept for rollback in /var/lib/snapd/snaps"
+category = "System Maintenance"
+os = ["linux"]
+requires_root = true
+risk = "moderate"
+[[cleaner.action]]
+type = "command"
+program = "sh"
+args = ["-c", "snap list --all | awk '/disabled/{print $1, $3}' | while read n r; do snap remove \"$n\" --revision=\"$r\"; done"]
+sudo = true
+measure = ["/var/lib/snapd/snaps"]
+label = "snap old revisions"
+
+[[cleaner]]
+id = "sys-lin-cups-spool"
+name = "Print Spool"
+description = "Stuck or finished print jobs in /var/spool/cups"
+category = "System Maintenance"
+os = ["linux"]
+requires_root = true
+[[cleaner.action]]
+type = "delete"
+paths = ["/var/spool/cups/*", "/var/cache/cups/*.cache"]
+label = "Print spool"
+
+[[cleaner]]
+id = "sys-lin-appstream"
+name = "AppStream & Firmware Caches"
+description = "Software-centre metadata, fwupd and PackageKit downloads (re-created on demand)"
+category = "System Maintenance"
+os = ["linux"]
+requires_root = true
+[[cleaner.action]]
+type = "delete"
+paths = ["/var/cache/app-info/*", "/var/cache/fwupd/*", "/var/lib/PackageKit/downloads/*"]
+label = "AppStream/fwupd cache"
+
+[[cleaner]]
+id = "sys-lin-old-tmp-logs"
+name = "Old Login & Boot Logs"
+description = "Rotated btmp/wtmp/lastlog archives and installer logs"
+category = "System Maintenance"
+os = ["linux"]
+requires_root = true
+[[cleaner.action]]
+type = "delete"
+paths = ["/var/log/btmp.*", "/var/log/wtmp.*", "/var/log/installer/*", "/var/log/dist-upgrade/*", "/var/log/unattended-upgrades/*.gz"]
+label = "Old log"
+
+[[cleaner]]
+id = "sys-lin-user-trash-orphans"
+name = "Trash on Other Volumes"
+description = "Per-volume .Trash-UID folders of the current user on mounted disks"
+category = "System Maintenance"
+os = ["linux"]
+[[cleaner.action]]
+type = "delete"
+paths = ["/mnt/*/.Trash-*/files/*", "/media/*/*/.Trash-*/files/*", "/run/media/*/*/.Trash-*/files/*"]
+label = "Volume trash"
+
+[[cleaner]]
+id = "sys-lin-fstrim"
+name = "TRIM Filesystems (SSD)"
+description = "fstrim -av: tell SSDs which blocks are free (keeps them fast; frees no visible space)"
+category = "System Maintenance"
+os = ["linux"]
+requires_root = true
+[[cleaner.action]]
+type = "command"
+program = "fstrim"
+args = ["-av"]
+sudo = true
+label = "fstrim"
+
+[[cleaner]]
+id = "sys-lin-user-coredumps"
+name = "User Core Dumps"
+description = "core / core.<pid> files dropped in the home directory"
+category = "System Maintenance"
+os = ["linux"]
+[[cleaner.action]]
+type = "delete"
+paths = ["~/core", "~/core.[0-9]*"]
+label = "Core dump"
+
+# ───────────────────────────── macOS ─────────────────────────────
+
+[[cleaner]]
+id = "sys-mac-install-macos-apps"
+name = "macOS Installer Apps"
+description = "Leftover 'Install macOS …' apps in /Applications (about 12 GB each)"
+category = "System Maintenance"
+os = ["macos"]
+risk = "caution"
+[[cleaner.action]]
+type = "delete"
+paths = ["/Applications/Install macOS*.app"]
+label = "macOS installer"
+
+[[cleaner]]
+id = "sys-mac-ios-software-updates"
+name = "iOS / iPadOS Update Files"
+description = "Downloaded .ipsw firmware in ~/Library/iTunes"
+category = "System Maintenance"
+os = ["macos"]
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/Library/iTunes/iPhone Software Updates/*", "~/Library/iTunes/iPad Software Updates/*", "~/Library/iTunes/iPod Software Updates/*"]
+label = "iOS firmware"
+
+[[cleaner]]
+id = "sys-mac-rosetta-cache"
+name = "Rosetta Translation Cache"
+description = "Cached translated x86_64 binaries (/var/db/oah); rebuilt on next launch of Intel apps"
+category = "System Maintenance"
+os = ["macos"]
+requires_root = true
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["/private/var/db/oah/*/*/*.aot"]
+label = "Rosetta cache"
+
+[[cleaner]]
+id = "sys-mac-asl-logs"
+name = "Legacy ASL & Install Logs"
+description = "Old Apple System Log archives and installer logs in /private/var/log"
+category = "System Maintenance"
+os = ["macos"]
+requires_root = true
+[[cleaner.action]]
+type = "delete"
+paths = ["/private/var/log/asl/*.asl", "/private/var/log/install.log.*", "/private/var/log/*.gz", "/private/var/log/*.bz2"]
+label = "Old log"
+
+[[cleaner]]
+id = "sys-mac-periodic"
+name = "Run Periodic Maintenance Scripts"
+description = "periodic daily weekly monthly: rotates and compresses logs, rebuilds locate DBs"
+category = "System Maintenance"
+os = ["macos"]
+requires_root = true
+[[cleaner.action]]
+type = "command"
+program = "periodic"
+args = ["daily", "weekly", "monthly"]
+sudo = true
+label = "periodic"
+
+[[cleaner]]
+id = "sys-mac-font-cache"
+name = "Reset Font Caches"
+description = "atsutil databases -remove: fixes garbled fonts; takes effect after a restart"
+category = "System Maintenance"
+os = ["macos"]
+requires_root = true
+[[cleaner.action]]
+type = "command"
+program = "atsutil"
+args = ["databases", "-remove"]
+sudo = true
+label = "atsutil"
+
+[[cleaner]]
+id = "sys-mac-simulator-logs"
+name = "CoreSimulator Logs & Caches"
+description = "iOS Simulator logs and the shared simulator caches"
+category = "System Maintenance"
+os = ["macos"]
+[[cleaner.action]]
+type = "delete"
+paths = ["~/Library/Logs/CoreSimulator/*", "~/Library/Developer/CoreSimulator/Caches/*"]
+label = "Simulator cache"
+
+[[cleaner]]
+id = "sys-mac-dyld-and-ql"
+name = "Launch Services & Icon Caches"
+description = "Per-user icon, QuickLook and Launch Services caches in the Darwin cache dir"
+category = "System Maintenance"
+os = ["macos"]
+[[cleaner.action]]
+type = "delete"
+paths = ["~/Library/Caches/com.apple.iconservices.store", "~/Library/Caches/com.apple.QuickLook.thumbnailcache", "~/Library/Caches/com.apple.helpd", "~/Library/Caches/com.apple.Safari/Webpage Previews"]
+label = "System cache"
+
+# ───────────────────────────── Windows ─────────────────────────────
+
+[[cleaner]]
+id = "sys-win-defender-history"
+name = "Defender Scan History"
+description = "Windows Defender scan history and quarantine-free scan logs"
+category = "System Maintenance"
+os = ["windows"]
+requires_root = true
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["$PROGRAMDATA/Microsoft/Windows Defender/Scans/History/*", "$PROGRAMDATA/Microsoft/Windows Defender/Support/*"]
+label = "Defender history"
+
+[[cleaner]]
+id = "sys-win-setup-logs"
+name = "Windows Setup & Update Logs"
+description = "Panther, DISM, WindowsUpdate and inf setup logs"
+category = "System Maintenance"
+os = ["windows"]
+requires_root = true
+[[cleaner.action]]
+type = "delete"
+paths = ["$SYSTEMROOT/Panther/*.log", "$SYSTEMROOT/Panther/*.etl", "$SYSTEMROOT/Logs/DISM/*", "$SYSTEMROOT/Logs/WindowsUpdate/*", "$SYSTEMROOT/inf/*.log", "$SYSTEMROOT/Performance/WinSAT/DataStore/*"]
+label = "Setup log"
+
+[[cleaner]]
+id = "sys-win-font-cache"
+name = "Font Cache"
+description = "Windows font cache service files (rebuilt automatically)"
+category = "System Maintenance"
+os = ["windows"]
+requires_root = true
+[[cleaner.action]]
+type = "delete"
+paths = ["$SYSTEMROOT/ServiceProfiles/LocalService/AppData/Local/FontCache/*"]
+label = "Font cache"
+
+[[cleaner]]
+id = "sys-win-store-cache"
+name = "Microsoft Store & Shader Caches"
+description = "Store local cache plus DirectX and GPU driver shader caches"
+category = "System Maintenance"
+os = ["windows"]
+[[cleaner.action]]
+type = "delete"
+paths = ["$LOCALAPPDATA/Packages/Microsoft.WindowsStore_8wekyb3d8bbwe/LocalCache/*", "$LOCALAPPDATA/D3DSCache/*", "$LOCALAPPDATA/NVIDIA/DXCache/*", "$LOCALAPPDATA/NVIDIA/GLCache/*", "$LOCALAPPDATA/AMD/DxCache/*"]
+label = "Store/shader cache"
+
+[[cleaner]]
+id = "sys-win-onedrive-logs"
+name = "OneDrive Logs"
+description = "OneDrive sync client logs"
+category = "System Maintenance"
+os = ["windows"]
+[[cleaner.action]]
+type = "delete"
+paths = ["$LOCALAPPDATA/Microsoft/OneDrive/logs/*"]
+label = "OneDrive log"
+
+[[cleaner]]
+id = "sys-win-hibernation"
+name = "Disable Hibernation (hiberfil.sys)"
+description = "powercfg /hibernate off — frees the hibernation file (about 40% of RAM). Also disables hibernate and Fast Startup"
+category = "System Maintenance"
+os = ["windows"]
+requires_root = true
+risk = "caution"
+[[cleaner.action]]
+type = "command"
+program = "powercfg.exe"
+args = ["/hibernate", "off"]
+measure = ["C:\\hiberfil.sys"]
+label = "powercfg /hibernate off"
+
+[[cleaner]]
+id = "sys-win-event-logs"
+name = "Clear Windows Event Logs"
+description = "Clear the Application, System and Setup event logs"
+category = "System Maintenance"
+os = ["windows"]
+requires_root = true
+risk = "moderate"
+[[cleaner.action]]
+type = "command"
+program = "powershell.exe"
+args = ["-NoProfile", "-Command", "'Application','System','Setup' | ForEach-Object { wevtutil.exe cl $_ }"]
+label = "wevtutil cl"

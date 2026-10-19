@@ -410,18 +410,26 @@ impl ScanBoard {
 /// Start a background scan of every cleaner. Results arrive on the returned
 /// channel as `(category, item, info)`; the second value is the job count.
 pub fn spawn_scan(categories: &[CleanerCategory]) -> (Receiver<(usize, usize, ScanInfo)>, usize) {
-    let jobs: VecDeque<_> = categories
+    // Slowest cleaners (as measured by the previous scan) go first: they are the long
+    // pole, so starting them early keeps every worker busy until the end.
+    let history = load_scan_times();
+    let mut list: Vec<_> = categories
         .iter()
         .enumerate()
         .flat_map(|(ci, c)| {
             c.items
                 .iter()
                 .enumerate()
-                .map(move |(ii, i)| (ci, ii, i.function.clone()))
+                .map(move |(ii, i)| (ci, ii, i.id.clone(), i.function.clone()))
         })
         .collect();
+    list.sort_by_key(|(_, _, id, _)| std::cmp::Reverse(history.get(id).copied().unwrap_or(0)));
+    let jobs: VecDeque<_> = list.into_iter().collect();
     let total = jobs.len();
+    crate::utils::clear_size_cache();
     let queue = Arc::new(Mutex::new(jobs));
+    let times = Arc::new(Mutex::new(std::collections::HashMap::<String, u64>::new()));
+    let remaining = Arc::new(std::sync::atomic::AtomicUsize::new(total));
     let (tx, rx) = channel();
     let workers = std::env::var("CLEANSYS_SCAN_THREADS")
         .ok()
@@ -429,22 +437,56 @@ pub fn spawn_scan(categories: &[CleanerCategory]) -> (Receiver<(usize, usize, Sc
         .filter(|n| *n > 0)
         .unwrap_or_else(|| {
             std::thread::available_parallelism()
-                .map(|n| n.get().clamp(2, 6))
+                .map(|n| n.get().clamp(2, 8))
                 .unwrap_or(4)
         });
+    let timing = std::env::var_os("CLEANSYS_SCAN_TIMING").is_some();
     for _ in 0..workers {
         let queue = Arc::clone(&queue);
+        let times = Arc::clone(&times);
+        let remaining = Arc::clone(&remaining);
         let tx = tx.clone();
         std::thread::spawn(move || loop {
             let job = queue.lock().unwrap_or_else(|e| e.into_inner()).pop_front();
-            let Some((ci, ii, f)) = job else { break };
+            let Some((ci, ii, id, f)) = job else { break };
+            let t0 = std::time::Instant::now();
             let info = ScanInfo::from_result(f(RunOptions::preview()).map_err(|e| e.to_string()));
+            let ms = t0.elapsed().as_millis() as u64;
+            if timing {
+                eprintln!("scan {ms:>7} ms {id} ({} bytes)", info.bytes);
+            }
+            times
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .insert(id, ms);
+            if remaining.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) == 1 {
+                save_scan_times(&times.lock().unwrap_or_else(|e| e.into_inner()));
+            }
             if tx.send((ci, ii, info)).is_err() {
                 break; // receiver dropped (app closed)
             }
         });
     }
     (rx, total)
+}
+
+fn scan_times_path() -> Option<std::path::PathBuf> {
+    crate::settings::settings_dir()
+        .ok()
+        .map(|d| d.join("scan_times.json"))
+}
+
+pub(crate) fn load_scan_times() -> std::collections::HashMap<String, u64> {
+    scan_times_path()
+        .and_then(|p| std::fs::read_to_string(p).ok())
+        .and_then(|s| serde_json::from_str(&s).ok())
+        .unwrap_or_default()
+}
+
+pub(crate) fn save_scan_times(times: &std::collections::HashMap<String, u64>) {
+    if let (Some(p), Ok(json)) = (scan_times_path(), serde_json::to_string(times)) {
+        let _ = std::fs::write(p, json);
+    }
 }
 
 #[cfg(test)]

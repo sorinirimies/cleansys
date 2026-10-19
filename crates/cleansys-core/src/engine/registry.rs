@@ -19,10 +19,15 @@ const BUILTIN: &[(&str, &str)] = &[
         "developer_more.toml",
         include_str!("builtin/developer_more.toml"),
     ),
+    (
+        "developer_extra.toml",
+        include_str!("builtin/developer_extra.toml"),
+    ),
     ("browsers.toml", include_str!("builtin/browsers.toml")),
     ("apps.toml", include_str!("builtin/apps.toml")),
     ("games.toml", include_str!("builtin/games.toml")),
     ("system.toml", include_str!("builtin/system.toml")),
+    ("system_more.toml", include_str!("builtin/system_more.toml")),
     ("containers.toml", include_str!("builtin/containers.toml")),
     ("privacy.toml", include_str!("builtin/privacy.toml")),
 ];

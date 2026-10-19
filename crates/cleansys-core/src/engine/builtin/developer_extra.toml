@@ -1,0 +1,101 @@
+# Developer-tool caches that the other developer files do not cover yet.
+
+[[cleaner]]
+id = "dev-node-native-caches"
+name = "Node Native Build Caches"
+description = "node-gyp headers, electron-builder downloads, Metro and Expo caches"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/node-gyp", "$XDG_CACHE_HOME/electron-builder", "$XDG_CACHE_HOME/metro-*", "~/.expo/native-modules-cache", "~/.expo/versions-cache"]
+macos = ["~/Library/Caches/node-gyp", "~/Library/Caches/electron-builder", "~/.expo/native-modules-cache", "~/.expo/versions-cache"]
+windows = ["$LOCALAPPDATA/node-gyp", "$LOCALAPPDATA/electron-builder/Cache"]
+label = "Node tool cache"
+
+[[cleaner]]
+id = "dev-js-lint-caches"
+name = "Linter & Test Runner Caches"
+description = "ESLint, Prettier, Jest, Nx, Turborepo and TypeScript caches in the user cache dir"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.eslintcache", "~/.cache/prettier", "~/.cache/eslint", "~/.cache/typescript", "~/.cache/turbo", "~/.nx/cache"]
+label = "Tool cache"
+
+[[cleaner]]
+id = "dev-rustup-tmp"
+name = "Rustup Downloads & Temp"
+description = "Interrupted toolchain downloads and temp files (toolchains are kept)"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.rustup/downloads/*", "~/.rustup/tmp/*"]
+label = "Rustup temp"
+
+[[cleaner]]
+id = "dev-elixir-erlang"
+name = "Elixir / Erlang Caches"
+description = "Hex package cache and Mix archives cache"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.hex/packages", "~/.cache/rebar3", "~/.cache/hex"]
+label = "Hex/rebar cache"
+
+[[cleaner]]
+id = "dev-opam-ocaml"
+name = "OCaml opam Download Cache"
+description = "opam source archive cache"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.opam/download-cache/*", "~/.opam/repo/*/cache/*"]
+label = "opam cache"
+
+[[cleaner]]
+id = "dev-aur-helpers"
+name = "AUR Helper Build Caches"
+description = "yay, paru and pamac build directories and downloaded sources"
+category = "Developer Caches"
+os = ["linux"]
+[[cleaner.action]]
+type = "delete"
+paths = ["$XDG_CACHE_HOME/yay/*", "$XDG_CACHE_HOME/paru/clone/*", "$XDG_CACHE_HOME/paru/pkg/*", "/var/tmp/pamac-build-*"]
+label = "AUR build cache"
+
+[[cleaner]]
+id = "dev-zed-editor"
+name = "Zed Editor Caches"
+description = "Zed logs and language-server downloads (re-downloaded when needed)"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_DATA_HOME/zed/languages", "$XDG_DATA_HOME/zed/node", "$XDG_DATA_HOME/zed/logs"]
+macos = ["~/Library/Application Support/Zed/languages", "~/Library/Application Support/Zed/node", "~/Library/Logs/Zed"]
+windows = ["$LOCALAPPDATA/Zed/languages", "$LOCALAPPDATA/Zed/node", "$LOCALAPPDATA/Zed/logs"]
+label = "Zed cache"
+
+[[cleaner]]
+id = "dev-vm-tooling"
+name = "VM & Container Runtime Logs"
+description = "Colima, Lima, OrbStack, Multipass and VirtualBox logs and download caches"
+category = "Containers & Virtualization"
+[[cleaner.action]]
+type = "delete"
+linux = ["~/.colima/_lima/*/*.log", "~/.lima/*/*.log", "~/.cache/lima/*", "~/VirtualBox VMs/*/Logs/*"]
+macos = ["~/.colima/_lima/*/*.log", "~/.lima/*/*.log", "~/Library/Caches/lima/*", "~/Library/Logs/OrbStack/*", "~/VirtualBox VMs/*/Logs/*", "~/Library/Logs/Multipass/*"]
+windows = ["$USERPROFILE/VirtualBox VMs/*/Logs/*"]
+label = "VM log/cache"
+
+[[cleaner]]
+id = "dev-jupyter-ipython"
+name = "Jupyter & IPython Runtime"
+description = "Jupyter runtime kernel files and IPython history"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_DATA_HOME/jupyter/runtime/*", "~/.ipython/profile_default/history.sqlite", "$XDG_CACHE_HOME/jupyterlab*"]
+macos = ["~/Library/Jupyter/runtime/*", "~/.ipython/profile_default/history.sqlite"]
+windows = ["$APPDATA/jupyter/runtime/*", "$USERPROFILE/.ipython/profile_default/history.sqlite"]
+label = "Jupyter runtime"
