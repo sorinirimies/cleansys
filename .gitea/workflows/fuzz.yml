@@ -5,9 +5,7 @@ on:
     - cron: "0 4 * * *"
   push:
     branches: [main]
-    paths: ["fuzz/**", "crates/**/src/**", "Cargo.lock"]
   pull_request:
-    paths: ["fuzz/**", "crates/**/src/**", "Cargo.lock"]
   workflow_dispatch:
 
 env:

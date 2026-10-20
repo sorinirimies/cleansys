@@ -5,9 +5,7 @@ on:
     - cron: "0 3 * * *"
   push:
     branches: [main]
-    paths: ["Cargo.lock", "Cargo.toml", "**/Cargo.toml", "deny.toml", ".cargo/audit.toml", "fuzz/**"]
   pull_request:
-    paths: ["Cargo.lock", "Cargo.toml", "**/Cargo.toml", "deny.toml", ".cargo/audit.toml", "fuzz/**"]
   workflow_dispatch:
 
 env:
