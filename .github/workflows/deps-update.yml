@@ -80,7 +80,9 @@ jobs:
       # Snapshot the lockfile as committed on main, to tell later whether any
       # *direct* dependency really moved (vs. transitive-only churn).
       - name: Snapshot committed Cargo.lock (release gate)
-        run: git show HEAD:Cargo.lock > "$RUNNER_TEMP/Cargo.lock.head"
+        run: |
+          git show HEAD:Cargo.lock > "$RUNNER_TEMP/Cargo.lock.head"
+          cargo metadata --no-deps --format-version 1 | jq -S -c '[.packages[].dependencies[] | {name,req,kind,features,optional,target,uses_default_features}] | sort_by(.name,.kind,.target)' > "$RUNNER_TEMP/reqs-before.json"
 
       # ── Snapshot Cargo.lock BEFORE upgrading, for the downgrade guard ───────
       - name: Snapshot Cargo.lock (pre-upgrade)
@@ -131,12 +133,22 @@ jobs:
             echo "has_changes=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # Transitive-only lock churn (syn, libc, ...) is still committed, but
-      # must NOT cut a release. Release only if a direct dependency changed.
-      - name: Check for direct dependency changes
+      # Release ONLY if a Cargo.toml dependency requirement changed (compared as data:
+      # cargo-edit also reformats manifests, which must not count). A lockfile-only
+      # update, including a direct dependency that merely resolves to a new version,
+      # is committed without a version bump, tag or release.
+      - name: Check for dependency requirement changes
         id: direct
         run: |
-          echo "release=$(nu scripts/ci/direct_deps_changed.nu --before "$RUNNER_TEMP/Cargo.lock.head" --after Cargo.lock)" >> "$GITHUB_OUTPUT"
+          cargo metadata --no-deps --format-version 1 | jq -S -c '[.packages[].dependencies[] | {name,req,kind,features,optional,target,uses_default_features}] | sort_by(.name,.kind,.target)' > "$RUNNER_TEMP/reqs-after.json"
+          if cmp -s "$RUNNER_TEMP/reqs-before.json" "$RUNNER_TEMP/reqs-after.json"; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            # Lock-only: drop cosmetic manifest reformatting from cargo-edit.
+            git ls-files -m -- '*Cargo.toml' | xargs -r git checkout --
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "Cargo.toml dependency requirements changed -> patch release."
+          fi
 
       # ── Quality gate ───────────────────────────────────────────────────────
       - name: Check formatting
@@ -196,9 +208,9 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Transitive-only update — no release
+      - name: Lockfile-only update — no release
         if: steps.check.outputs.has_changes == 'true' && steps.direct.outputs.release != 'true'
-        run: echo "ℹ️ Only transitive deps changed — lockfile committed, release skipped."
+        run: echo "ℹ️ No Cargo.toml requirement changed — lockfile committed, no version bump or release."
 
       - name: Nothing to update
         if: steps.check.outputs.has_changes == 'false'
