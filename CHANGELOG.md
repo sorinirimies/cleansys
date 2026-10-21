@@ -2,11 +2,29 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.8.7 - 2026-10-21
+### ⚡ Performance
+- perf: one shared scan pool (2x cores, configurable), deeper parallel walks, streaming sizing, parallel artifact stat; catch cleaner panics
+### ✨ Features
+- feat(ui): spinning, greyed-out Rescan button; restyle all buttons
+- feat: ~40 new system/dev cleaners; faster scans (size cache, parallel sizing, slowest-first)
+### 🐛 Bug Fixes
+- fix(test): judge glob breadth by full pattern, not literal prefix
+### 💄 Styling
+- style: highlight action buttons in GUI and web
+### 📚 Documentation
+- docs: document scan_threads / CLEANSYS_SCAN_THREADS
+### 🔄 CI
+- ci: run cargo audit + fuzz on every push and gate releases on them
+- ci: release only when a Cargo.toml requirement changes; lock-only merges without a bump
+- ci: ignore zbus-split unmaintained advisories (transitive, no upgrade)
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.8.6...v0.8.7
 ## 0.8.6 - 2026-10-17
 ### 🐛 Bug Fixes
 - fix: details paths follow unticked parent after scan; cli --saved, --exclude, rescan, --rescan
 ### 🔧 Chores
 - chore: drop unneeded unsafe in macos menu; test --saved selection
+- chore: bump version to 0.8.6
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.8.5...v0.8.6
 ## 0.8.5 - 2026-10-17
 ### 🔧 Chores
