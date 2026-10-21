@@ -8,6 +8,11 @@ ignore = [
     # Unmaintained transitive deps of the iced/wgpu GUI stack; no upstream fix yet.
     "RUSTSEC-2024-0436", # paste
     "RUSTSEC-2026-0192", # ttf-parser
+    # zbus split crates merged into zbus 6 (unmaintained notice only); pulled in
+    # transitively by the GUI stack, no safe upgrade until upstream moves to zbus 6.
+    "RUSTSEC-2026-0370", # zvariant
+    "RUSTSEC-2026-0371", # zbus_names
+    "RUSTSEC-2026-0372", # zvariant_derive
 ]
 
 [licenses]
