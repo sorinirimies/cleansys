@@ -18,6 +18,8 @@ All notable changes to this project will be documented in this file.
 - ci: run cargo audit + fuzz on every push and gate releases on them
 - ci: release only when a Cargo.toml requirement changes; lock-only merges without a bump
 - ci: ignore zbus-split unmaintained advisories (transitive, no upgrade)
+### 🔧 Chores
+- chore: bump version to 0.8.7
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.8.6...v0.8.7
 ## 0.8.6 - 2026-10-17
 ### 🐛 Bug Fixes
@@ -32,17 +34,6 @@ All notable changes to this project will be documented in this file.
 - chore: bump version to 0.8.5
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.8.4...v0.8.5
 ## 0.8.4 - 2026-10-16
-### 📦 Other Changes
-- Exit web on page close; parent/child selection sync; TUI details Enter; GUI inline details; web details button
-### 🔄 CI
-- ci: put cargo bin on PATH before rustup calls
-### 🔧 Chores
-- chore(deps): nightly dependency upgrade 2026-10-16
-- chore: bump version to 0.8.3
-- chore: sync Cargo.lock
-- chore: bump version to 0.8.4
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.8.2...v0.8.4
-## 0.8.2 - 2026-10-15
 ### ✨ Features
 - feat(theme): add System theme that follows OS light/dark across core, gui, tui and web
 ### 🐛 Bug Fixes
@@ -59,6 +50,7 @@ All notable changes to this project will be documented in this file.
 - just: push-all(-force) skip missing remotes, time out, summarize
 - demo: fix stretched web-responsive gif (fit frames to fixed canvas)
 - Merge remote-tracking branch 'gitea-starscream/main'
+- Exit web on page close; parent/child selection sync; TUI details Enter; GUI inline details; web details button
 ### 🔄 CI
 - ci(security): add cargo-audit workflow and just audit recipe
 - ci: add cargo-fuzz targets + fuzz smoke job; fix audit/fuzz findings
@@ -67,7 +59,9 @@ All notable changes to this project will be documented in this file.
 - ci: ignore unmaintained GUI-stack advisories in deny.toml
 - ci: prebuilt Nushell, cargo-deny + cargo-audit security workflow
 - ci: ignore unmaintained GUI-stack advisories in deny.toml
+- ci: put cargo bin on PATH before rustup calls
 ### 🔧 Chores
+- chore: bump version to 0.8.1
 - chore(deps): nightly dependency upgrade 2026-10-12
 - chore(deps): nightly dependency upgrade 2026-10-13
 - chore(deps): nightly dependency upgrade 2026-10-14
@@ -76,20 +70,12 @@ All notable changes to this project will be documented in this file.
 - chore: refresh stale Cargo.lock
 - chore(deps): nightly dependency upgrade 2026-10-15
 - chore: bump version to 0.8.2
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.8.1...v0.8.2
-## 0.8.1 - 2026-10-09
-### 🔧 Chores
-- chore: bump version to 0.8.1
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.8.0...v0.8.1
+- chore(deps): nightly dependency upgrade 2026-10-16
+- chore: bump version to 0.8.3
+- chore: sync Cargo.lock
+- chore: bump version to 0.8.4
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.8.0...v0.8.4
 ## 0.8.0 - 2026-10-09
-### ✨ Features
-- feat(gui): activity panel fills the width, resizable by dragging its top edge, Clear lit only when there is content
-### 🐛 Bug Fixes
-- fix(gui): sudo authentication no longer pins the header badge to ROOT; remove dead code (unused settings fns, icon, message); regression tests
-### 🔧 Chores
-- chore: bump version to 0.8.0
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.9...v0.8.0
-## 0.7.9 - 2026-10-09
 ### ✨ Features
 - feat: sudo prompt in web UI; idle-day selector and expandable per-path selection in TUI/GUI/web
 - feat(tui): show clean progress, outcome and activity log in the main view (worker thread); remove the detailed progress screen
@@ -97,18 +83,21 @@ All notable changes to this project will be documented in this file.
 - feat(gui): window resizer — presets, grow/shrink, maximise, full screen shortcuts and settings; remember the window size
 - feat: same animated progress in TUI, GUI and web — spinner plus a bar with a sweeping highlight (shared cleansys_core::anim)
 - feat(gui): round progress ring per cleaner/category while measuring, and on progress labels (canvas); shared ring_arc maths
+- feat(gui): activity panel fills the width, resizable by dragging its top edge, Clear lit only when there is content
 ### 🐛 Bug Fixes
 - fix(test,core): make the web details test independent of the shared sandbox project; write engine.json atomically
 - fix(gui,macos): install the standard Window menu so the system's tiling/zoom shortcuts work (as in tokenburn)
+- fix(gui): sudo authentication no longer pins the header badge to ROOT; remove dead code (unused settings fns, icon, message); regression tests
 ### 📚 Documentation
 - docs: document details expansion, per-path selection and idle-days selector
 ### 📦 Other Changes
 - docs/demo: re-record TUI tapes and web screenshots for the in-view progress, details and idle-days; silence cleaner output in the TUI; wider footer
 ### 🔧 Chores
 - chore: bump version to 0.7.9
+- chore: bump version to 0.8.0
 ### 🧪 Testing
 - test(tui): cover the clean worker, progress/summary state and run keys; tidy logging and lints
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.8...v0.7.9
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.7.8...v0.8.0
 ## 0.7.8 - 2026-10-07
 ### 🔧 Chores
 - chore: bump version to 0.7.8
@@ -206,27 +195,26 @@ All notable changes to this project will be documented in this file.
 - chore: bump version to 0.6.16
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.15...v0.6.16
 ## 0.6.15 - 2026-09-25
+### 🐛 Bug Fixes
+- fix(ci): disable Gitea nightly deps-update schedule to prevent dual auto-release
 ### 📦 Other Changes
+- merge: reconcile diverged GitHub/gitea-starscream nightly auto-release histories
+- merge: reconcile second round of gitea nightly divergence, bump to 0.6.14
 - merge: reconcile github's 2026-09-24 nightly run (thiserror bump) into 0.6.14
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-25
 - chore: bump version to 0.6.15
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.12...v0.6.15
 ## 0.6.12 - 2026-09-24
-### 📦 Other Changes
-- merge: reconcile second round of gitea nightly divergence, bump to 0.6.14
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-24
 - chore: bump version to 0.6.12
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.13...v0.6.12
 ## 0.6.13 - 2026-09-23
-### 🐛 Bug Fixes
-- fix(ci): disable Gitea nightly deps-update schedule to prevent dual auto-release
 ### 📚 Documentation
 - docs: update README and CHANGELOG for v0.6.8
-### 📦 Other Changes
-- merge: reconcile diverged GitHub/gitea-starscream nightly auto-release histories
 ### 🔧 Chores
+- chore: bump version to 0.6.8
 - chore(deps): nightly dependency upgrade 2026-09-17
 - chore: bump version to 0.6.9
 - chore(deps): nightly dependency upgrade 2026-09-19
@@ -237,11 +225,7 @@ All notable changes to this project will be documented in this file.
 - chore: bump version to 0.6.12
 - chore(deps): nightly dependency upgrade 2026-09-23
 - chore: bump version to 0.6.13
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.8...v0.6.13
-## 0.6.8 - 2026-09-16
-### 🔧 Chores
-- chore: bump version to 0.6.8
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.11...v0.6.8
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.11...v0.6.13
 ## 0.6.11 - 2026-09-23
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-23
@@ -253,6 +237,11 @@ All notable changes to this project will be documented in this file.
 - chore: bump version to 0.6.10
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.9...v0.6.10
 ## 0.6.9 - 2026-09-19
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-09-19
+- chore: bump version to 0.6.9
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.8...v0.6.9
+## 0.6.8 - 2026-09-17
 ### 🐛 Bug Fixes
 - fix(docs): repair corrupted README demo preview + commit real GIF/PNG assets
 - fix(gui): activity log (and whole main screen) didn't stretch full width on resize
@@ -264,11 +253,9 @@ All notable changes to this project will be documented in this file.
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-17
 - chore: bump version to 0.6.8
-- chore(deps): nightly dependency upgrade 2026-09-19
-- chore: bump version to 0.6.9
 ### 🧪 Testing
 - test(tui): add render.rs smoke-test suite; cleanup: finish DRY'ing system_cleaners.rs sudo call sites
-**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.7...v0.6.9
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.7...v0.6.8
 ## 0.6.7 - 2026-09-15
 ### 📚 Documentation
 - docs: update README and CHANGELOG for v0.6.4
@@ -288,9 +275,11 @@ All notable changes to this project will be documented in this file.
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.5...v0.6.6
 ## 0.6.5 - 2026-09-14
 ### 🐛 Bug Fixes
+- fix(gui): system cleaners silently no-op after password entry
 - fix: deep-analysis pass -- TUI/GUI bugs, dedupe, panic hardening
 - fix(demo): demo.tape used bare 'cargo run', broken since the cleansys-tui->cleansys package rename
 ### 📚 Documentation
+- docs: regenerate CHANGELOG.md with correct per-version sections
 - docs: regenerate CHANGELOG.md after merging Gitea auto-releases
 ### 📦 Other Changes
 - merge: reconcile Gitea nightly-deps auto-releases (v0.6.3, v0.6.4) with GUI sudo fix
@@ -298,10 +287,7 @@ All notable changes to this project will be documented in this file.
 - chore: bump version to 0.6.5
 **Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.6.4...v0.6.5
 ## 0.6.4 - 2026-09-14
-### 🐛 Bug Fixes
-- fix(gui): system cleaners silently no-op after password entry
 ### 📚 Documentation
-- docs: regenerate CHANGELOG.md with correct per-version sections
 - docs: update README and CHANGELOG for v0.6.2
 ### 🔧 Chores
 - chore(deps): nightly dependency upgrade 2026-09-13
