@@ -26,7 +26,7 @@ from a **terminal UI**, a **desktop GUI**, a **local web UI** or the **command l
 
 ## ✨ Highlights
 
-- **See before you delete** — every cleaner is measured in the background, in parallel (sizes are cached per scan and the slowest cleaners start first), biggest first; preview (`d` / 🔍) lists exact paths.
+- **See before you delete** — every cleaner is measured in the background, in parallel (one shared thread pool, sizes cached per scan, slowest cleaners first; tune with `scan_threads` in `settings.json` or `CLEANSYS_SCAN_THREADS`, default 2× cores), biggest first; preview (`d` / 🔍) lists exact paths.
 - **~230 cleaners** — browsers, apps, IDEs, Gradle/Cargo/npm, Docker, AI/LLM caches, OS logs and more. See [What it cleans](#-what-it-cleans).
 - **Project build output** — `target/`, `node_modules/`, `.venv/`… next to a marker file, by default only in projects idle for 14 days.
 - **Smart selection** — `r` / ✨ *Recommended* ticks only safe, user-land cleaners with something to free; expand any cleaner to [untick single paths](#details--fine-grained-selection).
@@ -234,6 +234,7 @@ Every front-end has the same two screens, so you never have to edit `engine.json
 | Project folders | the roots scanned for build output (add / remove; `~` and `$VAR` work) | `engine.json` (`scan_roots`) |
 | Never delete | glob patterns that are never touched | `engine.json` (`exclude`) |
 | Window (GUI) | size preset / larger / smaller / maximise / full screen / reset — the last size is restored on launch | `settings.json` (`window_size`) |
+| Scan threads | worker threads for scans; lower on spinning disks / network mounts (default 2× cores) | `settings.json` (`scan_threads`), `CLEANSYS_SCAN_THREADS` |
 | Hide cleaners with nothing to clean | tidy list after a scan | `settings.json` |
 | Ask before cleaning | the confirmation step (the web UI then posts straight to *Run*) | `settings.json` |
 
