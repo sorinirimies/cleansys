@@ -35,6 +35,10 @@ pub struct Settings {
     /// Height of the GUI activity panel in pixels (dragged by the user).
     #[serde(default)]
     pub log_height: Option<u32>,
+    /// Worker threads for scans (`None`/`0` = automatic: 2× the CPU cores, 4–32).
+    /// Lower it on spinning disks or network mounts. `CLEANSYS_SCAN_THREADS` overrides.
+    #[serde(default)]
+    pub scan_threads: Option<usize>,
 }
 
 impl Settings {
@@ -250,6 +254,7 @@ mod tests {
             confirm_before_run: Some(false),
             window_size: Some((900, 700)),
             log_height: Some(240),
+            scan_threads: None,
         };
         save_to(&path, &settings).unwrap();
 

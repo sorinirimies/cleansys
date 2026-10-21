@@ -66,9 +66,15 @@ pub fn run_spec_with(
                         let targets: Vec<PathBuf> = if *files_only {
                             files_below(&path, &filter)
                         } else if *contents_only {
-                            let mut kids: Vec<PathBuf> = fs::read_dir(&path)
-                                .map(|rd| rd.flatten().map(|e| e.path()).collect())
-                                .unwrap_or_default();
+                            let rd = fs::read_dir(&path).into_iter().flatten().flatten();
+                            let mut kids: Vec<PathBuf> = if opts.dry_run {
+                                // Start measuring each entry while the listing is still running.
+                                crate::utils::size_while_discovering(
+                                    rd.map(|e| e.path()).filter(|t| filter.accepts(t)),
+                                )
+                            } else {
+                                rd.map(|e| e.path()).collect()
+                            };
                             kids.sort();
                             kids
                         } else {
@@ -393,8 +399,23 @@ fn project_index(cfg: &EngineConfig, needed: &[String]) -> Index {
 
     // Serialise builds so parallel scans share one walk instead of each
     // starting their own.
+    // Rayon workers waiting inside a nested parallel walk may steal another scan job
+    // that needs the index too. That job runs on the thread already holding the lock,
+    // so it must not lock again (std mutexes aren't reentrant) -- it just walks itself.
+    thread_local!(static BUILDING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) });
     static BUILD: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _build = BUILD.lock().unwrap_or_else(|e| e.into_inner());
+    let reentrant = BUILDING.with(|b| b.get());
+    let _build = (!reentrant).then(|| BUILD.lock().unwrap_or_else(|e| e.into_inner()));
+    struct Reset(bool);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            if !self.0 {
+                BUILDING.with(|b| b.set(false));
+            }
+        }
+    }
+    BUILDING.with(|b| b.set(true));
+    let _reset = Reset(reentrant);
     let roots = cfg.effective_roots();
     let key = format!("{roots:?}|{}", cfg.max_depth);
 
@@ -534,26 +555,29 @@ pub fn find_project_artifacts(
         .filter_map(|m| glob::Pattern::new(m).ok())
         .collect();
     let min_age = Duration::from_secs(cfg.min_age_days.saturating_mul(86_400));
-    let mut found = Vec::new();
+    use rayon::prelude::*;
 
-    for d in project_index(cfg, markers).dirs.iter() {
-        if !d
-            .files
-            .iter()
-            .any(|f| patterns.iter().any(|p| p.matches(f)))
-        {
-            continue;
-        }
-        for art in artifacts {
-            let candidate = d.path.join(art);
-            let is_real_dir = fs::symlink_metadata(&candidate)
-                .map(|m| m.is_dir())
-                .unwrap_or(false);
-            if is_real_dir && is_stale(d, &candidate, min_age) {
-                found.push((d.path.clone(), candidate));
-            }
-        }
-    }
+    // The per-project stat calls (artifact exists? stale?) are independent: run them in parallel.
+    let index = project_index(cfg, markers);
+    let mut found: Vec<(PathBuf, PathBuf)> = index
+        .dirs
+        .par_iter()
+        .filter(|d| {
+            d.files
+                .iter()
+                .any(|f| patterns.iter().any(|p| p.matches(f)))
+        })
+        .flat_map_iter(|d| {
+            artifacts.iter().filter_map(move |art| {
+                let candidate = d.path.join(art);
+                let is_real_dir = fs::symlink_metadata(&candidate)
+                    .map(|m| m.is_dir())
+                    .unwrap_or(false);
+                (is_real_dir && is_stale(d, &candidate, min_age))
+                    .then(|| (d.path.clone(), candidate))
+            })
+        })
+        .collect();
     found.sort();
     found.dedup();
     found

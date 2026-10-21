@@ -427,30 +427,30 @@ pub fn spawn_scan(categories: &[CleanerCategory]) -> (Receiver<(usize, usize, Sc
     let jobs: VecDeque<_> = list.into_iter().collect();
     let total = jobs.len();
     crate::utils::clear_size_cache();
-    let queue = Arc::new(Mutex::new(jobs));
     let times = Arc::new(Mutex::new(std::collections::HashMap::<String, u64>::new()));
     let remaining = Arc::new(std::sync::atomic::AtomicUsize::new(total));
+    let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
     let (tx, rx) = channel();
-    let workers = std::env::var("CLEANSYS_SCAN_THREADS")
-        .ok()
-        .and_then(|v| v.parse::<usize>().ok())
-        .filter(|n| *n > 0)
-        .unwrap_or_else(|| {
-            std::thread::available_parallelism()
-                .map(|n| n.get().clamp(2, 8))
-                .unwrap_or(4)
-        });
     let timing = std::env::var_os("CLEANSYS_SCAN_TIMING").is_some();
-    for _ in 0..workers {
-        let queue = Arc::clone(&queue);
+    // One shared pool: cleaner jobs and the directory walks inside them use the same
+    // workers (work-stealing), and each result is sent the moment its cleaner finishes.
+    let pool = crate::utils::scan_pool();
+    for (ci, ii, id, f) in jobs {
         let times = Arc::clone(&times);
         let remaining = Arc::clone(&remaining);
+        let cancelled = Arc::clone(&cancelled);
         let tx = tx.clone();
-        std::thread::spawn(move || loop {
-            let job = queue.lock().unwrap_or_else(|e| e.into_inner()).pop_front();
-            let Some((ci, ii, id, f)) = job else { break };
+        pool.spawn(move || {
+            if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
+                return;
+            }
             let t0 = std::time::Instant::now();
-            let info = ScanInfo::from_result(f(RunOptions::preview()).map_err(|e| e.to_string()));
+            // A panicking cleaner must not take the whole pool (rayon aborts on escaped panics) down.
+            let info = ScanInfo::from_result(
+                std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(RunOptions::preview())))
+                    .unwrap_or_else(|_| Err(anyhow::anyhow!("cleaner panicked")))
+                    .map_err(|e| e.to_string()),
+            );
             let ms = t0.elapsed().as_millis() as u64;
             if timing {
                 eprintln!("scan {ms:>7} ms {id} ({} bytes)", info.bytes);
@@ -463,7 +463,8 @@ pub fn spawn_scan(categories: &[CleanerCategory]) -> (Receiver<(usize, usize, Sc
                 save_scan_times(&times.lock().unwrap_or_else(|e| e.into_inner()));
             }
             if tx.send((ci, ii, info)).is_err() {
-                break; // receiver dropped (app closed)
+                // receiver dropped (app closed): skip the rest
+                cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
             }
         });
     }

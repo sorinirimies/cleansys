@@ -5,7 +5,6 @@
 
 use anyhow::{bail, Result};
 use serde::Serialize;
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::Mutex;
 
 use super::running::AppRunning;
@@ -206,27 +205,20 @@ pub fn execute(jobs: &[Job], opts: RunOptions) -> Vec<Outcome> {
     let mut order: Vec<usize> = (0..jobs.len()).collect();
     order.sort_by_key(|&i| std::cmp::Reverse(history.get(&jobs[i].id).copied().unwrap_or(0)));
     let times = Mutex::new(std::collections::HashMap::<String, u64>::new());
-    let next = AtomicUsize::new(0);
     let slots: Vec<Mutex<Option<Outcome>>> = jobs.iter().map(|_| Mutex::new(None)).collect();
-    let workers = std::env::var("CLEANSYS_SCAN_THREADS")
-        .ok()
-        .and_then(|v| v.parse::<usize>().ok())
-        .filter(|n| *n > 0)
-        .unwrap_or_else(|| {
-            std::thread::available_parallelism()
-                .map(|n| n.get().min(8))
-                .unwrap_or(4)
-        });
-    std::thread::scope(|s| {
-        for _ in 0..workers {
-            s.spawn(|| loop {
-                let n = next.fetch_add(1, Ordering::SeqCst);
-                if n >= jobs.len() {
-                    break;
-                }
-                let i = order[n];
+    // Shared scan pool: jobs and the directory walks inside them steal from one another.
+    crate::utils::scan_pool().scope(|s| {
+        for &i in &order {
+            let (jobs, times, slots) = (jobs, &times, &slots);
+            s.spawn(move |_| {
                 let t0 = std::time::Instant::now();
-                let r = run_one(&jobs[i], opts);
+                // Never let a panicking cleaner abort the shared pool.
+                let r = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    run_one(&jobs[i], opts)
+                }));
+                let Ok(r) = r else {
+                    return;
+                };
                 times
                     .lock()
                     .unwrap_or_else(|e| e.into_inner())

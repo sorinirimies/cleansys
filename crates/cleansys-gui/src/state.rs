@@ -453,6 +453,10 @@ impl CleanSysGui {
             confirm_before_run: Some(self.confirm_before_run),
             window_size: self.saved_window_size,
             log_height: Some(self.log_height.round() as u32),
+            // not edited in the GUI: keep whatever the user put in settings.json
+            scan_threads: cleansys_core::load_settings()
+                .ok()
+                .and_then(|s| s.scan_threads),
         }
     }
 

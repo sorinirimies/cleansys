@@ -308,11 +308,67 @@ pub fn get_size_cached(path: &std::path::Path) -> u64 {
 /// faster this way than one after another).
 pub fn prewarm_sizes(paths: &[std::path::PathBuf]) {
     use rayon::prelude::*;
-    if paths.len() > 1 {
-        paths.par_iter().for_each(|p| {
+    // The same path can be listed twice (overlapping globs): measure it once.
+    let mut unique: Vec<&std::path::PathBuf> = paths.iter().collect();
+    unique.sort();
+    unique.dedup();
+    if unique.len() > 1 {
+        unique.par_iter().for_each(|p| {
             get_size_cached(p);
         });
     }
+}
+
+/// Worker threads for scanning. Scans are I/O-bound (threads mostly wait on the disk),
+/// so the default oversubscribes the CPU: 2× cores, clamped to 4..=32. Override with
+/// `CLEANSYS_SCAN_THREADS` or the `scan_threads` setting (env wins).
+pub fn scan_thread_count() -> usize {
+    std::env::var("CLEANSYS_SCAN_THREADS")
+        .ok()
+        .and_then(|v| v.parse::<usize>().ok())
+        .or_else(|| {
+            crate::settings::load_settings()
+                .ok()
+                .and_then(|s| s.scan_threads)
+        })
+        .filter(|n| *n > 0)
+        .map(|n| n.min(256))
+        .unwrap_or_else(|| {
+            std::thread::available_parallelism()
+                .map(|n| (n.get() * 2).clamp(4, 32))
+                .unwrap_or(8)
+        })
+}
+
+/// The single pool every scan runs on: cleaner jobs *and* the directory walks inside
+/// them share its workers (rayon work-stealing), so cores stay busy until the very end.
+pub fn scan_pool() -> &'static rayon::ThreadPool {
+    static POOL: std::sync::OnceLock<rayon::ThreadPool> = std::sync::OnceLock::new();
+    POOL.get_or_init(|| {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(scan_thread_count())
+            .thread_name(|i| format!("cleansys-scan-{i}"))
+            .build()
+            .expect("scan thread pool")
+    })
+}
+
+/// Size `paths` as they arrive from `iter`, so measuring starts while discovery is
+/// still running (discovery and sizing overlap). Returns the paths in arrival order.
+pub fn size_while_discovering<I>(iter: I) -> Vec<std::path::PathBuf>
+where
+    I: Iterator<Item = std::path::PathBuf>,
+{
+    let mut all = Vec::new();
+    rayon::in_place_scope(|s| {
+        for p in iter {
+            all.push(p.clone());
+            s.spawn(move |_| {
+                get_size_cached(&p);
+            });
+        }
+    });
+    all
 }
 
 /// Directory levels (from the root) that fan out across threads. Deeper levels are
@@ -407,7 +463,8 @@ fn dir_total(path: &std::path::Path, depth: u32, max_depth: u32) -> u64 {
         }
     };
 
-    if depth < PARALLEL_DEPTH && entries.len() > 1 {
+    // Shallow levels always fan out; deeper ones only when wide enough to be worth it.
+    if entries.len() > 1 && (depth < PARALLEL_DEPTH || entries.len() >= 32) {
         use rayon::prelude::*;
         entries
             .par_iter()
