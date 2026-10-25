@@ -38,7 +38,7 @@ rayon       = "1.12"
 ratatui       = "0.30"
 crossterm     = "0.29"
 tui-checkbox  = "0.5"
-tui-piechart  = "1.1"
+tui-piechart  = "1.4"
 tui-spinner   = "0.5"
 clap          = { version = "4.6", features = ["derive", "env"] }
 
