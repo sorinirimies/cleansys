@@ -2,6 +2,15 @@
 
 All notable changes to this project will be documented in this file.
 
+## 0.8.8 - 2026-10-25
+### 📚 Documentation
+- docs: update README and CHANGELOG for v0.8.7
+### 🔧 Chores
+- chore(deps): nightly dependency upgrade 2026-10-22
+- chore(deps): nightly dependency upgrade 2026-10-23
+- chore(deps): nightly dependency upgrade 2026-10-24
+- chore(deps): nightly dependency upgrade 2026-10-25
+**Full Changelog**: https://github.com/sorinirimies/cleansys/compare/v0.8.7...v0.8.8
 ## 0.8.7 - 2026-10-21
 ### ⚡ Performance
 - perf: one shared scan pool (2x cores, configurable), deeper parallel walks, streaming sizing, parallel artifact stat; catch cleaner panics
