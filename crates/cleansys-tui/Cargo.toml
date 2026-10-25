@@ -30,6 +30,7 @@ crossterm     = { workspace = true }
 tui-checkbox  = { workspace = true }
 tui-piechart  = { workspace = true }
 tui-spinner   = { workspace = true }
+tui-nuances   = { workspace = true }
 notify-rust   = { workspace = true }
 
 [dev-dependencies]
