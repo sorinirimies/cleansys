@@ -5829,11 +5829,12 @@ dependencies = [
 
 [[package]]
 name = "tui-checkbox"
-version = "0.5.1"
+version = "0.5.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "814f8ff6c52d794ae22e41b134fee301cdda85e84c0f0c235fcec2efa49ba17a"
+checksum = "3ea61730259f12c34790e8ade8b6e32eabb02076c673f5d11e271be076fdd1b4"
 dependencies = [
  "ratatui",
+ "tui-nuances",
 ]
 
 [[package]]
@@ -5847,9 +5848,9 @@ dependencies = [
 
 [[package]]
 name = "tui-piechart"
-version = "1.4.1"
+version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ca199fb77a982abf283c184704e117bf5ebf3ce8fdcdc1880bb4178037290158"
+checksum = "a3b3d9dfaa69b001a51f98e35af00ad98ebe1a5d8ac4e2e98631704f61ac0536"
 dependencies = [
  "ratatui",
  "tui-nuances",
@@ -5857,11 +5858,12 @@ dependencies = [
 
 [[package]]
 name = "tui-spinner"
-version = "0.5.0"
+version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "63f13ba57ce9f65f5b17b186a1ebb6d67bbebb8dbb5db2318aa7cad6f166eee8"
+checksum = "94adf69de1718fb5db406fa79e2a674c75ec8016ed04ab3bdf698e757c9856eb"
 dependencies = [
  "ratatui",
+ "tui-nuances",
 ]
 
 [[package]]
