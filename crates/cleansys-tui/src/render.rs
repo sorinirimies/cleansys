@@ -552,10 +552,7 @@ fn render_space_treemap(f: &mut Frame, app: &App, area: Rect) {
         .into_iter()
         .map(|(n, b)| tui_chart::TreemapItem::new(n, b as f64));
     let chart = tui_chart::Treemap::new(items)
-        .gradient(
-            ratatui::style::Color::Rgb(40, 70, 150),
-            ratatui::style::Color::Rgb(70, 200, 120),
-        )
+        .gradient(crate::theme::th().border, crate::theme::th().success)
         .show_values(false)
         .block(Block::default().title("🗺 Space").borders(Borders::ALL));
     f.render_widget(chart, area);

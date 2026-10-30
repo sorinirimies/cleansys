@@ -750,6 +750,7 @@ dependencies = [
  "predicates",
  "ratatui",
  "tempfile",
+ "tui-chart",
  "tui-checkbox",
  "tui-nuances",
  "tui-piechart",
@@ -5825,6 +5826,18 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2df906b07856748fa3f6e0ad0cbaa047052d4a7dd609e231c4f72cee8c36f31"
 dependencies = [
  "core_maths",
+]
+
+[[package]]
+name = "tui-chart"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9616cd1452c5f76fe176dd78662ea9053c4eebdc10af9470f3c205db90c324ba"
+dependencies = [
+ "ratatui",
+ "tui-nuances",
+ "tui-piechart",
+ "unicode-width",
 ]
 
 [[package]]

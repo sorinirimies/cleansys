@@ -422,7 +422,7 @@ pub fn render_dashboard(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(
         Treemap::new(items)
             .show_values(false)
-            .gradient(Color::Rgb(40, 70, 150), Color::Rgb(70, 200, 120))
+            .gradient(th().border, th().success)
             .block(frame_block(format!(
                 " Biggest cleaners · {} reclaimable in total ",
                 format_size(d.total)
