@@ -437,7 +437,9 @@ fn highlight_columns(app: &mut App) -> Vec<u16> {
     for y in 0..buf.area.height {
         for x in 0..buf.area.width {
             let cell = &buf[(x, y)];
-            if cell.symbol() == "█" && cell.fg == app.theme.success_hi {
+            if cell.symbol() == "█"
+                && cell.fg == tui_nuances::color::lighten(app.theme.success, 0.45)
+            {
                 xs.push(x);
             }
         }
@@ -517,7 +519,11 @@ fn every_theme_renders_with_its_background() {
     for i in 0..cleansys_core::THEME_COUNT {
         app.set_theme(i);
         let buf = draw(&mut app);
-        assert_eq!(buf[(0, 0)].bg, app.theme.bg, "theme {i}");
+        assert_eq!(
+            buf[(0, 0)].bg,
+            app.theme.background.unwrap_or_default(),
+            "theme {i}"
+        );
     }
 }
 

@@ -124,7 +124,7 @@ pub struct App {
     /// Follow the OS light/dark setting instead of a fixed preset.
     pub follow_system: bool,
     /// Colours of the active theme (what every view reads).
-    pub theme: crate::theme::UiTheme,
+    pub theme: std::sync::Arc<tui_nuances::Theme>,
     /// Whether the theme picker popup is open.
     pub theme_picker_open: bool,
     /// Last time the OS appearance was polled (while following the system).
@@ -239,7 +239,7 @@ impl App {
             show_help: false,
             theme_index: 0,
             follow_system: false,
-            theme: crate::theme::UiTheme::by_index(0),
+            theme: crate::theme::by_index(0),
             theme_picker_open: false,
             last_system_check: Instant::now(),
             animation_frame: 0,
@@ -445,7 +445,7 @@ impl App {
 
     fn apply_theme_index(&mut self, index: usize) {
         self.theme_index = index.min(cleansys_core::THEME_COUNT - 1);
-        self.theme = crate::theme::UiTheme::by_index(self.theme_index);
+        self.theme = crate::theme::by_index(self.theme_index);
     }
 
     /// Pick preset `index` (stops following the system) and remember it.
@@ -1832,7 +1832,7 @@ mod theme_tests {
         assert!(app.follow_system);
         app.cycle_theme(-1);
         assert_eq!(app.theme_index, cleansys_core::THEME_COUNT - 1);
-        assert_eq!(app.theme, crate::theme::UiTheme::by_index(app.theme_index));
+        assert_eq!(app.theme, crate::theme::by_index(app.theme_index));
     }
 
     #[test]

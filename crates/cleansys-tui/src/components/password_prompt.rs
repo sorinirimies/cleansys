@@ -149,7 +149,7 @@ impl PasswordPrompt {
             Span::styled(
                 password_display,
                 Style::default()
-                    .fg(crate::theme::th().text)
+                    .fg(crate::theme::th().foreground)
                     .add_modifier(Modifier::BOLD),
             ),
             Span::styled("_", Style::default().fg(crate::theme::th().warning)),
@@ -184,7 +184,8 @@ impl PasswordPrompt {
             .wrap(Wrap { trim: true });
 
         // Clear the area behind the popup
-        let clear_block = Block::default().style(Style::default().bg(crate::theme::th().bg));
+        let clear_block =
+            Block::default().style(Style::default().bg(crate::theme::bg(&crate::theme::th())));
         f.render_widget(clear_block, popup_area);
 
         // Render the popup

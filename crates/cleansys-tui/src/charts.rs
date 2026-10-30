@@ -59,7 +59,7 @@ fn palette() -> [Color; 6] {
         t.success,
         t.warning,
         t.error,
-        t.text_secondary,
+        t.secondary,
         t.muted,
     ]
 }
@@ -261,7 +261,11 @@ fn popup(f: &mut Frame, area: Rect, w_pct: u16, h_pct: u16, title: &str, hint: &
         .title_bottom(Line::from(hint.to_string()).right_aligned())
         .borders(Borders::ALL)
         .border_style(Style::default().fg(th().accent))
-        .style(Style::default().bg(th().bg).fg(th().text));
+        .style(
+            Style::default()
+                .bg(crate::theme::bg(&th()))
+                .fg(th().foreground),
+        );
     let inner = block.inner(rect);
     f.render_widget(block, rect);
     inner
@@ -477,7 +481,9 @@ pub fn render_detail(f: &mut Frame, app: &App, area: Rect) {
                 Line::from(vec![
                     Span::styled(
                         item.name.clone(),
-                        Style::default().fg(th().text).add_modifier(Modifier::BOLD),
+                        Style::default()
+                            .fg(th().foreground)
+                            .add_modifier(Modifier::BOLD),
                     ),
                     Span::raw("  "),
                     Span::styled(format!("[{}]", risk.0), Style::default().fg(risk.1)),
@@ -496,7 +502,7 @@ pub fn render_detail(f: &mut Frame, app: &App, area: Rect) {
             .chain(tall.then(|| {
                 Line::from(Span::styled(
                     item.description.clone(),
-                    Style::default().fg(th().text_secondary),
+                    Style::default().fg(th().secondary),
                 ))
             }))
             .collect::<Vec<_>>(),
@@ -645,7 +651,7 @@ pub fn render_report(f: &mut Frame, app: &App, area: Rect) {
                 ),
                 Span::styled(
                     format!("  in {elapsed}"),
-                    Style::default().fg(th().text_secondary),
+                    Style::default().fg(th().secondary),
                 ),
             ]),
             Line::from(Span::styled(
@@ -657,7 +663,7 @@ pub fn render_report(f: &mut Frame, app: &App, area: Rect) {
                     r.failed.len(),
                     r.items
                 ),
-                Style::default().fg(th().text_secondary),
+                Style::default().fg(th().secondary),
             )),
         ]),
         rows[0],

@@ -16,10 +16,14 @@ pub fn ui(f: &mut Frame, app: &mut App) {
     // Start every frame from a clean slate so nothing from the previous view
     // (title text, progress panels) bleeds through when views switch.
     f.render_widget(Clear, f.area());
-    crate::theme::set_current(app.theme);
+    crate::theme::set_current(std::sync::Arc::clone(&app.theme));
     // Paint the theme's background and default text colour over the whole screen.
     f.render_widget(
-        Block::default().style(Style::default().bg(app.theme.bg).fg(app.theme.text)),
+        Block::default().style(
+            Style::default()
+                .bg(crate::theme::bg(&app.theme))
+                .fg(app.theme.foreground),
+        ),
         f.area(),
     );
 
@@ -313,7 +317,10 @@ fn animated_bar(width: usize, frac: f32, tick: u32) -> Vec<Span<'static>> {
     let (filled, (hl_start, hl_len)) = cleansys_core::anim::bar_cells(width, frac, tick, 16, 4);
     let base = Style::default().fg(crate::theme::th().success);
     let hot = Style::default()
-        .fg(crate::theme::th().success_hi)
+        .fg(tui_nuances::color::lighten(
+            crate::theme::th().success,
+            0.45,
+        ))
         .add_modifier(Modifier::BOLD);
     let empty = Style::default().fg(crate::theme::th().muted);
     vec![
@@ -417,7 +424,7 @@ fn render_activity_log(f: &mut Frame, app: &App, area: Rect) {
             } else if l.starts_with('✅') || l.starts_with('🎉') {
                 crate::theme::th().success
             } else {
-                crate::theme::th().text_secondary
+                crate::theme::th().secondary
             };
             let text: String = l.chars().take(width).collect();
             Line::from(Span::styled(text, Style::default().fg(color)))
@@ -445,7 +452,7 @@ fn size_style(bytes: u64) -> Style {
     } else if bytes >= 500 * MB {
         Style::default().fg(crate::theme::th().warning)
     } else {
-        Style::default().fg(crate::theme::th().text)
+        Style::default().fg(crate::theme::th().foreground)
     }
 }
 
@@ -656,7 +663,7 @@ fn entry_rows(app: &App, ci: usize, ii: usize, width: usize) -> Vec<ListItem<'st
         let on = app.board.entry_selected(&e.path);
         let (mark, style) = match (e.skippable, on) {
             (true, true) => ("[x]", Style::default().fg(crate::theme::th().success)),
-            (true, false) => ("[ ]", Style::default().fg(crate::theme::th().text)),
+            (true, false) => ("[ ]", Style::default().fg(crate::theme::th().foreground)),
             (false, _) => (" · ", Style::default().fg(crate::theme::th().muted)),
         };
         let size = format_size(e.bytes);
@@ -798,7 +805,7 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
                     .fg(crate::theme::th().success)
                     .add_modifier(Modifier::BOLD)
             } else {
-                Style::default().fg(crate::theme::th().text)
+                Style::default().fg(crate::theme::th().foreground)
             };
 
             let dimmed = (item.requires_root && !app.is_root)
@@ -806,10 +813,10 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
             // DIM (not a dark colour): stays readable on the highlighted row.
             let name_style = if dimmed {
                 Style::default()
-                    .fg(crate::theme::th().text_secondary)
+                    .fg(crate::theme::th().secondary)
                     .add_modifier(Modifier::DIM)
             } else {
-                Style::default().fg(crate::theme::th().text)
+                Style::default().fg(crate::theme::th().foreground)
             };
 
             let mut left = vec![
@@ -1063,7 +1070,10 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
         hints.extend(key("?", "Help", crate::theme::th().accent));
         hints.extend(key("q", "Quit", crate::theme::th().error));
         let mut status_spans = vec![
-            Span::styled("Selected: ", Style::default().fg(crate::theme::th().text)),
+            Span::styled(
+                "Selected: ",
+                Style::default().fg(crate::theme::th().foreground),
+            ),
             Span::styled(
                 n.to_string(),
                 Style::default()
@@ -1102,7 +1112,7 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             Span::styled(
                 "User: ",
                 Style::default()
-                    .fg(crate::theme::th().text)
+                    .fg(crate::theme::th().foreground)
                     .add_modifier(Modifier::BOLD),
             ),
             if app.is_root {
@@ -1121,7 +1131,10 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
                 )
             },
             Span::raw("  •  "),
-            Span::styled("Selected: ", Style::default().fg(crate::theme::th().text)),
+            Span::styled(
+                "Selected: ",
+                Style::default().fg(crate::theme::th().foreground),
+            ),
             Span::styled(
                 // Live count of ticked cleaners.
                 format!(
@@ -1437,7 +1450,7 @@ fn render_schedule(f: &mut Frame, app: &App, area: Rect) {
         let selected = i == app.schedule_field;
         let style = if selected {
             Style::default()
-                .fg(crate::theme::th().bg)
+                .fg(crate::theme::bg(&crate::theme::th()))
                 .bg(crate::theme::th().accent)
                 .add_modifier(Modifier::BOLD)
         } else {
@@ -1619,14 +1632,14 @@ fn tab_line(app: &App) -> Line<'static> {
             Span::styled(
                 format!(" {label} "),
                 Style::default()
-                    .fg(crate::theme::th().bg)
+                    .fg(crate::theme::bg(&crate::theme::th()))
                     .bg(crate::theme::th().accent)
                     .add_modifier(Modifier::BOLD),
             )
         } else {
             Span::styled(
                 format!(" {label} "),
-                Style::default().fg(crate::theme::th().text_secondary),
+                Style::default().fg(crate::theme::th().secondary),
             )
         }
     };
@@ -1772,14 +1785,14 @@ fn render_settings_tab(f: &mut Frame, app: &mut App, area: Rect) {
                 Span::raw("  "),
                 Span::styled(
                     roots.get(*i).cloned().unwrap_or_default(),
-                    Style::default().fg(crate::theme::th().text),
+                    Style::default().fg(crate::theme::th().foreground),
                 ),
             ]),
             SettingsRow::Exclude(i) => Line::from(vec![
                 Span::raw("  "),
                 Span::styled(
                     app.engine_cfg.exclude.get(*i).cloned().unwrap_or_default(),
-                    Style::default().fg(crate::theme::th().text),
+                    Style::default().fg(crate::theme::th().foreground),
                 ),
             ]),
             SettingsRow::AddRoot | SettingsRow::AddExclude => {
@@ -1793,7 +1806,7 @@ fn render_settings_tab(f: &mut Frame, app: &mut App, area: Rect) {
                         Span::styled("  ＋ ", Style::default().fg(crate::theme::th().success)),
                         Span::styled(
                             format!("{}▏", inp.text),
-                            Style::default().fg(crate::theme::th().text),
+                            Style::default().fg(crate::theme::th().foreground),
                         ),
                     ]),
                     _ => Line::from(Span::styled(
@@ -1834,7 +1847,7 @@ fn render_about_tab(f: &mut Frame, app: &mut App, area: Rect) {
     )])));
     items.push(ListItem::new(Line::from(Span::styled(
         format!("  {}", cleansys_core::appinfo::TAGLINE),
-        Style::default().fg(crate::theme::th().text_secondary),
+        Style::default().fg(crate::theme::th().secondary),
     ))));
     items.push(ListItem::new(Line::raw("")));
     let first_row = items.len();
@@ -1845,7 +1858,7 @@ fn render_about_tab(f: &mut Frame, app: &mut App, area: Rect) {
                 .fg(crate::theme::th().accent)
                 .add_modifier(Modifier::UNDERLINED)
         } else {
-            Style::default().fg(crate::theme::th().text)
+            Style::default().fg(crate::theme::th().foreground)
         };
         let room = width.saturating_sub(18);
         let shown = shorten_left(value, room);
@@ -1873,7 +1886,7 @@ fn render_about_tab(f: &mut Frame, app: &mut App, area: Rect) {
 /// The theme picker popup: "System" plus every preset, with a colour swatch each.
 fn render_theme_picker(f: &mut Frame, app: &App, area: Rect) {
     use ratatui::widgets::ListState;
-    let t = app.theme;
+    let t = std::sync::Arc::clone(&app.theme);
     let h = area.height.saturating_sub(4).clamp(8, 24);
     let w = 44.min(area.width);
     let popup = Rect::new(
@@ -1906,7 +1919,7 @@ fn render_theme_picker(f: &mut Frame, app: &App, area: Rect) {
                     if active {
                         Style::default().fg(t.accent).add_modifier(Modifier::BOLD)
                     } else {
-                        Style::default().fg(t.text)
+                        Style::default().fg(t.foreground)
                     },
                 ),
             ]))
@@ -1928,12 +1941,16 @@ fn render_theme_picker(f: &mut Frame, app: &App, area: Rect) {
         ))
         .borders(Borders::ALL)
         .border_style(Style::default().fg(t.accent))
-        .style(Style::default().bg(t.surface).fg(t.text));
+        .style(
+            Style::default()
+                .bg(t.surface.unwrap_or_else(|| crate::theme::bg(&t)))
+                .fg(t.foreground),
+        );
     let list = List::new(items)
         .block(block)
         .highlight_style(
             Style::default()
-                .bg(t.selection)
+                .bg(t.selection_bg)
                 .add_modifier(Modifier::BOLD),
         )
         .highlight_symbol("▶ ");
