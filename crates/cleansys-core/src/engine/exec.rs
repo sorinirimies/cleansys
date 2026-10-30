@@ -397,25 +397,13 @@ fn scan_one_dir(
 fn project_index(cfg: &EngineConfig, needed: &[String]) -> Index {
     use rayon::prelude::*;
 
-    // Serialise builds so parallel scans share one walk instead of each
-    // starting their own.
-    // Rayon workers waiting inside a nested parallel walk may steal another scan job
-    // that needs the index too. That job runs on the thread already holding the lock,
-    // so it must not lock again (std mutexes aren't reentrant) -- it just walks itself.
-    thread_local!(static BUILDING: std::cell::Cell<bool> = const { std::cell::Cell::new(false) });
+    // Serialise builds so parallel scans share one walk instead of each starting their
+    // own. The walk itself runs on a helper thread (and so on rayon's *global* pool):
+    // a scan worker that held this lock while running a nested parallel walk would
+    // steal other scan jobs, which would re-walk everything or queue behind the lock,
+    // making the scan crawl or appear stuck. Here the waiting worker just blocks.
     static BUILD: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let reentrant = BUILDING.with(|b| b.get());
-    let _build = (!reentrant).then(|| BUILD.lock().unwrap_or_else(|e| e.into_inner()));
-    struct Reset(bool);
-    impl Drop for Reset {
-        fn drop(&mut self) {
-            if !self.0 {
-                BUILDING.with(|b| b.set(false));
-            }
-        }
-    }
-    BUILDING.with(|b| b.set(true));
-    let _reset = Reset(reentrant);
+    let _build = BUILD.lock().unwrap_or_else(|e| e.into_inner());
     let roots = cfg.effective_roots();
     let key = format!("{roots:?}|{}", cfg.max_depth);
 
@@ -441,27 +429,36 @@ fn project_index(cfg: &EngineConfig, needed: &[String]) -> Index {
         .filter_map(|m| glob::Pattern::new(m).ok())
         .collect();
 
-    let mut dirs = Vec::new();
-    let mut frontier: Vec<PathBuf> = roots;
-    let mut depth = 0usize;
-    let mut visited = 0usize;
-    while !frontier.is_empty() {
-        visited += frontier.len();
-        if visited > MAX_VISITED_DIRS {
-            warn!("project scan aborted: too many directories");
-            break;
-        }
-        let level: Vec<(Option<DirFiles>, Vec<PathBuf>)> = frontier
-            .par_iter()
-            .map(|d| scan_one_dir(d, depth, cfg, &compiled))
-            .collect();
-        frontier = Vec::new();
-        for (found, children) in level {
-            dirs.extend(found);
-            frontier.extend(children);
-        }
-        depth += 1;
-    }
+    let dirs = std::thread::scope(|scope| {
+        scope
+            .spawn(|| {
+                let mut dirs = Vec::new();
+                let mut frontier: Vec<PathBuf> = roots;
+                let mut depth = 0usize;
+                let mut visited = 0usize;
+                while !frontier.is_empty() {
+                    visited += frontier.len();
+                    if visited > MAX_VISITED_DIRS {
+                        warn!("project scan aborted: too many directories");
+                        break;
+                    }
+                    let level: Vec<(Option<DirFiles>, Vec<PathBuf>)> = frontier
+                        .par_iter()
+                        .map(|d| scan_one_dir(d, depth, cfg, &compiled))
+                        .collect();
+                    frontier = Vec::new();
+                    for (found, children) in level {
+                        dirs.extend(found);
+                        frontier.extend(children);
+                    }
+                    depth += 1;
+                }
+                dirs
+            })
+            .join()
+            .unwrap_or_default()
+    });
+    let mut dirs = dirs;
     dirs.sort_by(|a, b| a.path.cmp(&b.path));
 
     let idx: Index = std::sync::Arc::new(IndexData { patterns, dirs });

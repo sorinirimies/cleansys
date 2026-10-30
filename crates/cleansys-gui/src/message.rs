@@ -55,7 +55,7 @@ pub enum Message {
     /// Measure how much every cleaner could free (read-only), in the background.
     ScanAll,
     /// One cleaner's background scan finished.
-    ScanItemFinished(usize, usize, Result<cleansys_core::CleaningResult, String>),
+    ScanItemFinished(usize, usize, cleansys_core::ScanInfo),
     /// Toggle hiding cleaners that have nothing to clean.
     ToggleHideEmpty,
     /// The user grabbed the activity panel's top edge.

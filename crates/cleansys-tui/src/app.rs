@@ -178,6 +178,16 @@ pub struct App {
     pub filter: String,
     /// Whether keystrokes currently go to the filter box.
     pub filter_active: bool,
+    /// Graphical system dashboard overlay (`D`).
+    pub dashboard_open: bool,
+    /// Graphical per-cleaner detail overlay (`v`).
+    pub detail_open: bool,
+    /// Graphical clean report overlay (opens when a run finishes, `P` reopens).
+    pub report_open: bool,
+    /// Bytes the current / last run was expected to free (selected cleaners, per the scan).
+    pub run_planned: u64,
+    /// Disk usage when the current / last run started.
+    pub disk_before: Option<cleansys_core::utils::DiskUsage>,
     /// Whether the schedule (automatic cleaning) overlay is open.
     pub schedule_open: bool,
     /// The schedule being edited in the overlay.
@@ -259,6 +269,11 @@ impl App {
             hide_empty: true,
             filter: String::new(),
             filter_active: false,
+            dashboard_open: false,
+            detail_open: false,
+            report_open: false,
+            run_planned: 0,
+            disk_before: None,
             schedule_open: false,
             schedule_draft: cleansys_core::engine::schedule::Schedule::default(),
             schedule_field: 0,
@@ -1128,6 +1143,8 @@ impl App {
     /// the post-password-authentication path in [`Self::handle_key`].
     fn start_operations(&mut self, selected_cleaners: &[PendingOperation]) {
         self.is_running = true;
+        self.run_planned = self.board.selected_bytes(&self.categories);
+        self.disk_before = cleansys_core::utils::disk_usage();
         self.operation_start_time = Some(Instant::now());
         self.operation_end_time = None;
         self.total_bytes_cleaned = 0;
@@ -1276,6 +1293,7 @@ impl App {
         self.log(line.clone());
         crate::notifications::notify_completion(&line);
         self.run_summary = Some(summary);
+        self.report_open = true;
         // Sizes changed — measure again so the list shows what is left.
         self.start_scan();
     }
@@ -1443,6 +1461,38 @@ impl App {
             return Ok(false);
         }
 
+        // Graphical overlays (dashboard / cleaner detail / clean report)
+        if self.report_open {
+            match key.code {
+                KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q' | 'P') => {
+                    self.report_open = false
+                }
+                _ => {}
+            }
+            return Ok(false);
+        }
+        if self.dashboard_open {
+            match key.code {
+                KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q' | 'D') => {
+                    self.dashboard_open = false;
+                }
+                KeyCode::Char('R') if !self.is_running => self.start_scan(),
+                _ => {}
+            }
+            return Ok(false);
+        }
+        if self.detail_open {
+            match key.code {
+                KeyCode::Esc | KeyCode::Enter | KeyCode::Left | KeyCode::Char('q' | 'v') => {
+                    self.detail_open = false;
+                }
+                KeyCode::Down | KeyCode::Char('j') => self.next_item(),
+                KeyCode::Up | KeyCode::Char('k') => self.previous_item(),
+                _ => {}
+            }
+            return Ok(false);
+        }
+
         // Settings / About overlay
         if self.info_open {
             self.handle_info_key(key.code);
@@ -1494,7 +1544,9 @@ impl App {
                     self.collapse_details();
                     self.request_run()?;
                 }
-                KeyCode::Left | KeyCode::Right | KeyCode::Esc | KeyCode::Char('q') => {
+                // → / v: go one level deeper into the graphical view.
+                KeyCode::Right | KeyCode::Char('v') => self.detail_open = true,
+                KeyCode::Left | KeyCode::Esc | KeyCode::Char('q') => {
                     self.collapse_details();
                 }
                 _ => {}
@@ -1559,8 +1611,14 @@ impl App {
             }
             // Expand the highlighted cleaner's per-path details
             (KeyCode::Right, _) => {
-                if !self.show_help && !self.is_running {
-                    self.expand_current();
+                if !self.show_help {
+                    if !self.is_running {
+                        self.expand_current();
+                    }
+                    // Nothing to expand (or a clean is running): show the charts instead.
+                    if self.entry_cursor.is_none() && self.current_item().is_some() {
+                        self.detail_open = true;
+                    }
                 }
             }
             // Theme picker
@@ -1602,6 +1660,18 @@ impl App {
             (KeyCode::Char('r'), _) => {
                 if !self.show_help && !self.is_running {
                     self.select_recommended();
+                }
+            }
+            // Graphical views
+            (KeyCode::Char('D'), _) if !self.show_help => self.dashboard_open = true,
+            (KeyCode::Char('v'), _) if !self.show_help && self.current_item().is_some() => {
+                self.detail_open = true;
+            }
+            (KeyCode::Char('P'), _) if !self.show_help => {
+                if self.run_summary.is_some() || self.is_running {
+                    self.report_open = true;
+                } else {
+                    self.set_notice("No clean report yet — run a clean first");
                 }
             }
             // Schedule automatic cleaning

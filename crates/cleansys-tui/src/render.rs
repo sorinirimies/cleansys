@@ -77,6 +77,12 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         render_theme_picker(f, app, f.area());
     } else if app.preview_open {
         render_preview(f, app, f.area());
+    } else if app.report_open {
+        crate::charts::render_report(f, app, f.area());
+    } else if app.dashboard_open {
+        crate::charts::render_dashboard(f, app, f.area());
+    } else if app.detail_open {
+        crate::charts::render_detail(f, app, f.area());
     }
 }
 
@@ -220,7 +226,18 @@ fn render_main_content(f: &mut Frame, app: &mut App, area: Rect) {
             .direction(Direction::Horizontal)
             .constraints([Constraint::Length(sidebar_w), Constraint::Min(30)])
             .split(area);
-        render_categories(f, app, chunks[0]);
+        // Tall sidebars also get a treemap of reclaimable space per category.
+        let treemap_h = 10;
+        if chunks[0].height >= 24 && category_sizes(app).len() > 1 {
+            let side = Layout::default()
+                .direction(Direction::Vertical)
+                .constraints([Constraint::Min(8), Constraint::Length(treemap_h)])
+                .split(chunks[0]);
+            render_categories(f, app, side[0]);
+            render_space_treemap(f, app, side[1]);
+        } else {
+            render_categories(f, app, chunks[0]);
+        }
         chunks[1]
     } else {
         area
@@ -510,6 +527,38 @@ fn scan_line(app: &App) -> Line<'static> {
     } else {
         Line::default()
     }
+}
+
+/// `(name, bytes)` of every category with something to reclaim.
+fn category_sizes(app: &App) -> Vec<(String, u64)> {
+    app.categories
+        .iter()
+        .enumerate()
+        .filter_map(|(i, c)| match app.board.category_bytes_when_done(i) {
+            Some(b) if b > 0 => Some((
+                c.name
+                    .trim_end_matches(cleansys_core::model::ROOT_SUFFIX)
+                    .to_string(),
+                b,
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Treemap (tui-chart) of reclaimable space per category.
+fn render_space_treemap(f: &mut Frame, app: &App, area: Rect) {
+    let items = category_sizes(app)
+        .into_iter()
+        .map(|(n, b)| tui_chart::TreemapItem::new(n, b as f64));
+    let chart = tui_chart::Treemap::new(items)
+        .gradient(
+            ratatui::style::Color::Rgb(40, 70, 150),
+            ratatui::style::Color::Rgb(70, 200, 120),
+        )
+        .show_values(false)
+        .block(Block::default().title("🗺 Space").borders(Borders::ALL));
+    f.render_widget(chart, area);
 }
 
 fn render_categories(f: &mut Frame, app: &App, area: Rect) {
@@ -1010,6 +1059,8 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
         hints.extend(key("Enter", "Run", crate::theme::th().success));
         hints.extend(key("Tab", "Cat", crate::theme::th().accent));
         hints.extend(key("r", "Rec", crate::theme::th().accent));
+        hints.extend(key("D", "Dash", crate::theme::th().accent));
+        hints.extend(key("v", "Detail", crate::theme::th().accent));
         hints.extend(key("S", "Sched", crate::theme::th().accent));
         hints.extend(key("L", "Log", crate::theme::th().accent));
         hints.extend(key("?", "Help", crate::theme::th().accent));
@@ -1121,14 +1172,28 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
                     .fg(crate::theme::th().accent)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(": Recommended  "),
+            Span::raw(": Rec  "),
             Span::styled(
                 "S",
                 Style::default()
                     .fg(crate::theme::th().accent)
                     .add_modifier(Modifier::BOLD),
             ),
-            Span::raw(": Schedule  "),
+            Span::raw(": Sched  "),
+            Span::styled(
+                "D",
+                Style::default()
+                    .fg(crate::theme::th().accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(": Dash  "),
+            Span::styled(
+                "v",
+                Style::default()
+                    .fg(crate::theme::th().accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
+            Span::raw(": Detail/→  "),
             Span::styled(
                 "L",
                 Style::default()
@@ -1202,6 +1267,8 @@ fn render_help(f: &mut Frame, area: Rect) {
         l("  Progress, the outcome and the activity log appear under the list;"),
         l("  q / Esc cancels a running clean, Esc dismisses the summary, L toggles the log"),
         l("  R: Re-scan sizes      S: Schedule automatic cleaning"),
+        l("  D: Dashboard (disk, space by category/risk)   v: Charts for the highlighted cleaner"),
+        l("  P: Report of the last clean (opens automatically when a clean finishes)"),
         l("  T: Theme picker (System follows your OS light/dark; ↑/↓ previews, Esc closes)"),
         l(""),
         h("🔒 System Operations:"),

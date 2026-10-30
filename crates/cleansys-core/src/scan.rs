@@ -410,6 +410,21 @@ impl ScanBoard {
 /// Start a background scan of every cleaner. Results arrive on the returned
 /// channel as `(category, item, info)`; the second value is the job count.
 pub fn spawn_scan(categories: &[CleanerCategory]) -> (Receiver<(usize, usize, ScanInfo)>, usize) {
+    let (tx, rx) = channel();
+    let total = spawn_scan_with(categories, move |ci, ii, info| {
+        tx.send((ci, ii, info)).is_ok()
+    });
+    (rx, total)
+}
+
+/// Like [`spawn_scan`], but every result is handed to `sink(category, item, info)` the
+/// moment its cleaner finishes (on a scan worker thread). Return `false` from the sink to
+/// cancel the jobs that have not started yet. Returns the job count. This is the single
+/// scan implementation every front-end (TUI, GUI, web) goes through.
+pub fn spawn_scan_with<F>(categories: &[CleanerCategory], sink: F) -> usize
+where
+    F: Fn(usize, usize, ScanInfo) -> bool + Send + Sync + 'static,
+{
     // Slowest cleaners (as measured by the previous scan) go first: they are the long
     // pole, so starting them early keeps every worker busy until the end.
     let history = load_scan_times();
@@ -430,7 +445,7 @@ pub fn spawn_scan(categories: &[CleanerCategory]) -> (Receiver<(usize, usize, Sc
     let times = Arc::new(Mutex::new(std::collections::HashMap::<String, u64>::new()));
     let remaining = Arc::new(std::sync::atomic::AtomicUsize::new(total));
     let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
-    let (tx, rx) = channel();
+    let sink = Arc::new(sink);
     let timing = std::env::var_os("CLEANSYS_SCAN_TIMING").is_some();
     // One shared pool: cleaner jobs and the directory walks inside them use the same
     // workers (work-stealing), and each result is sent the moment its cleaner finishes.
@@ -439,7 +454,7 @@ pub fn spawn_scan(categories: &[CleanerCategory]) -> (Receiver<(usize, usize, Sc
         let times = Arc::clone(&times);
         let remaining = Arc::clone(&remaining);
         let cancelled = Arc::clone(&cancelled);
-        let tx = tx.clone();
+        let sink = Arc::clone(&sink);
         pool.spawn(move || {
             if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
                 return;
@@ -462,13 +477,13 @@ pub fn spawn_scan(categories: &[CleanerCategory]) -> (Receiver<(usize, usize, Sc
             if remaining.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) == 1 {
                 save_scan_times(&times.lock().unwrap_or_else(|e| e.into_inner()));
             }
-            if tx.send((ci, ii, info)).is_err() {
+            if !sink(ci, ii, info) {
                 // receiver dropped (app closed): skip the rest
                 cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
             }
         });
     }
-    (rx, total)
+    total
 }
 
 fn scan_times_path() -> Option<std::path::PathBuf> {

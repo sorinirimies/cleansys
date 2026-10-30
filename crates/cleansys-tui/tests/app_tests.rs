@@ -595,6 +595,10 @@ fn q_cancels_a_running_clean_instead_of_quitting() {
     assert!(!quit, "q during a run cancels, it must not quit the app");
     assert!(app.operation_logs.iter().any(|l| l.contains("Cancelling")));
     wait_for_run(&mut app);
+    // The finished run opens its report; q closes that first.
+    assert!(app.report_open);
+    key(&mut app, KeyCode::Char('q'));
+    assert!(!app.report_open);
     // Once idle, q quits again.
     let quit = app
         .handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::NONE))

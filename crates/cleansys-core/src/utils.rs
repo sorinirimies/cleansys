@@ -237,6 +237,56 @@ pub fn confirm(prompt: &str, default: bool) -> Result<bool> {
     }
 }
 
+/// Capacity of the volume holding the user's files.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DiskUsage {
+    pub total: u64,
+    pub free: u64,
+}
+
+impl DiskUsage {
+    pub fn used(&self) -> u64 {
+        self.total.saturating_sub(self.free)
+    }
+
+    /// Used share of the volume, 0..=100.
+    pub fn used_percent(&self) -> f64 {
+        if self.total == 0 {
+            0.0
+        } else {
+            self.used() as f64 * 100.0 / self.total as f64
+        }
+    }
+}
+
+/// Total / free space of the volume holding the home directory (the one cleaning frees
+/// space on). `None` when it cannot be determined (and always on non-Unix targets).
+pub fn disk_usage() -> Option<DiskUsage> {
+    #[cfg(unix)]
+    {
+        use std::ffi::CString;
+        use std::os::unix::ffi::OsStrExt;
+        let path = directories::UserDirs::new()
+            .map(|d| d.home_dir().to_path_buf())
+            .unwrap_or_else(|| std::path::PathBuf::from("/"));
+        let c = CString::new(path.as_os_str().as_bytes()).ok()?;
+        // SAFETY: `c` is a valid NUL-terminated path and `st` is a properly sized out-buffer.
+        let mut st: libc::statvfs = unsafe { std::mem::zeroed() };
+        if unsafe { libc::statvfs(c.as_ptr(), &mut st) } != 0 {
+            return None;
+        }
+        let frag = st.f_frsize as u64;
+        Some(DiskUsage {
+            total: (st.f_blocks as u64).saturating_mul(frag),
+            free: (st.f_bavail as u64).saturating_mul(frag),
+        })
+    }
+    #[cfg(not(unix))]
+    {
+        None
+    }
+}
+
 /// Format bytes into human-readable sizes
 pub fn format_size(bytes: u64) -> String {
     const KB: u64 = 1024;

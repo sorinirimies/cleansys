@@ -301,6 +301,12 @@ fn finished_run_shows_a_summary_under_the_list_and_esc_dismisses_it() {
     let sum = app.run_summary.clone().expect("summary after a run");
     assert_eq!(sum.ok, 1);
     assert_eq!(sum.failed, 0);
+    // The finished run opens its graphical report first; close it to see the list.
+    assert!(app.report_open);
+    render_once(&mut app);
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
+        .unwrap();
+    assert!(!app.report_open);
     let text = screen_text(&mut app, 120, 40);
     assert!(text.contains("Freed"), "summary missing:\n{text}");
     assert!(text.contains("Trash"), "list must remain visible");
@@ -525,4 +531,141 @@ fn theme_picker_renders_and_lists_system_first() {
         .map(|p| buf[p].symbol().to_string())
         .collect();
     assert!(text.contains("Theme") && text.contains("System"));
+}
+
+// ── charts: dashboard / detail / report ────────────────────────────────
+
+fn render(app: &mut App, w: u16, h: u16) {
+    let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("terminal");
+    terminal.draw(|f| ui(f, app)).expect("draw must not error");
+}
+
+/// An app whose scan board holds sizes, as after a finished scan.
+fn app_with_scan() -> App {
+    use cleansys_core::{ScanBoard, ScanEntry, ScanInfo};
+    let mut app = app_with_categories();
+    let mut board = ScanBoard::new(&app.categories);
+    board.start(4);
+    for (ci, ii, bytes) in [
+        (0, 0, 5_000_000_000u64),
+        (0, 1, 120_000_000),
+        (1, 0, 2_000_000),
+    ] {
+        let entries = (0..12)
+            .map(|n| ScanEntry {
+                path: format!("/x/{ci}/{ii}/dir{n}"),
+                bytes: bytes / (n + 1),
+                label: format!("dir{n}"),
+                skippable: true,
+            })
+            .collect::<Vec<_>>();
+        board.record(
+            ci,
+            ii,
+            ScanInfo {
+                bytes,
+                items: 12,
+                top_path: None,
+                error: None,
+                entries,
+            },
+        );
+    }
+    board.record(1, 1, ScanInfo::default());
+    app.board = board;
+    app
+}
+
+#[test]
+fn dashboard_renders_with_and_without_data() {
+    let mut app = app_with_categories();
+    app.dashboard_open = true;
+    render(&mut app, 120, 40);
+    let mut app = app_with_scan();
+    app.dashboard_open = true;
+    render(&mut app, 120, 40);
+    render(&mut app, 60, 20);
+    let d = cleansys_tui::charts::dashboard_data(&app);
+    assert_eq!(d.total, 5_122_000_000);
+    assert_eq!(d.by_category.len(), 2);
+    assert_eq!(d.by_risk[0], d.total);
+}
+
+#[test]
+fn detail_view_renders() {
+    let mut app = app_with_scan();
+    app.detail_open = true;
+    render(&mut app, 120, 40);
+    app.next_item();
+    render(&mut app, 100, 30);
+    // A cleaner without a scan result must not panic either.
+    let mut app = app_with_categories();
+    app.detail_open = true;
+    render(&mut app, 100, 30);
+}
+
+#[test]
+fn report_summarises_a_finished_run() {
+    use cleansys_core::Status;
+    let mut app = app_with_scan();
+    app.categories[0].items[0].status = Some(Status::Success("ok".into()));
+    app.categories[0].items[0].bytes_cleaned = 4_000_000_000;
+    app.categories[0].items[1].status = Some(Status::Success("ok".into()));
+    app.categories[1].items[0].status = Some(Status::Error("Cancelled".into()));
+    app.run_planned = 5_000_000_000;
+    app.report_open = true;
+    render(&mut app, 120, 40);
+    render(&mut app, 50, 18);
+    let r = cleansys_tui::charts::report_data(&app);
+    assert_eq!(r.freed, 4_000_000_000);
+    assert_eq!(r.cleaners.len(), 1);
+    assert_eq!(r.nothing, 1);
+    assert_eq!(r.failed.len(), 1);
+}
+
+#[test]
+fn chart_keys_open_and_close_overlays() {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    let key = |c| KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE);
+    let mut app = app_with_scan();
+    app.handle_key(key('D')).unwrap();
+    assert!(app.dashboard_open);
+    app.handle_key(key('D')).unwrap();
+    assert!(!app.dashboard_open);
+    app.handle_key(key('v')).unwrap();
+    assert!(app.detail_open);
+    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
+        .unwrap();
+    assert!(!app.detail_open);
+    app.handle_key(key('P')).unwrap();
+    assert!(!app.report_open, "no run yet, nothing to report");
+}
+
+#[test]
+fn chart_overlays_survive_every_terminal_size() {
+    use cleansys_core::Status;
+    for (w, h) in [
+        (20, 6),
+        (40, 10),
+        (60, 18),
+        (80, 24),
+        (100, 30),
+        (120, 40),
+        (200, 60),
+        (50, 60),
+    ] {
+        for which in 0..3 {
+            let mut app = app_with_scan();
+            app.categories[0].items[0].status = Some(Status::Success("ok".into()));
+            app.categories[0].items[0].bytes_cleaned = 4_000_000_000;
+            app.categories[1].items[0].status = Some(Status::Error("boom".into()));
+            app.run_planned = 5_000_000_000;
+            match which {
+                0 => app.dashboard_open = true,
+                1 => app.detail_open = true,
+                _ => app.report_open = true,
+            }
+            render(&mut app, w, h);
+        }
+    }
 }

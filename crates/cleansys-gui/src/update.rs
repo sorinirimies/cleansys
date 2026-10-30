@@ -310,8 +310,7 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             }
         }
         Message::ScanAll => start_scan(state),
-        Message::ScanItemFinished(cat_idx, item_idx, result) => {
-            let info = cleansys_core::ScanInfo::from_result(result);
+        Message::ScanItemFinished(cat_idx, item_idx, info) => {
             if state
                 .board
                 .record_synced(&state.categories, cat_idx, item_idx, info)
@@ -650,55 +649,44 @@ fn blocking(
     }
 }
 
-type ScanResult = Result<cleansys_core::CleaningResult, String>;
-
-/// Run the queued scans on a small pool of OS threads (never on the UI /
-/// async executor threads, so a slow disk walk can't freeze the window).
-/// Each job reports through its own one-shot channel.
-fn spawn_scan_pool(
-    jobs: Vec<(
-        cleansys_core::CleanerFn,
-        iced::futures::channel::oneshot::Sender<ScanResult>,
-    )>,
-) {
-    use std::collections::VecDeque;
-    use std::sync::{Arc, Mutex};
-    let queue = Arc::new(Mutex::new(VecDeque::from(jobs)));
-    let workers = std::thread::available_parallelism()
-        .map(|n| n.get().clamp(2, 6))
-        .unwrap_or(4);
-    for _ in 0..workers {
-        let queue = Arc::clone(&queue);
-        std::thread::spawn(move || loop {
-            let job = queue.lock().unwrap_or_else(|e| e.into_inner()).pop_front();
-            let Some((function, tx)) = job else { break };
-            let _ = tx.send(function(RunOptions::preview()).map_err(|e| e.to_string()));
-        });
-    }
-}
-
-/// Measure every cleaner in the background (read-only previews).
+/// Measure every cleaner in the background (read-only previews), through the shared
+/// core scan so the GUI scans exactly like the TUI and web front-ends.
 fn start_scan(state: &mut CleanSysGui) -> Task<Message> {
     if state.board.is_scanning() || state.is_running {
         return Task::none();
     }
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+    type Tx = iced::futures::channel::oneshot::Sender<cleansys_core::ScanInfo>;
     let mut tasks = Vec::new();
-    let mut jobs = Vec::new();
+    let mut senders: HashMap<(usize, usize), Tx> = HashMap::new();
     for (cat_idx, cat) in state.categories.iter().enumerate() {
-        for (item_idx, item) in cat.items.iter().enumerate() {
-            let (tx, rx) = iced::futures::channel::oneshot::channel::<ScanResult>();
-            jobs.push((item.function.clone(), tx));
+        for item_idx in 0..cat.items.len() {
+            let (tx, rx) = iced::futures::channel::oneshot::channel();
+            senders.insert((cat_idx, item_idx), tx);
             tasks.push(Task::perform(
                 async move {
-                    rx.await
-                        .unwrap_or_else(|_| Err("scan cancelled".to_string()))
+                    rx.await.unwrap_or_else(|_| cleansys_core::ScanInfo {
+                        error: Some("scan cancelled".to_string()),
+                        ..Default::default()
+                    })
                 },
-                move |result| Message::ScanItemFinished(cat_idx, item_idx, result),
+                move |info| Message::ScanItemFinished(cat_idx, item_idx, info),
             ));
         }
     }
-    spawn_scan_pool(jobs);
-    state.board.start(tasks.len());
+    let senders = Arc::new(Mutex::new(senders));
+    let total = cleansys_core::spawn_scan_with(&state.categories, move |ci, ii, info| {
+        if let Some(tx) = senders
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .remove(&(ci, ii))
+        {
+            let _ = tx.send(info);
+        }
+        true
+    });
+    state.board.start(total);
     Task::batch(tasks)
 }
 
