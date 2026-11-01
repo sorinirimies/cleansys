@@ -9,13 +9,14 @@
 
 use cleansys_core::{format_size, Risk, Status};
 use ratatui::{
+    buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph},
+    widgets::{Block, Borders, Clear, Paragraph, Widget},
     Frame,
 };
-use tui_chart::{BarChart, BarGroup, BarOrientation, Gauge, Sparkline, Treemap, TreemapItem};
+use tui_chart::Sparkline;
 use tui_piechart::{PieChart, PieSlice};
 
 use crate::app::App;
@@ -172,43 +173,317 @@ pub fn report_data(app: &App) -> ReportData {
 
 // ── widgets ────────────────────────────────────────────────────────────
 
-/// Horizontal bar chart of `(label, bytes)` rows (at most `max_rows`).
-fn bytes_bars(title: &str, rows: &[(String, u64)], max_rows: usize, color: Color) -> BarChart {
-    let rows = &rows[..rows.len().min(max_rows)];
-    let (div, unit) = unit_for(rows.iter().map(|(_, b)| *b).max().unwrap_or(0));
-    let groups = rows
-        .iter()
-        .map(|(n, b)| BarGroup::new(clip(n, 18), [*b as f64 / div]))
-        .collect();
-    BarChart::new(groups)
-        .orientation(BarOrientation::Horizontal)
-        .group_gap(0)
-        .colors(vec![color])
-        .show_values(true)
-        .block(frame_block(format!(" {title} ({unit}) ")))
+/// Fixed-width text bar: `frac` of `width` cells filled with eighth-block precision.
+fn bar_text(frac: f64, width: usize) -> (String, String) {
+    const PART: [char; 8] = [' ', '▏', '▎', '▍', '▌', '▋', '▊', '▉'];
+    let eighths = (frac.clamp(0.0, 1.0) * width as f64 * 8.0).round() as usize;
+    let full = (eighths / 8).min(width);
+    let rem = if full < width { eighths % 8 } else { 0 };
+    let mut filled = "█".repeat(full);
+    if rem > 0 {
+        filled.push(PART[rem]);
+    }
+    let used = full + usize::from(rem > 0);
+    (filled, "░".repeat(width.saturating_sub(used)))
 }
 
-fn share_pie<'a>(title: &str, rows: &'a [(String, u64)], max_slices: usize) -> PieChart<'a> {
-    let colors = palette();
-    let slices = rows
-        .iter()
-        .take(max_slices)
-        .enumerate()
-        .map(|(i, (n, b))| PieSlice::new(n.as_str(), *b as f64, colors[i % colors.len()]))
-        .collect();
-    PieChart::new(slices)
-        .show_legend(true)
-        .show_percentages(true)
-        .high_resolution(true)
-        .block(frame_block(format!(" {title} ")))
+/// Pad / clip `s` to exactly `w` display cells (chars).
+fn fit(s: &str, w: usize) -> String {
+    let c = clip(s, w);
+    format!("{c:<w$}")
 }
 
-/// A single-value gauge with a label.
-fn percent_gauge(title: &str, pct: f64, label: String, color: Color) -> Gauge<'static> {
-    Gauge::new(pct.clamp(0.0, 100.0))
-        .color(color)
-        .label(label)
-        .block(frame_block(format!(" {title} ")))
+/// Ranked horizontal bars: `label  ████▍░░░  size  pct`, one coloured row per entry.
+struct RankedBars<'a> {
+    title: String,
+    rows: &'a [(String, u64)],
+    max_rows: usize,
+}
+
+impl Widget for RankedBars<'_> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let block = frame_block(format!(" {} ", self.title));
+        let inner = block.inner(area);
+        block.render(area, buf);
+        if inner.width < 24 || inner.height == 0 {
+            return;
+        }
+        let rows = &self.rows[..self.rows.len().min(self.max_rows)];
+        let total: u64 = self.rows.iter().map(|(_, b)| *b).sum();
+        let max = rows.iter().map(|(_, b)| *b).max().unwrap_or(0).max(1);
+        let w = inner.width as usize;
+        let label_w = (w / 3).clamp(10, 26);
+        let tail_w = 17; // " 123.45 GB  99%"
+        let bar_w = w.saturating_sub(label_w + tail_w + 2).max(4);
+        let colors = palette();
+        let lines: Vec<Line> = rows
+            .iter()
+            .enumerate()
+            .map(|(i, (name, bytes))| {
+                let color = colors[i % colors.len()];
+                let (filled, empty) = bar_text(*bytes as f64 / max as f64, bar_w);
+                let pct = if total == 0 {
+                    0
+                } else {
+                    (*bytes as f64 * 100.0 / total as f64).round() as u64
+                };
+                Line::from(vec![
+                    Span::styled(fit(name, label_w), Style::default().fg(th().foreground)),
+                    Span::raw(" "),
+                    Span::styled(filled, Style::default().fg(color)),
+                    Span::styled(empty, Style::default().fg(th().border)),
+                    Span::styled(
+                        format!(" {:>9}", format_size(*bytes)),
+                        Style::default()
+                            .fg(th().foreground)
+                            .add_modifier(Modifier::BOLD),
+                    ),
+                    Span::styled(format!(" {pct:>3}%"), Style::default().fg(th().muted)),
+                ])
+            })
+            .collect();
+        Paragraph::new(lines).render(inner, buf);
+    }
+}
+
+fn bytes_bars<'a>(
+    title: &str,
+    rows: &'a [(String, u64)],
+    max_rows: usize,
+    _color: Color,
+) -> RankedBars<'a> {
+    RankedBars {
+        title: title.to_string(),
+        rows,
+        max_rows,
+    }
+}
+
+/// `■ name  size  pct` legend lines for `parts`, in as many columns as fit.
+fn legend_lines(
+    parts: &[(String, u64, Color)],
+    total: u64,
+    width: u16,
+    rows: u16,
+) -> Vec<Line<'static>> {
+    let col_w = (width as usize).clamp(24, 30);
+    let cols = ((width as usize) / col_w).max(1);
+    let rows = rows as usize;
+    let mut lines: Vec<Vec<Span<'static>>> = vec![Vec::new(); rows.max(1)];
+    for (i, (name, bytes, color)) in parts.iter().enumerate() {
+        let (col, row) = (i / rows.max(1), i % rows.max(1));
+        if col >= cols {
+            break;
+        }
+        let pct = if total == 0 {
+            0.0
+        } else {
+            *bytes as f64 * 100.0 / total as f64
+        };
+        let name_w = col_w - 15;
+        lines[row].push(Span::styled("■ ", Style::default().fg(*color)));
+        lines[row].push(Span::styled(
+            fit(name, name_w),
+            Style::default().fg(th().foreground),
+        ));
+        lines[row].push(Span::styled(
+            format!("{:>9}", format_size(*bytes)),
+            Style::default().fg(th().muted),
+        ));
+        lines[row].push(Span::styled(
+            format!("{pct:>4.0}%  "),
+            Style::default().fg(th().muted),
+        ));
+    }
+    lines.into_iter().map(Line::from).collect()
+}
+
+/// A pie (not too big, not braille-noisy) with a coloured legend next to it.
+struct ShareChart<'a> {
+    title: String,
+    rows: &'a [(String, u64)],
+    max_slices: usize,
+    /// Slice colours; the shared palette when `None`.
+    colors: Option<Vec<Color>>,
+}
+
+impl Widget for ShareChart<'_> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let block = frame_block(format!(" {} ", self.title));
+        let inner = block.inner(area);
+        block.render(area, buf);
+        if inner.width < 12 || inner.height < 3 {
+            return;
+        }
+        let colors = self.colors.clone().unwrap_or_else(|| palette().to_vec());
+        let rows = &self.rows[..self.rows.len().min(self.max_slices)];
+        let total: u64 = rows.iter().map(|(_, b)| *b).sum();
+        let parts: Vec<(String, u64, Color)> = rows
+            .iter()
+            .enumerate()
+            .map(|(i, (n, b))| (n.clone(), *b, colors[i % colors.len()]))
+            .collect();
+        // Cells are ~twice as tall as wide: a circle needs 2*height columns.
+        let pie_h = inner.height.min(14);
+        let pie_w = (pie_h * 2).min(inner.width.saturating_sub(26)).max(6);
+        let cols = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Length(pie_w + 1), Constraint::Min(10)])
+            .split(inner);
+        let slices: Vec<PieSlice> = parts
+            .iter()
+            .map(|(n, b, c)| PieSlice::new(n.as_str(), *b as f64, *c))
+            .collect();
+        PieChart::new(slices)
+            .show_legend(false)
+            .show_percentages(false)
+            .high_resolution(true)
+            .render(
+                Rect {
+                    y: cols[0].y + (cols[0].height.saturating_sub(pie_h)) / 2,
+                    height: pie_h.min(cols[0].height),
+                    ..cols[0]
+                },
+                buf,
+            );
+        let legend = legend_lines(&parts, total, 30, parts.len() as u16);
+        let top = cols[1].y + cols[1].height.saturating_sub(legend.len() as u16) / 2;
+        let rect = Rect {
+            y: top,
+            height: (legend.len() as u16).min(cols[1].height),
+            ..cols[1]
+        };
+        Paragraph::new(legend).render(rect, buf);
+    }
+}
+
+fn share_pie<'a>(title: &str, rows: &'a [(String, u64)], max_slices: usize) -> ShareChart<'a> {
+    ShareChart {
+        title: title.to_string(),
+        rows,
+        max_slices,
+        colors: None,
+    }
+}
+
+/// One stacked proportional bar (two rows tall) with a legend underneath: the
+/// readable replacement for a treemap when only a handful of big items matter.
+struct StackedShare<'a> {
+    title: String,
+    rows: &'a [(String, u64)],
+}
+
+impl Widget for StackedShare<'_> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let block = frame_block(format!(" {} ", self.title));
+        let inner = block.inner(area);
+        block.render(area, buf);
+        if inner.width < 20 || inner.height < 3 {
+            return;
+        }
+        let colors = palette();
+        let shown = self.rows.len().min(8);
+        let total: u64 = self.rows.iter().map(|(_, b)| *b).sum();
+        let parts: Vec<(String, u64, Color)> = self.rows[..shown]
+            .iter()
+            .enumerate()
+            .map(|(i, (n, b))| (n.clone(), *b, colors[i % colors.len()]))
+            .collect();
+        let shown_total: u64 = parts.iter().map(|(_, b, _)| *b).sum();
+        let mut parts = parts;
+        if total > shown_total {
+            parts.push(("others".into(), total - shown_total, th().border));
+        }
+        // Largest-remainder widths so the segments always add up to the full width.
+        let w = inner.width as usize;
+        let mut widths: Vec<usize> = parts
+            .iter()
+            .map(|(_, b, _)| (*b as f64 / total.max(1) as f64 * w as f64) as usize)
+            .collect();
+        let mut left = w.saturating_sub(widths.iter().sum());
+        let mut order: Vec<usize> = (0..parts.len()).collect();
+        order.sort_by_key(|&i| std::cmp::Reverse(parts[i].1));
+        for i in order.into_iter().cycle().take(left) {
+            widths[i] += 1;
+            left -= 1;
+            if left == 0 {
+                break;
+            }
+        }
+        let bar: Vec<Span> = parts
+            .iter()
+            .zip(&widths)
+            .map(|((_, _, c), n)| Span::styled("█".repeat(*n), Style::default().fg(*c)))
+            .collect();
+        Paragraph::new(vec![Line::from(bar.clone()), Line::from(bar)])
+            .render(Rect { height: 2, ..inner }, buf);
+        let legend_h = inner.height - 3;
+        if legend_h > 0 {
+            let rows = (parts.len() as u16)
+                .div_ceil(((inner.width as usize / 30).max(1)) as u16)
+                .min(legend_h)
+                .max(1);
+            Paragraph::new(legend_lines(&parts, total, inner.width, rows)).render(
+                Rect {
+                    y: inner.y + 3,
+                    height: legend_h,
+                    ..inner
+                },
+                buf,
+            );
+        }
+    }
+}
+
+/// A single-value gauge: label on the left, filled bar with the percentage on the right.
+struct PercentBar {
+    title: String,
+    pct: f64,
+    label: String,
+    color: Color,
+}
+
+impl Widget for PercentBar {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let block = frame_block(format!(" {} ", self.title));
+        let inner = block.inner(area);
+        block.render(area, buf);
+        if inner.width < 16 || inner.height == 0 {
+            return;
+        }
+        let w = inner.width as usize;
+        let pct_txt = format!(" {:>5.1}%", self.pct);
+        let label_w = self
+            .label
+            .chars()
+            .count()
+            .min(w.saturating_sub(pct_txt.len() + 14));
+        let bar_w = w.saturating_sub(label_w + pct_txt.len() + 2).max(4);
+        let (filled, empty) = bar_text(self.pct / 100.0, bar_w);
+        Paragraph::new(Line::from(vec![
+            Span::styled(
+                clip(&self.label, label_w),
+                Style::default().fg(th().foreground),
+            ),
+            Span::raw("  "),
+            Span::styled(filled, Style::default().fg(self.color)),
+            Span::styled(empty, Style::default().fg(th().border)),
+            Span::styled(
+                pct_txt,
+                Style::default().fg(self.color).add_modifier(Modifier::BOLD),
+            ),
+        ]))
+        .render(inner, buf);
+    }
+}
+
+fn percent_gauge(title: &str, pct: f64, label: String, color: Color) -> PercentBar {
+    PercentBar {
+        title: title.to_string(),
+        pct: pct.clamp(0.0, 100.0),
+        label,
+        color,
+    }
 }
 
 fn heading(text: String) -> Line<'static> {
@@ -352,7 +627,11 @@ pub fn render_dashboard(f: &mut Frame, app: &App, area: Rect) {
         .constraints([
             Constraint::Length(if inner.height >= 12 { 3 } else { 0 }),
             Constraint::Min(6),
-            Constraint::Length(if roomy { (inner.height / 3).max(6) } else { 0 }),
+            Constraint::Length(if roomy {
+                (inner.height / 3).clamp(6, 9)
+            } else {
+                0
+            }),
         ])
         .split(inner);
     if rows[0].height > 0 {
@@ -391,46 +670,38 @@ pub fn render_dashboard(f: &mut Frame, app: &App, area: Rect) {
     .filter(|(_, b)| *b > 0)
     .map(|(n, b)| (n.to_string(), b))
     .collect();
-    let colors = [th().success, th().warning, th().error];
-    let slices: Vec<PieSlice> = [
-        ("Safe", d.by_risk[0], colors[0]),
-        ("Moderate", d.by_risk[1], colors[1]),
-        ("Caution", d.by_risk[2], colors[2]),
+    let risk_colors: Vec<Color> = [
+        (d.by_risk[0], th().success),
+        (d.by_risk[1], th().warning),
+        (d.by_risk[2], th().error),
     ]
     .into_iter()
-    .filter(|(_, b, _)| *b > 0)
-    .map(|(n, b, c)| PieSlice::new(n, b as f64, c))
+    .filter(|(b, _)| *b > 0)
+    .map(|(_, c)| c)
     .collect();
     if let Some(right) = right {
-        if risk_rows.is_empty() {
-            f.render_widget(frame_block(" By risk "), right);
-        } else {
-            f.render_widget(
-                PieChart::new(slices)
-                    .show_legend(true)
-                    .show_percentages(true)
-                    .high_resolution(true)
-                    .block(frame_block(" By risk ")),
-                right,
-            );
-        }
+        f.render_widget(
+            ShareChart {
+                title: "By risk".into(),
+                rows: &risk_rows,
+                max_slices: 3,
+                colors: Some(risk_colors),
+            },
+            right,
+        );
     }
     if rows[2].height == 0 {
         return;
     }
 
-    let items = d
-        .top
-        .iter()
-        .map(|(n, b)| TreemapItem::new(format!("{} {}", clip(n, 18), format_size(*b)), *b as f64));
     f.render_widget(
-        Treemap::new(items)
-            .show_values(false)
-            .gradient(th().border, th().success)
-            .block(frame_block(format!(
-                " Biggest cleaners · {} reclaimable in total ",
+        StackedShare {
+            title: format!(
+                "Biggest cleaners · {} reclaimable in total",
                 format_size(d.total)
-            ))),
+            ),
+            rows: &d.top,
+        },
         rows[2],
     );
 }
@@ -579,7 +850,11 @@ pub fn render_detail(f: &mut Frame, app: &App, area: Rect) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Min(6),
-            Constraint::Length(if right_area.height >= 16 { 5 } else { 0 }),
+            Constraint::Length(if right_area.height >= 16 && info.entries.len() >= 8 {
+                5
+            } else {
+                0
+            }),
         ])
         .split(right_area);
     let mut shares: Vec<(String, u64)> =
