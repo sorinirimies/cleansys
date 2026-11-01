@@ -450,9 +450,23 @@ jobs:
       - name: Update PKGBUILD checksums
         run: bash scripts/ci/update_aur.sh ${{ needs.validate.outputs.version }}
 
+      - name: Check AUR secrets
+        id: aur
+        env:
+          AUR_USERNAME: ${{ secrets.AUR_USERNAME }}
+          AUR_EMAIL: ${{ secrets.AUR_EMAIL }}
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          if [ -n "$AUR_USERNAME" ] && [ -n "$AUR_EMAIL" ] && [ -n "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice::AUR deploy skipped: set the AUR_USERNAME, AUR_EMAIL and AUR_SSH_PRIVATE_KEY repo secrets to enable it."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          fi
+
       - name: Deploy to AUR
+        if: steps.aur.outputs.configured == 'true'
         uses: KSXGitHub/github-actions-deploy-aur@v3
-        continue-on-error: true
         with:
           pkgname: cleansys
           pkgbuild: packaging/aur/cleansys/PKGBUILD
