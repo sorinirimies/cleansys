@@ -865,6 +865,7 @@ impl App {
     /// (when `confirmation_mode` is on) or start execution immediately.
     pub fn request_run(&mut self) -> Result<()> {
         if self.is_running {
+            self.set_notice("A clean is already running — q cancels it");
             return Ok(());
         }
 
@@ -1292,8 +1293,9 @@ impl App {
         );
         self.log(line.clone());
         crate::notifications::notify_completion(&line);
+        // The run panel under the list already shows what was freed; the full chart report
+        // is opt-in (`P`) instead of covering the screen the moment a clean ends.
         self.run_summary = Some(summary);
-        self.report_open = true;
         // Sizes changed — measure again so the list shows what is left.
         self.start_scan();
     }
@@ -1615,8 +1617,12 @@ impl App {
                     if !self.is_running {
                         self.expand_current();
                     }
-                    // Nothing to expand (or a clean is running): show the charts instead.
-                    if self.entry_cursor.is_none() && self.current_item().is_some() {
+                    // Nothing to expand: show the charts instead (not mid-clean, when the
+                    // numbers are changing under you).
+                    if self.entry_cursor.is_none()
+                        && !self.is_running
+                        && self.current_item().is_some()
+                    {
                         self.detail_open = true;
                     }
                 }
@@ -1664,14 +1670,20 @@ impl App {
             }
             // Graphical views
             (KeyCode::Char('D'), _) if !self.show_help => self.dashboard_open = true,
-            (KeyCode::Char('v'), _) if !self.show_help && self.current_item().is_some() => {
+            (KeyCode::Char('v'), _)
+                if !self.show_help && !self.is_running && self.current_item().is_some() =>
+            {
                 self.detail_open = true;
             }
             (KeyCode::Char('P'), _) if !self.show_help => {
-                if self.run_summary.is_some() || self.is_running {
+                if self.run_summary.is_some() && !self.is_running {
                     self.report_open = true;
+                } else if self.is_running {
+                    self.set_notice("The report is available once the clean has finished");
                 } else {
-                    self.set_notice("No clean report yet — run a clean first");
+                    self.set_notice(
+                        "No clean report yet — run a clean first (D shows what is on disk)",
+                    );
                 }
             }
             // Schedule automatic cleaning

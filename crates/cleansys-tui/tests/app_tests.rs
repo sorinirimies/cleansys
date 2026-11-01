@@ -595,9 +595,7 @@ fn q_cancels_a_running_clean_instead_of_quitting() {
     assert!(!quit, "q during a run cancels, it must not quit the app");
     assert!(app.operation_logs.iter().any(|l| l.contains("Cancelling")));
     wait_for_run(&mut app);
-    // The finished run opens its report; q closes that first.
-    assert!(app.report_open);
-    key(&mut app, KeyCode::Char('q'));
+    // The finished run no longer pops its chart report over the list.
     assert!(!app.report_open);
     // Once idle, q quits again.
     let quit = app
@@ -888,4 +886,34 @@ fn capital_t_opens_picker_keys_navigate_and_esc_closes() {
     assert!(app.follow_system);
     key(&mut app, KeyCode::Esc);
     assert!(!app.theme_picker_open);
+}
+
+#[test]
+fn detail_charts_and_report_stay_closed_around_a_run() {
+    let mut app = app_with_categories();
+    app.confirmation_mode = false;
+    app.categories[0].items[0].selected = true;
+    app.request_run().unwrap();
+    key(&mut app, KeyCode::Right);
+    key(&mut app, KeyCode::Char('v'));
+    key(&mut app, KeyCode::Enter);
+    assert!(!app.detail_open, "no detail charts mid-clean");
+    assert!(app.notice.is_some(), "Enter mid-clean explains itself");
+    wait_for_run(&mut app);
+    assert!(!app.report_open && !app.detail_open);
+}
+
+#[test]
+fn report_opens_only_after_a_finished_clean() {
+    let mut app = app_with_categories();
+    app.confirmation_mode = false;
+    key(&mut app, KeyCode::Char('P'));
+    assert!(!app.report_open, "nothing to report before any clean");
+    app.categories[0].items[0].selected = true;
+    app.request_run().unwrap();
+    key(&mut app, KeyCode::Char('P'));
+    assert!(!app.report_open, "not while it is still running");
+    wait_for_run(&mut app);
+    key(&mut app, KeyCode::Char('P'));
+    assert!(app.report_open, "available once finished");
 }

@@ -420,7 +420,7 @@ fn render_summary(f: &mut Frame, sum: &crate::app::RunSummary, area: Rect) {
         } else {
             " Done "
         })
-        .title_bottom(Line::from(" Esc: dismiss · L: log ").right_aligned());
+        .title_bottom(Line::from(" P: report · L: log · Esc: dismiss ").right_aligned());
     f.render_widget(Paragraph::new(Line::from(spans)).block(block), area);
 }
 
@@ -1265,7 +1265,7 @@ fn render_action_bar(f: &mut Frame, app: &App, area: Rect) {
             ]),
             key_hints(&[
                 ("S", "schedule", t.accent),
-                ("D", "dashboard", t.accent),
+                ("D", "storage chart", t.accent),
                 ("v", "details", t.accent),
                 ("L", "log", t.accent),
                 ("?", "help", t.accent),

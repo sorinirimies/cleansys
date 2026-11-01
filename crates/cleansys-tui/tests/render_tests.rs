@@ -301,12 +301,9 @@ fn finished_run_shows_a_summary_under_the_list_and_esc_dismisses_it() {
     let sum = app.run_summary.clone().expect("summary after a run");
     assert_eq!(sum.ok, 1);
     assert_eq!(sum.failed, 0);
-    // The finished run opens its graphical report first; close it to see the list.
-    assert!(app.report_open);
-    render_once(&mut app);
-    app.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::NONE))
-        .unwrap();
+    // Regression: the chart report must not open by itself (it duplicated the summary).
     assert!(!app.report_open);
+    render_once(&mut app);
     let text = screen_text(&mut app, 120, 40);
     assert!(text.contains("Freed"), "summary missing:\n{text}");
     assert!(text.contains("Trash"), "list must remain visible");
