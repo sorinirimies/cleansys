@@ -16,7 +16,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Widget},
     Frame,
 };
-use tui_chart::Sparkline;
+use tui_chart::{RadialBar, RadialRing, RadialSweep, Sankey, SankeyLink, Sparkline, Waterfall};
 use tui_piechart::{PieChart, PieSlice};
 
 use crate::app::App;
@@ -83,6 +83,8 @@ pub struct DashboardData {
     pub by_risk: [u64; 3],
     /// Biggest cleaners `(name, bytes)`, biggest first.
     pub top: Vec<(String, u64)>,
+    /// Reclaimable bytes per `(category, risk index)` flow, for the sankey.
+    pub flows: Vec<(String, usize, u64)>,
     pub total: u64,
 }
 
@@ -91,6 +93,7 @@ pub fn dashboard_data(app: &App) -> DashboardData {
     let mut all: Vec<(String, u64)> = Vec::new();
     for (ci, cat) in app.categories.iter().enumerate() {
         let mut sum = 0;
+        let mut per_risk = [0u64; 3];
         for (ii, item) in cat.items.iter().enumerate() {
             let Some(info) = app.board.get(ci, ii) else {
                 continue;
@@ -99,11 +102,13 @@ pub fn dashboard_data(app: &App) -> DashboardData {
                 continue;
             }
             sum += info.bytes;
-            d.by_risk[match item.risk {
+            let ri = match item.risk {
                 Risk::Safe => 0,
                 Risk::Moderate => 1,
                 Risk::Caution => 2,
-            }] += info.bytes;
+            };
+            d.by_risk[ri] += info.bytes;
+            per_risk[ri] += info.bytes;
             all.push((item.name.clone(), info.bytes));
         }
         if sum > 0 {
@@ -111,6 +116,9 @@ pub fn dashboard_data(app: &App) -> DashboardData {
                 .name
                 .trim_end_matches(cleansys_core::model::ROOT_SUFFIX)
                 .to_string();
+            for (ri, b) in per_risk.iter().enumerate().filter(|(_, b)| **b > 0) {
+                d.flows.push((name.clone(), ri, *b));
+            }
             d.by_category.push((name, sum));
         }
     }
@@ -661,39 +669,49 @@ pub fn render_dashboard(f: &mut Frame, app: &App, area: Rect) {
         ),
         left,
     );
-    let risk_rows: Vec<(String, u64)> = [
-        ("Safe", d.by_risk[0]),
-        ("Moderate", d.by_risk[1]),
-        ("Caution", d.by_risk[2]),
-    ]
-    .into_iter()
-    .filter(|(_, b)| *b > 0)
-    .map(|(n, b)| (n.to_string(), b))
-    .collect();
-    let risk_colors: Vec<Color> = [
-        (d.by_risk[0], th().success),
-        (d.by_risk[1], th().warning),
-        (d.by_risk[2], th().error),
-    ]
-    .into_iter()
-    .filter(|(b, _)| *b > 0)
-    .map(|(_, c)| c)
-    .collect();
     if let Some(right) = right {
+        let names = ["Safe", "Moderate", "Caution"];
+        let cols = [th().success, th().warning, th().error];
+        let rings: Vec<RadialRing> = (0..3)
+            .filter(|&i| d.by_risk[i] > 0)
+            .map(|i| {
+                RadialRing::new(
+                    format!("{} {}", names[i], format_size(d.by_risk[i])),
+                    d.by_risk[i] as f64,
+                    d.total.max(1) as f64,
+                )
+                .color(cols[i])
+            })
+            .collect();
+        let block = frame_block(" By risk ");
+        let inner = block.inner(right);
+        f.render_widget(block, right);
+        // Keep the rings a sensible size on tall terminals.
+        let h = inner.height.min(16);
+        let w = inner.width.min(64);
         f.render_widget(
-            ShareChart {
-                title: "By risk".into(),
-                rows: &risk_rows,
-                max_slices: 3,
-                colors: Some(risk_colors),
+            RadialBar::new(rings).sweep(RadialSweep::Full).legend(true),
+            Rect {
+                x: inner.x + (inner.width - w) / 2,
+                y: inner.y + (inner.height - h) / 2,
+                width: w,
+                height: h,
             },
-            right,
         );
     }
     if rows[2].height == 0 {
         return;
     }
 
+    let (stack_area, flow_area) = if rows[2].width >= 110 {
+        let c = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(rows[2]);
+        (c[0], Some(c[1]))
+    } else {
+        (rows[2], None)
+    };
     f.render_widget(
         StackedShare {
             title: format!(
@@ -702,8 +720,52 @@ pub fn render_dashboard(f: &mut Frame, app: &App, area: Rect) {
             ),
             rows: &d.top,
         },
-        rows[2],
+        stack_area,
     );
+    if let Some(flow_area) = flow_area {
+        f.render_widget(category_risk_sankey(&d), flow_area);
+    }
+}
+
+/// Category → risk flow of the reclaimable bytes (top categories only).
+fn category_risk_sankey(d: &DashboardData) -> Sankey {
+    const RISK: [&str; 3] = ["Safe", "Moderate", "Caution"];
+    let top: Vec<&str> = d
+        .by_category
+        .iter()
+        .take(5)
+        .map(|(n, _)| n.as_str())
+        .collect();
+    let links = d
+        .flows
+        .iter()
+        .filter(|(n, _, _)| top.contains(&n.as_str()))
+        .map(|(n, r, b)| SankeyLink::new(clip(n, 16), RISK[*r], *b as f64 / 1e9));
+    let t = th();
+    Sankey::new(links)
+        .node_color("Safe", t.success)
+        .node_color("Moderate", t.warning)
+        .node_color("Caution", t.error)
+        .block(frame_block(" Where it comes from · GB by risk "))
+}
+
+/// Disk used before → minus what each category freed → used now.
+fn freed_waterfall(r: &ReportData, used_before: u64) -> Waterfall {
+    let t = th();
+    let gb = 1e9;
+    let mut w = Waterfall::new()
+        .initial(used_before as f64 / gb)
+        .colors(t.error, t.success, t.accent);
+    w = w.total("Used before");
+    let shown: u64 = r.by_category.iter().take(4).map(|(_, b)| *b).sum();
+    for (n, b) in r.by_category.iter().take(4) {
+        w = w.delta(clip(n, 10), -(*b as f64) / gb);
+    }
+    if r.freed > shown {
+        w = w.delta("others", -((r.freed - shown) as f64) / gb);
+    }
+    w.total("Used now")
+        .block(frame_block(" Disk used, before → after (GB) "))
 }
 
 // ── per-cleaner detail ─────────────────────────────────────────────────
@@ -1029,7 +1091,12 @@ pub fn render_report(f: &mut Frame, app: &App, area: Rect) {
             ]
         })
         .split(right_area);
-    f.render_widget(share_pie("Freed by category", &r.by_category, 6), right[0]);
+    match app.disk_before {
+        Some(before) if right[0].height >= 9 => {
+            f.render_widget(freed_waterfall(&r, before.used()), right[0]);
+        }
+        _ => f.render_widget(share_pie("Freed by category", &r.by_category, 6), right[0]),
+    }
     if right.len() > 1 {
         let lines: Vec<Line> = r
             .failed
