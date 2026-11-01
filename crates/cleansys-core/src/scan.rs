@@ -425,6 +425,17 @@ pub fn spawn_scan_with<F>(categories: &[CleanerCategory], sink: F) -> usize
 where
     F: Fn(usize, usize, ScanInfo) -> bool + Send + Sync + 'static,
 {
+    spawn_scan_timeout(categories, scan_timeout(), sink)
+}
+
+fn spawn_scan_timeout<F>(
+    categories: &[CleanerCategory],
+    timeout: std::time::Duration,
+    sink: F,
+) -> usize
+where
+    F: Fn(usize, usize, ScanInfo) -> bool + Send + Sync + 'static,
+{
     // Slowest cleaners (as measured by the previous scan) go first: they are the long
     // pole, so starting them early keeps every worker busy until the end.
     let history = load_scan_times();
@@ -450,16 +461,58 @@ where
     // One shared pool: cleaner jobs and the directory walks inside them use the same
     // workers (work-stealing), and each result is sent the moment its cleaner finishes.
     let pool = crate::utils::scan_pool();
-    for (ci, ii, id, f) in jobs {
+    // One slot per job: when it started and whether its result was already delivered. A
+    // watchdog reports a job that hangs (a stalled mount, a command waiting on a lock) as
+    // failed so the front-end's spinner ends; the late real result is then dropped.
+    let slots: Arc<Vec<ScanSlot>> = Arc::new(
+        jobs.iter()
+            .map(|_| ScanSlot {
+                started: Mutex::new(None),
+                reported: std::sync::atomic::AtomicBool::new(false),
+            })
+            .collect(),
+    );
+    let targets: Arc<Vec<(usize, usize)>> = Arc::new(jobs.iter().map(|j| (j.0, j.1)).collect());
+    // Deliver one result exactly once, whichever of worker / watchdog gets there first.
+    let report = {
+        let slots = Arc::clone(&slots);
         let times = Arc::clone(&times);
         let remaining = Arc::clone(&remaining);
         let cancelled = Arc::clone(&cancelled);
         let sink = Arc::clone(&sink);
+        Arc::new(
+            move |n: usize, ci: usize, ii: usize, id: String, ms: u64, info: ScanInfo| {
+                if slots[n]
+                    .reported
+                    .swap(true, std::sync::atomic::Ordering::SeqCst)
+                {
+                    return;
+                }
+                times
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(id, ms);
+                if remaining.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) == 1 {
+                    save_scan_times(&times.lock().unwrap_or_else(|e| e.into_inner()));
+                }
+                if !sink(ci, ii, info) {
+                    // receiver dropped (app closed): skip the rest
+                    cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
+                }
+            },
+        )
+    };
+    let ids: Arc<Vec<String>> = Arc::new(jobs.iter().map(|j| j.2.clone()).collect());
+    for (n, (ci, ii, id, f)) in jobs.into_iter().enumerate() {
+        let cancelled = Arc::clone(&cancelled);
+        let slots = Arc::clone(&slots);
+        let report = Arc::clone(&report);
         pool.spawn(move || {
             if cancelled.load(std::sync::atomic::Ordering::Relaxed) {
                 return;
             }
             let t0 = std::time::Instant::now();
+            *slots[n].started.lock().unwrap_or_else(|e| e.into_inner()) = Some(t0);
             // A panicking cleaner must not take the whole pool (rayon aborts on escaped panics) down.
             let info = ScanInfo::from_result(
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(RunOptions::preview())))
@@ -470,20 +523,58 @@ where
             if timing {
                 eprintln!("scan {ms:>7} ms {id} ({} bytes)", info.bytes);
             }
-            times
-                .lock()
-                .unwrap_or_else(|e| e.into_inner())
-                .insert(id, ms);
-            if remaining.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) == 1 {
-                save_scan_times(&times.lock().unwrap_or_else(|e| e.into_inner()));
+            report(n, ci, ii, id, ms, info);
+        });
+    }
+    if total > 0 {
+        std::thread::spawn(move || loop {
+            std::thread::sleep(std::time::Duration::from_millis(500));
+            if remaining.load(std::sync::atomic::Ordering::SeqCst) == 0
+                || cancelled.load(std::sync::atomic::Ordering::Relaxed)
+            {
+                return;
             }
-            if !sink(ci, ii, info) {
-                // receiver dropped (app closed): skip the rest
-                cancelled.store(true, std::sync::atomic::Ordering::Relaxed);
+            for (n, slot) in slots.iter().enumerate() {
+                let started = *slot.started.lock().unwrap_or_else(|e| e.into_inner());
+                if let Some(t0) = started {
+                    if t0.elapsed() >= timeout
+                        && !slot.reported.load(std::sync::atomic::Ordering::SeqCst)
+                    {
+                        let (ci, ii) = targets[n];
+                        let info = ScanInfo::from_result(Err(format!(
+                            "scan timed out after {}s",
+                            timeout.as_secs()
+                        )));
+                        report(
+                            n,
+                            ci,
+                            ii,
+                            ids[n].clone(),
+                            t0.elapsed().as_millis() as u64,
+                            info,
+                        );
+                    }
+                }
             }
         });
     }
     total
+}
+
+struct ScanSlot {
+    started: Mutex<Option<std::time::Instant>>,
+    reported: std::sync::atomic::AtomicBool,
+}
+
+/// How long one cleaner may scan before it is reported as timed out
+/// (`CLEANSYS_SCAN_TIMEOUT_SECS` overrides; default 5 minutes).
+fn scan_timeout() -> std::time::Duration {
+    let secs = std::env::var("CLEANSYS_SCAN_TIMEOUT_SECS")
+        .ok()
+        .and_then(|v| v.parse::<u64>().ok())
+        .filter(|n| *n > 0)
+        .unwrap_or(300);
+    std::time::Duration::from_secs(secs)
 }
 
 fn scan_times_path() -> Option<std::path::PathBuf> {
@@ -574,6 +665,42 @@ mod tests {
         assert!(!board.category_visible(&c, 1, true));
         assert!(board.category_visible(&c, 1, false));
         assert_eq!(board.first_visible_category(&c, true), Some(0));
+    }
+
+    #[test]
+    fn hung_scan_is_reported_as_timed_out_and_late_result_is_dropped() {
+        let hang = CleanerItem {
+            function: cleaner_fn(|_| {
+                std::thread::sleep(std::time::Duration::from_millis(1500));
+                Ok(CleaningResult::new())
+            }),
+            ..item("hang", 0)
+        };
+        let c = vec![CleanerCategory {
+            name: "A".into(),
+            description: "".into(),
+            items: vec![hang, item("ok", 5)],
+        }];
+        let (tx, rx) = channel();
+        let total = spawn_scan_timeout(
+            &c,
+            std::time::Duration::from_millis(600),
+            move |ci, ii, i| tx.send((ci, ii, i)).is_ok(),
+        );
+        assert_eq!(total, 2);
+        let mut got = Vec::new();
+        for _ in 0..2 {
+            got.push(rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap());
+        }
+        let timed_out = got.iter().find(|g| g.1 == 0).unwrap();
+        assert!(timed_out
+            .2
+            .error
+            .as_deref()
+            .unwrap_or("")
+            .contains("timed out"));
+        // the hung cleaner finishing later must not be delivered a second time
+        assert!(rx.recv_timeout(std::time::Duration::from_secs(2)).is_err());
     }
 
     #[test]

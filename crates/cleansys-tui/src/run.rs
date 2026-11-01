@@ -6,8 +6,9 @@
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 
 use cleansys_core::{CleanerFn, CleaningResult, RunOptions};
 
@@ -39,9 +40,76 @@ impl RunHandle {
     }
 }
 
+/// A single cleaner that runs longer than this is reported as failed so the run can move
+/// on instead of spinning forever (a command waiting on a lock, a hung mount, ...).
+const JOB_TIMEOUT: Duration = Duration::from_secs(300);
+
+/// After a cancel, how long the running cleaner gets to finish before it is abandoned.
+const CANCEL_GRACE: Duration = Duration::from_secs(10);
+
 /// Run `jobs` one after another on a new thread. `skipped` are the paths the user
 /// unticked in the details view; they are left alone.
 pub fn spawn(jobs: Vec<Job>, skipped: Vec<PathBuf>, is_root: bool) -> RunHandle {
+    spawn_with(jobs, skipped, is_root, JOB_TIMEOUT, CANCEL_GRACE)
+}
+
+/// Turn a cleaner error into the short text shown in the list.
+fn short_error(e: &anyhow::Error) -> String {
+    e.to_string()
+        .split(':')
+        .next_back()
+        .unwrap_or("Unknown error")
+        .trim()
+        .to_string()
+}
+
+/// Run one cleaner on its own thread so a panic or a hang cannot take the worker down
+/// with it: a panic becomes an error, a hang becomes a timeout (the stuck thread is left
+/// behind), and a cancel gives the cleaner `grace` to finish before it is abandoned.
+fn run_job(
+    function: CleanerFn,
+    cancel: &AtomicBool,
+    timeout: Duration,
+    grace: Duration,
+) -> Result<CleaningResult, String> {
+    let (tx, rx) = channel();
+    std::thread::spawn(move || {
+        let out = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            function(RunOptions::execute().with_skips())
+        }));
+        let _ = tx.send(match out {
+            Ok(Ok(r)) => Ok(r),
+            Ok(Err(e)) => Err(short_error(&e)),
+            Err(_) => Err("Cleaner crashed".to_string()),
+        });
+    });
+    let started = Instant::now();
+    let mut cancelled_at: Option<Instant> = None;
+    loop {
+        match rx.recv_timeout(Duration::from_millis(100)) {
+            Ok(r) => return r,
+            Err(RecvTimeoutError::Disconnected) => return Err("Cleaner crashed".to_string()),
+            Err(RecvTimeoutError::Timeout) => {}
+        }
+        if cancel.load(Ordering::SeqCst) && cancelled_at.is_none() {
+            cancelled_at = Some(Instant::now());
+        }
+        if cancelled_at.is_some_and(|t| t.elapsed() >= grace) {
+            return Err("Cancelled (did not stop in time)".to_string());
+        }
+        if started.elapsed() >= timeout {
+            return Err(format!("Timed out after {}s", timeout.as_secs()));
+        }
+    }
+}
+
+fn spawn_with(
+    jobs: Vec<Job>,
+    skipped: Vec<PathBuf>,
+    is_root: bool,
+    timeout: Duration,
+    grace: Duration,
+) -> RunHandle {
     let (tx, rx) = channel();
     let cancel = Arc::new(AtomicBool::new(false));
     let flag = Arc::clone(&cancel);
@@ -57,14 +125,7 @@ pub fn spawn(jobs: Vec<Job>, skipped: Vec<PathBuf>, is_root: bool) -> RunHandle 
                 if requires_root && !is_root && cleansys_core::cached_sudo_password().is_none() {
                     Err("Requires sudo - restart with 'sudo cleansys'".to_string())
                 } else {
-                    function(RunOptions::execute().with_skips()).map_err(|e| {
-                        e.to_string()
-                            .split(':')
-                            .next_back()
-                            .unwrap_or("Unknown error")
-                            .trim()
-                            .to_string()
-                    })
+                    run_job(function, &flag, timeout, grace)
                 };
             if tx.send(RunMsg::Finished(cat, item, result)).is_err() {
                 break; // UI gone
@@ -224,5 +285,70 @@ mod tests {
         assert!(!cleansys_core::engine::skip::is_skipped(
             std::path::Path::new("/tui-run-test/keep/me")
         ));
+    }
+
+    fn hang_job() -> Job {
+        (
+            0,
+            0,
+            "hang".into(),
+            cleaner_fn(|_| {
+                std::thread::sleep(Duration::from_secs(30));
+                Ok(CleaningResult::new())
+            }),
+            false,
+        )
+    }
+
+    #[test]
+    fn panicking_cleaner_is_an_error_and_the_run_still_finishes() {
+        let _guard = serial();
+        let bad: Job = (0, 0, "boom".into(), cleaner_fn(|_| panic!("kaboom")), false);
+        let h = spawn(vec![bad, ok_job(0, 1, false)], vec![], false);
+        let msgs = drain(&h);
+        assert!(msgs
+            .iter()
+            .any(|m| matches!(m, RunMsg::Finished(0, 0, Err(e)) if e.contains("crashed"))));
+        assert!(msgs
+            .iter()
+            .any(|m| matches!(m, RunMsg::Finished(0, 1, Ok(_)))));
+    }
+
+    #[test]
+    fn hung_cleaner_times_out_and_the_next_one_runs() {
+        let _guard = serial();
+        let h = spawn_with(
+            vec![hang_job(), ok_job(0, 1, false)],
+            vec![],
+            false,
+            Duration::from_millis(300),
+            Duration::from_secs(10),
+        );
+        let msgs = drain(&h);
+        assert!(msgs
+            .iter()
+            .any(|m| matches!(m, RunMsg::Finished(0, 0, Err(e)) if e.contains("Timed out"))));
+        assert!(msgs
+            .iter()
+            .any(|m| matches!(m, RunMsg::Finished(0, 1, Ok(_)))));
+    }
+
+    #[test]
+    fn cancel_abandons_a_cleaner_that_will_not_stop() {
+        let _guard = serial();
+        let h = spawn_with(
+            vec![hang_job(), ok_job(0, 1, false)],
+            vec![],
+            false,
+            Duration::from_secs(60),
+            Duration::from_millis(300),
+        );
+        std::thread::sleep(Duration::from_millis(100));
+        h.cancel();
+        let msgs = drain(&h);
+        assert!(msgs
+            .iter()
+            .any(|m| matches!(m, RunMsg::Finished(0, 0, Err(e)) if e.contains("Cancelled"))));
+        assert!(msgs.iter().any(|m| matches!(m, RunMsg::Cancelled(0, 1))));
     }
 }
