@@ -155,7 +155,7 @@ jobs:
 
   # ── 5. Docs ──────────────────────────────────────────────────────────────────
   doc:
-    # run docs generation on nightly so doc(cfg) etc. are available.
+    # Stable: nightly rustc currently hits a query-cycle error compiling zvariant_utils.
     name: doc
     runs-on: ubuntu-latest
     steps:
@@ -181,8 +181,8 @@ jobs:
             sleep $((attempt*15))
             [ "$attempt" = 4 ] && exit 1
           done
-      - name: Install Rust nightly
-        uses: dtolnay/rust-toolchain@nightly
+      - name: Install Rust stable
+        uses: dtolnay/rust-toolchain@stable
       - name: Cache Cargo dependencies
         uses: Swatinem/rust-cache@v2
       - name: cargo doc (workspace)
