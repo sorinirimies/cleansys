@@ -288,7 +288,7 @@ fn disk_gauges(f: &mut Frame, app: &App, area: Rect, reclaimable: u64) {
             };
             f.render_widget(
                 percent_gauge(
-                    "💽 Disk used",
+                    "Disk used",
                     pct,
                     format!(
                         "{} of {} used · {} free",
@@ -307,7 +307,7 @@ fn disk_gauges(f: &mut Frame, app: &App, area: Rect, reclaimable: u64) {
             };
             f.render_widget(
                 percent_gauge(
-                    "♻ Reclaimable (of used)",
+                    "Reclaimable (of used)",
                     share,
                     format!(
                         "{} · {:.1}% of used space{}",
@@ -327,7 +327,7 @@ fn disk_gauges(f: &mut Frame, app: &App, area: Rect, reclaimable: u64) {
         None => {
             f.render_widget(
                 Paragraph::new("Disk usage is not available on this platform")
-                    .block(frame_block(" 💽 Disk ")),
+                    .block(frame_block(" Disk ")),
                 area,
             );
         }
@@ -342,7 +342,7 @@ pub fn render_dashboard(f: &mut Frame, app: &App, area: Rect) {
         area,
         94,
         92,
-        " 📊 System dashboard ",
+        " System dashboard ",
         " Esc/D close · R rescan ",
     );
     let d = dashboard_data(app);
@@ -363,7 +363,7 @@ pub fn render_dashboard(f: &mut Frame, app: &App, area: Rect) {
         let msg = if app.board.is_scanning() {
             "⠿ Measuring what every cleaner can free…"
         } else {
-            "Nothing to clean right now — the system is tidy ✨"
+            "Nothing to clean right now — the system is tidy"
         };
         f.render_widget(
             Paragraph::new(heading(msg.to_string())).block(frame_block(" Reclaimable ")),
@@ -443,7 +443,7 @@ pub fn render_detail(f: &mut Frame, app: &App, area: Rect) {
         area,
         92,
         88,
-        " 🔎 Cleaner details ",
+        " Cleaner details ",
         " ↑/↓ other cleaner · ←/Esc close ",
     );
     let Some((ci, ii)) = app.current_item() else {
@@ -470,7 +470,7 @@ pub fn render_detail(f: &mut Frame, app: &App, area: Rect) {
     let info = app.board.get(ci, ii);
     let size_line = match info {
         Some(i) if i.error.is_some() => {
-            format!("⚠ scan failed: {}", i.error.clone().unwrap_or_default())
+            format!("! scan failed: {}", i.error.clone().unwrap_or_default())
         }
         Some(i) => format!("Would free {} in {} item(s)", format_size(i.bytes), i.items),
         None => "Not measured yet…".to_string(),
@@ -617,9 +617,9 @@ pub fn render_report(f: &mut Frame, app: &App, area: Rect) {
         94,
         92,
         if live {
-            " 🧹 Cleaning report (live) "
+            " Cleaning report (live) "
         } else {
-            " 🎉 Cleaning report "
+            " Cleaning report "
         },
         " Esc/Enter close · P reopen ",
     );
@@ -637,7 +637,7 @@ pub fn render_report(f: &mut Frame, app: &App, area: Rect) {
 
     let (icon, color) = match summary {
         Some(s) if s.cancelled => ("⏹ Cancelled", th().warning),
-        Some(s) if s.failed > 0 => ("⚠ Done with problems", th().warning),
+        Some(s) if s.failed > 0 => ("! Done with problems", th().warning),
         Some(_) => ("✓ Done", th().success),
         None => ("⠿ Running", th().accent),
     };
@@ -698,7 +698,7 @@ pub fn render_report(f: &mut Frame, app: &App, area: Rect) {
             let gain = now.free as i64 - before.free as i64;
             f.render_widget(
                 percent_gauge(
-                    "💽 Disk used now",
+                    "Disk used now",
                     now.used_percent(),
                     format!(
                         "{:.1}% → was {:.1}% · free {} ({}{})",
@@ -713,7 +713,7 @@ pub fn render_report(f: &mut Frame, app: &App, area: Rect) {
                 gauges[1],
             );
         }
-        _ => f.render_widget(frame_block(" 💽 Disk "), gauges[1]),
+        _ => f.render_widget(frame_block(" Disk "), gauges[1]),
     }
 
     if r.cleaners.is_empty() {

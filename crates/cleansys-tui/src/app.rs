@@ -423,7 +423,7 @@ impl App {
             Ok(()) => true,
             Err(e) => {
                 self.settings_message = format!("Could not save: {e}");
-                self.log(format!("❌ Could not save settings: {e}"));
+                self.log(format!("✗ Could not save settings: {e}"));
                 false
             }
         }
@@ -439,7 +439,7 @@ impl App {
             s.hide_empty = Some(hide);
             s.confirm_before_run = Some(confirm);
         }) {
-            self.log(format!("❌ Could not save preferences: {e}"));
+            self.log(format!("✗ Could not save preferences: {e}"));
         }
     }
 
@@ -508,7 +508,7 @@ impl App {
             cleansys_core::THEME_NAMES[self.theme_index].to_string()
         };
         if let Err(e) = cleansys_core::update_settings(|s| s.theme_name = Some(name)) {
-            self.log(format!("❌ Could not save theme: {e}"));
+            self.log(format!("✗ Could not save theme: {e}"));
         }
     }
 
@@ -950,7 +950,7 @@ impl App {
         for (name, function) in selected {
             match function(cleansys_core::RunOptions::preview().with_skips()) {
                 Ok(result) => self.preview_results.push((name, result)),
-                Err(e) => self.log(format!("⚠️  Preview failed for {name}: {e}")),
+                Err(e) => self.log(format!("! Preview failed for {name}: {e}")),
             }
         }
         cleansys_core::engine::skip::clear_skipped();
@@ -1194,7 +1194,7 @@ impl App {
                     {
                         item.status = Some(Status::Running);
                         let name = item.name.clone();
-                        self.log(format!("🔄 Running: {name}"));
+                        self.log(format!("▶ Running: {name}"));
                         self.run_current = Some(name);
                     }
                 }
@@ -1243,7 +1243,7 @@ impl App {
                     self.log(format!("ℹ️  {name}: nothing to clean"));
                 } else {
                     self.log(format!(
-                        "✅ {name}: freed {} across {} item(s)",
+                        "✓ {name}: freed {} across {} item(s)",
                         format_size(bytes),
                         res.item_count()
                     ));
@@ -1257,7 +1257,7 @@ impl App {
             }
             Err(msg) => {
                 item.status = Some(Status::Error(msg.clone()));
-                self.log(format!("❌ {name}: {msg}"));
+                self.log(format!("✗ {name}: {msg}"));
             }
         }
     }
@@ -1287,7 +1287,7 @@ impl App {
             cancelled,
         };
         let line = format!(
-            "🎉 Cleaning {} — freed {}",
+            "✓ Cleaning {} — freed {}",
             if cancelled { "cancelled" } else { "complete" },
             format_size(summary.freed)
         );
@@ -1394,7 +1394,7 @@ impl App {
                             // Authentication failed, stay on prompt
                         }
                         Err(e) => {
-                            self.log(format!("❌ Authentication error: {e}"));
+                            self.log(format!("✗ Authentication error: {e}"));
                             self.password_prompt.hide();
                             self.needs_sudo = false;
                             self.pending_operations.clear();

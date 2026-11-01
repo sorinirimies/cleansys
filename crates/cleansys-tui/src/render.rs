@@ -148,7 +148,7 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
     let mut left = vec![
         Span::raw(" "),
         Span::styled(
-            "🧹 CleanSys",
+            "CleanSys",
             Style::default().fg(t.accent).add_modifier(Modifier::BOLD),
         ),
         Span::raw(" "),
@@ -190,12 +190,12 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
         let searching = app.filter_active || !app.filter.is_empty();
         let text = if searching {
             format!(
-                "🔍 {}{}",
+                "/ {}{}",
                 app.filter,
                 if app.filter_active { "▏" } else { "" }
             )
         } else {
-            "🔍 / search cleaners…".to_string()
+            "/ search cleaners…".to_string()
         };
         let style = if searching {
             Style::default().fg(t.foreground)
@@ -436,9 +436,9 @@ fn render_activity_log(f: &mut Frame, app: &App, area: Rect) {
     let lines: Vec<Line> = app.operation_logs[start..]
         .iter()
         .map(|l| {
-            let color = if l.starts_with('❌') {
+            let color = if l.starts_with('✗') {
                 crate::theme::th().error
-            } else if l.starts_with('✅') || l.starts_with('🎉') {
+            } else if l.starts_with('✓') {
                 crate::theme::th().success
             } else {
                 crate::theme::th().secondary
@@ -592,7 +592,7 @@ fn render_space_treemap(f: &mut Frame, app: &App, area: Rect) {
     let chart = tui_chart::Treemap::new(items)
         .gradient(crate::theme::th().border, crate::theme::th().success)
         .show_values(false)
-        .block(panel("🗺 Space"));
+        .block(panel("Space"));
     f.render_widget(chart, area);
 }
 
@@ -696,7 +696,7 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
     }
 
     let list =
-        List::new(items).block(panel("📂 Categories").title_bottom(scan_line(app).right_aligned()));
+        List::new(items).block(panel("Categories").title_bottom(scan_line(app).right_aligned()));
     f.render_widget(list, area);
 }
 
@@ -965,7 +965,7 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
             if card_lines == 3 {
                 let path = info
                     .and_then(|s| s.top_path.as_deref())
-                    .map(|p| format!("📁 {}", shorten_left(p, inner_w.saturating_sub(8))))
+                    .map(|p| format!("▸ {}", shorten_left(p, inner_w.saturating_sub(8))))
                     .unwrap_or_default();
                 lines.push(Line::from(vec![
                     Span::raw("    "),
@@ -1017,7 +1017,7 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
         } else if app.board.is_scanning() {
             "Scanning your system…"
         } else {
-            "Nothing to clean here — already tidy ✨  (e: show empty)"
+            "Nothing to clean here — already tidy (e: show empty)"
         };
         f.render_widget(
             Paragraph::new(Span::styled(
@@ -1144,11 +1144,11 @@ fn render_action_bar(f: &mut Frame, app: &App, area: Rect) {
     let label = if app.is_running {
         format!("{} Cleaning…", cleansys_core::anim::spinner(app.anim_tick))
     } else if n == 0 {
-        "🧹 Clean".to_string()
+        "Clean".to_string()
     } else if app.board.is_scanning() {
-        format!("🧹 Clean {n}")
+        format!("Clean {n}")
     } else {
-        format!("🧹 Clean {n} · {}", format_size(bytes))
+        format!("Clean {n} · {}", format_size(bytes))
     };
     let btn_w = (label.chars().count() as u16 + 6).min(inner.width / 2);
     let parts = Layout::default()
@@ -1499,30 +1499,30 @@ fn render_help(f: &mut Frame, area: Rect) {
     let l = |t: &'static str| Line::from(vec![Span::raw(t)]);
     let help_text = vec![
         Line::from(vec![Span::styled(
-            "🔍 Cleansys Help",
+            "Cleansys Help",
             Style::default()
                 .fg(crate::theme::th().accent)
                 .add_modifier(Modifier::BOLD),
         )]),
         l(""),
-        h("📍 Navigation:"),
+        h("Navigation:"),
         l("  ↑/↓ (j/k): Navigate cleaners      Home/End: first / last"),
         l("  Tab/Shift+Tab: Switch categories"),
         l("  /: Filter cleaners across all categories (Esc clears)"),
         l("  e: Hide/show cleaners with nothing to clean"),
         l(""),
-        h("⚙ Settings & info:"),
+        h("Settings & info:"),
         l("  o: Settings (idle days, scan depth, folders, exclusions, confirm, hide empty)"),
         l("  i: About — version, developer, GitHub (Enter opens a link)    Tab: switch tab"),
         l(""),
-        h("🔧 Selecting:"),
+        h("Selecting:"),
         l("  Space: Toggle the highlighted cleaner"),
         l("  →: Expand a cleaner's paths (↑/↓ move, Space tick, a/n all/none, ← back)"),
         l("  a / n: Select / deselect all in this category    A / N: everywhere"),
         l("  r: Select the recommended set (safe, user-land cleaners)"),
         l("  [ / ]: Idle days for project build output (fewer / more), then re-scans"),
         l(""),
-        h("🧹 Cleaning:"),
+        h("Cleaning:"),
         l("  d: Preview (dry-run) — exact paths and sizes, deletes nothing"),
         l("  Enter: Run the selected cleaners (asks for confirmation; y toggles that)"),
         l("  Progress, the outcome and the activity log appear under the list;"),
@@ -1532,17 +1532,17 @@ fn render_help(f: &mut Frame, area: Rect) {
         l("  P: Report of the last clean (opens automatically when a clean finishes)"),
         l("  T: Theme picker (System follows your OS light/dark; ↑/↓ previews, Esc closes)"),
         l(""),
-        h("🔒 System Operations:"),
+        h("System Operations:"),
         l("  System cleaners need sudo/root: run 'sudo cleansys' or enter your"),
         l("  password when prompted. Items marked (root) ask for elevation."),
         l(""),
-        h("🔄 Other:"),
+        h("Other:"),
         l("  ?: Show/hide help"),
         l("  q: Quit"),
     ];
 
     let help = Paragraph::new(help_text)
-        .block(Block::default().title("📚 Help").borders(Borders::ALL))
+        .block(Block::default().title("Help").borders(Borders::ALL))
         .wrap(Wrap { trim: true });
 
     f.render_widget(help, area);
@@ -1571,7 +1571,7 @@ fn render_confirm_run(f: &mut Frame, app: &App, area: Rect) {
     let selected_count = app.pending_run_selection.len();
     let mut lines = vec![
         Line::from(vec![Span::styled(
-            "⚠️  Confirm Cleaning",
+            "! Confirm Cleaning",
             Style::default()
                 .fg(crate::theme::th().warning)
                 .add_modifier(Modifier::BOLD),
@@ -1764,7 +1764,7 @@ fn render_preview(f: &mut Frame, app: &App, area: Rect) {
 
     let mut lines = vec![
         Line::from(vec![Span::styled(
-            "🔍 Preview (dry-run)",
+            "Preview (dry-run)",
             Style::default()
                 .fg(crate::theme::th().accent)
                 .add_modifier(Modifier::BOLD),
@@ -1841,7 +1841,7 @@ fn render_admin_notice(f: &mut Frame, area: Rect) {
 
     let lines = vec![
         Line::from(vec![Span::styled(
-            "⚠️  Administrator privileges required",
+            "! Administrator privileges required",
             Style::default()
                 .fg(crate::theme::th().warning)
                 .add_modifier(Modifier::BOLD),
@@ -2180,7 +2180,7 @@ fn render_theme_picker(f: &mut Frame, app: &App, area: Rect) {
     let block = Block::default()
         .title(Span::styled(
             format!(
-                " 🎨 Theme · {}/{} ",
+                " Theme · {}/{} ",
                 app.picker_index() + 1,
                 crate::theme::PICKER_LEN
             ),
