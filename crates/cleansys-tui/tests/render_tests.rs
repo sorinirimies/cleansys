@@ -675,3 +675,18 @@ fn chart_overlays_survive_every_terminal_size() {
         }
     }
 }
+
+#[test]
+fn gui_style_header_cards_and_action_bar_are_drawn() {
+    let mut app = app_with_categories();
+    app.categories[0].items[0].selected = true;
+    for (w, h) in [(160, 45), (100, 32)] {
+        app.handle_resize(w, h);
+        let text = screen_text(&mut app, w, h);
+        assert!(text.contains("CleanSys"), "{w}x{h}: brand");
+        assert!(text.contains("USER"), "{w}x{h}: scope badge");
+        assert!(text.contains("1 selected"), "{w}x{h}: action bar summary");
+        assert!(text.contains("Clean"), "{w}x{h}: clean button");
+        assert!(text.contains('╭'), "{w}x{h}: rounded panels");
+    }
+}

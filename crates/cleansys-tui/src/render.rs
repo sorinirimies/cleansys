@@ -2,12 +2,11 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, List, ListItem, Paragraph, Wrap},
+    widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph, Wrap},
     Frame,
 };
 // Using tui-checkbox library for consistent checkbox symbols across the application
 use tui_checkbox::symbols as checkbox_symbols;
-use tui_spinner::{FluxFrames, FluxSpinner};
 
 use crate::app::{App, InfoTab, InputKind, SettingsRow};
 use cleansys_core::{format_size, Status};
@@ -39,10 +38,10 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         (2, 2, 8)
     } else if app.terminal_height < 40 {
         // Medium terminals: standard UI
-        (3, 3, 10)
+        (3, 4, 10)
     } else {
         // Large terminals: spacious UI
-        (3, 3, 12)
+        (3, 4, 12)
     };
 
     let chunks = Layout::default()
@@ -90,122 +89,140 @@ pub fn ui(f: &mut Frame, app: &mut App) {
     }
 }
 
+/// Dark text for badges / buttons drawn on a coloured background.
+fn on_accent() -> Color {
+    match crate::theme::bg(&crate::theme::th()) {
+        Color::Reset => Color::Black,
+        c => c,
+    }
+}
+
+/// A small filled label (` MODERATE `, ` USER `) like the GUI's badges.
+fn badge(text: &str, bg: Color) -> Span<'static> {
+    Span::styled(
+        format!(" {text} "),
+        Style::default()
+            .fg(on_accent())
+            .bg(bg)
+            .add_modifier(Modifier::BOLD),
+    )
+}
+
+/// `key label` pairs as spans: bold coloured key, muted label.
+fn key_hints(pairs: &[(&str, &str, Color)]) -> Vec<Span<'static>> {
+    let mut v = Vec::new();
+    for (i, (k, label, color)) in pairs.iter().enumerate() {
+        if i > 0 {
+            v.push(Span::styled(
+                "  ·  ",
+                Style::default().fg(crate::theme::th().muted),
+            ));
+        }
+        v.push(Span::styled(
+            (*k).to_string(),
+            Style::default().fg(*color).add_modifier(Modifier::BOLD),
+        ));
+        v.push(Span::styled(
+            format!(" {label}"),
+            Style::default().fg(crate::theme::th().muted),
+        ));
+    }
+    v
+}
+
+/// The header bar, like the GUI's: brand + scope badge on the left, search field in the
+/// middle and the global keys on the right.
 fn render_title(f: &mut Frame, app: &App, area: Rect) {
-    // Adjust title content based on terminal width
-    let title_lines = if app.terminal_width < 80 {
-        // Narrow terminals: shortened version with dimensions indicator
-        let mut lines = vec![Line::from(vec![
-            Span::styled(
-                "Cleansys",
-                Style::default()
-                    .fg(crate::theme::th().accent)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::styled(
-                format!(" {}", cleansys_core::appinfo::version_label()),
-                Style::default().fg(crate::theme::th().warning),
-            ),
-            Span::raw(" - System Cleaner"),
-            if app.terminal_width < 60 || app.terminal_height < 20 {
-                Span::styled(
-                    format!(" [{}x{}]", app.terminal_width, app.terminal_height),
-                    Style::default().fg(crate::theme::th().muted),
-                )
-            } else {
-                Span::raw("")
-            },
-        ])];
+    let t = crate::theme::th();
+    let boxed = area.height >= 3;
+    let block = Block::default()
+        .borders(if boxed { Borders::ALL } else { Borders::BOTTOM })
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(t.border));
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+    if inner.height == 0 || inner.width < 10 {
+        return;
+    }
 
-        // Add help line
-        lines.push(Line::from(vec![
-            Span::styled("?", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw(" help | "),
-            Span::styled("o", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw(" settings | "),
-            Span::styled("i", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw(" about | "),
-            Span::styled("q", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw(" quit"),
-        ]));
+    let mut left = vec![
+        Span::raw(" "),
+        Span::styled(
+            "🧹 CleanSys",
+            Style::default().fg(t.accent).add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" "),
+        if app.is_root {
+            badge("ROOT", t.error)
+        } else {
+            badge("USER", t.secondary)
+        },
+    ];
+    if inner.width >= 60 {
+        left.push(Span::styled(
+            format!(" {}", cleansys_core::appinfo::version_label()),
+            Style::default().fg(t.muted),
+        ));
+    }
+    if app.is_running {
+        left.push(Span::styled(
+            format!("  {} RUNNING", cleansys_core::anim::spinner(app.anim_tick)),
+            Style::default().fg(t.warning).add_modifier(Modifier::BOLD),
+        ));
+    }
 
-        lines
+    let right = if inner.width >= 100 {
+        key_hints(&[
+            ("?", "help", t.accent),
+            ("o", "settings", t.accent),
+            ("i", "about", t.accent),
+            ("q", "quit", t.error),
+        ])
     } else {
-        // Wide terminals: full version
-        vec![
-            Line::from(vec![
-                Span::styled(
-                    "Cleansys",
-                    Style::default()
-                        .fg(crate::theme::th().accent)
-                        .add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    format!(" {}", cleansys_core::appinfo::version_label()),
-                    Style::default().fg(crate::theme::th().warning),
-                ),
-                Span::raw(" - Modern System Cleaner for Linux, macOS & Windows"),
-            ]),
-            Line::from(vec![
-                Span::raw("Press "),
-                Span::styled("?", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(" help · "),
-                Span::styled("o", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(" settings · "),
-                Span::styled("i", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(" about · "),
-                Span::styled("q", Style::default().add_modifier(Modifier::BOLD)),
-                Span::raw(" quit"),
-            ]),
-        ]
+        key_hints(&[("?", "help", t.accent), ("q", "quit", t.error)])
     };
+    let right_w = Line::from(right.clone()).width() as u16 + 1;
+    let left_w = Line::from(left.clone()).width() as u16;
 
-    let title = Paragraph::new(title_lines).block(Block::default().borders(Borders::BOTTOM));
-
-    f.render_widget(title, area);
-
-    // Animated "loading" spinner (via the tui-spinner crate) in the
-    // top-right corner of the title bar while a cleaning run is active.
-    if app.is_running && area.width > 14 {
-        let spinner_width = 12u16;
-        let spinner_area = Rect {
-            x: area.x + area.width.saturating_sub(spinner_width + 1),
-            y: area.y,
-            width: spinner_width,
+    // The search field sits between the two when there is room.
+    let room = inner.width.saturating_sub(left_w + right_w + 2);
+    if room >= 18 {
+        let searching = app.filter_active || !app.filter.is_empty();
+        let text = if searching {
+            format!(
+                "🔍 {}{}",
+                app.filter,
+                if app.filter_active { "▏" } else { "" }
+            )
+        } else {
+            "🔍 / search cleaners…".to_string()
+        };
+        let style = if searching {
+            Style::default().fg(t.foreground)
+        } else {
+            Style::default().fg(t.muted)
+        };
+        let field = Rect {
+            x: inner.x + left_w + 2,
+            y: inner.y,
+            width: room.saturating_sub(1),
             height: 1,
         };
-
-        let label = Line::from(vec![
-            Span::raw(" "),
-            Span::styled(
-                "RUNNING",
-                Style::default()
-                    .fg(crate::theme::th().warning)
-                    .add_modifier(Modifier::BOLD),
-            ),
-            Span::raw(" "),
-        ]);
-        let label_width = label.width() as u16;
-
-        let (label_area, glyph_area) = (
-            Rect {
-                width: label_width.min(spinner_width),
-                ..spinner_area
-            },
-            Rect {
-                x: spinner_area.x + label_width.min(spinner_width),
-                width: spinner_area.width.saturating_sub(label_width),
-                ..spinner_area
-            },
-        );
-
-        f.render_widget(Paragraph::new(label), label_area);
+        let mut shown: String = text.chars().take(room as usize - 1).collect();
+        shown.push(' ');
         f.render_widget(
-            FluxSpinner::new(app.animation_frame as u64)
-                .frames(FluxFrames::CLASSIC)
-                .color(crate::theme::th().accent),
-            glyph_area,
+            Paragraph::new(Span::styled(
+                shown,
+                style.bg(t.surface.unwrap_or(t.selection_bg)),
+            )),
+            field,
         );
     }
+    f.render_widget(Paragraph::new(Line::from(left)), inner);
+    f.render_widget(
+        Paragraph::new(Line::from(right)).alignment(ratatui::layout::Alignment::Right),
+        inner,
+    );
 }
 
 fn render_main_content(f: &mut Frame, app: &mut App, area: Rect) {
@@ -456,7 +473,7 @@ fn size_style(bytes: u64) -> Style {
     }
 }
 
-/// One animated spinner glyph from the `tui-spinner` crate, as spans that can be dropped
+/// One animated spinner glyph, as spans that can be dropped
 /// into any `Line` (the widget implements `Into<Text>`).
 fn spinner_spans(app: &App) -> Vec<Span<'static>> {
     // The same braille spinner the GUI shows (cleansys_core::anim).
@@ -493,16 +510,30 @@ fn to_free_spans(app: &App) -> Vec<Span<'static>> {
 }
 
 /// `left` spans, then `right` pushed against the right edge of `width` columns.
-fn row_line<'a>(mut left: Vec<Span<'a>>, right: Span<'a>, width: usize) -> Line<'a> {
+fn row_line<'a>(left: Vec<Span<'a>>, right: Span<'a>, width: usize) -> Line<'a> {
+    row_line_spans(left, vec![right], width)
+}
+
+/// Like [`row_line`] with several spans on the right.
+fn row_line_spans<'a>(mut left: Vec<Span<'a>>, right: Vec<Span<'a>>, width: usize) -> Line<'a> {
     let used: usize = left
         .iter()
+        .chain(right.iter())
         .map(|s| s.content.chars().count())
-        .sum::<usize>()
-        + right.content.chars().count();
+        .sum();
     let gap = width.saturating_sub(used).max(1);
     left.push(Span::raw(" ".repeat(gap)));
-    left.push(right);
+    left.extend(right);
     Line::from(left)
+}
+
+/// A rounded panel in the theme's border colour (the GUI's cards).
+fn panel<'a>(title: impl Into<Line<'a>>) -> Block<'a> {
+    Block::default()
+        .title(title)
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(crate::theme::th().border))
 }
 
 /// `true` for categories on the root/system side (kept visibly separate).
@@ -561,12 +592,12 @@ fn render_space_treemap(f: &mut Frame, app: &App, area: Rect) {
     let chart = tui_chart::Treemap::new(items)
         .gradient(crate::theme::th().border, crate::theme::th().success)
         .show_values(false)
-        .block(Block::default().title("🗺 Space").borders(Borders::ALL));
+        .block(panel("🗺 Space"));
     f.render_widget(chart, area);
 }
 
 fn render_categories(f: &mut Frame, app: &App, area: Rect) {
-    let inner_w = area.width.saturating_sub(4) as usize;
+    let inner_w = area.width.saturating_sub(2) as usize;
     let mut items: Vec<ListItem> = Vec::new();
     let mut shown_user_header = false;
     let mut shown_root_header = false;
@@ -581,21 +612,45 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
         let root = is_root_category(category);
         if !root && !shown_user_header {
             shown_user_header = true;
-            items.push(ListItem::new(Line::from(Span::styled(
-                "USER LAND",
-                Style::default()
-                    .fg(crate::theme::th().muted)
-                    .add_modifier(Modifier::BOLD),
-            ))));
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled(
+                    "USER LAND",
+                    Style::default()
+                        .fg(crate::theme::th().muted)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    if inner_w >= 34 {
+                        "  no password needed"
+                    } else {
+                        ""
+                    },
+                    Style::default()
+                        .fg(crate::theme::th().muted)
+                        .add_modifier(Modifier::DIM),
+                ),
+            ])));
         }
         if root && !shown_root_header {
             shown_root_header = true;
-            items.push(ListItem::new(Line::from(Span::styled(
-                "SYSTEM · ROOT",
-                Style::default()
-                    .fg(crate::theme::th().muted)
-                    .add_modifier(Modifier::BOLD),
-            ))));
+            items.push(ListItem::new(Line::from(vec![
+                Span::styled(
+                    "SYSTEM · ROOT",
+                    Style::default()
+                        .fg(crate::theme::th().muted)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    match (inner_w >= 34, app.is_root) {
+                        (false, _) => "",
+                        (true, true) => "  running as root",
+                        (true, false) => "  asks for your password",
+                    },
+                    Style::default()
+                        .fg(crate::theme::th().muted)
+                        .add_modifier(Modifier::DIM),
+                ),
+            ])));
         }
 
         let active = i == app.category_index && app.filter.is_empty();
@@ -604,12 +659,14 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
             .name
             .trim_end_matches(cleansys_core::model::ROOT_SUFFIX)
             .to_string();
-        let tick_text = if ticked > 0 {
-            format!(" ({ticked}✓)")
-        } else {
-            String::new()
-        };
-        let right = match app.board.category_bytes_when_done(i) {
+        let mut right: Vec<Span> = Vec::new();
+        if ticked > 0 {
+            right.push(Span::styled(
+                format!("{ticked}✓  "),
+                Style::default().fg(crate::theme::th().success),
+            ));
+        }
+        right.push(match app.board.category_bytes_when_done(i) {
             Some(b) if b > 0 => Span::styled(format_size(b), size_style(b)),
             Some(_) => Span::styled("—", Style::default().fg(crate::theme::th().muted)),
             None if app.board.is_scanning() => spinner_spans(app)
@@ -617,38 +674,29 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
                 .next()
                 .unwrap_or_else(|| Span::raw("…")),
             None => Span::raw(""),
-        };
+        });
         // Truncate the name so the size column never gets pushed out.
-        let budget = inner_w
-            .saturating_sub(2 + tick_text.chars().count() + right.content.chars().count() + 1);
+        let right_w: usize = right.iter().map(|s| s.content.chars().count()).sum();
+        let budget = inner_w.saturating_sub(2 + right_w + 1);
         let name = if name.chars().count() > budget && budget > 1 {
             format!("{}…", name.chars().take(budget - 1).collect::<String>())
         } else {
             name
         };
-        let mut left = vec![Span::raw(if active { "▶ " } else { "  " }), Span::raw(name)];
-        if ticked > 0 {
-            left.push(Span::styled(
-                tick_text,
-                Style::default().fg(crate::theme::th().success),
-            ));
-        }
+        let left = vec![Span::raw(if active { "▎ " } else { "  " }), Span::raw(name)];
         let style = if active {
             Style::default()
-                .fg(crate::theme::th().warning)
+                .fg(crate::theme::th().selection_fg)
+                .bg(crate::theme::th().selection_bg)
                 .add_modifier(Modifier::BOLD)
         } else {
             Style::default()
         };
-        items.push(ListItem::new(row_line(left, right, inner_w)).style(style));
+        items.push(ListItem::new(row_line_spans(left, right, inner_w)).style(style));
     }
 
-    let list = List::new(items).block(
-        Block::default()
-            .title("📂 Categories")
-            .title_bottom(scan_line(app).right_aligned())
-            .borders(Borders::ALL),
-    );
+    let list =
+        List::new(items).block(panel("📂 Categories").title_bottom(scan_line(app).right_aligned()));
     f.render_widget(list, area);
 }
 
@@ -785,9 +833,18 @@ fn render_cleaner_pane(f: &mut Frame, app: &mut App, area: Rect, show_category_b
 }
 
 fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
-    let inner_w = area.width.saturating_sub(4) as usize; // borders + highlight symbol
+    let inner_w = area.width.saturating_sub(3) as usize; // borders + highlight symbol
     let visible = app.view_items();
     let filtering = !app.filter.trim().is_empty();
+    // Rows per cleaner: a 3-line card (name, description, path) when there is room for a
+    // handful of them, 2 lines on medium panes, one dense line on small ones.
+    let card_lines = if area.height >= 26 {
+        3
+    } else if area.height >= 14 {
+        2
+    } else {
+        1
+    };
 
     let mut items: Vec<ListItem> = visible
         .iter()
@@ -826,16 +883,14 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
             ];
             match item.risk {
                 cleansys_core::Risk::Safe => {}
-                cleansys_core::Risk::Moderate => left.push(Span::styled(
-                    " ~",
-                    Style::default().fg(crate::theme::th().warning),
-                )),
-                cleansys_core::Risk::Caution => left.push(Span::styled(
-                    " !",
-                    Style::default()
-                        .fg(crate::theme::th().error)
-                        .add_modifier(Modifier::BOLD),
-                )),
+                cleansys_core::Risk::Moderate => {
+                    left.push(Span::raw(" "));
+                    left.push(badge("MODERATE", crate::theme::th().warning));
+                }
+                cleansys_core::Risk::Caution => {
+                    left.push(Span::raw(" "));
+                    left.push(badge("CAUTION", crate::theme::th().error));
+                }
             }
             if item.requires_root {
                 left.push(Span::styled(
@@ -887,7 +942,37 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
                     None => Span::raw(""),
                 },
             };
-            ListItem::new(row_line(left, right, inner_w))
+            let first = row_line(left, right, inner_w);
+            if card_lines == 1 {
+                return ListItem::new(first);
+            }
+            // Card: description (+ item count) and, when tall enough, the biggest path.
+            let count = match info {
+                Some(s) if s.bytes > 0 => format!("{} item(s)", s.items),
+                _ => String::new(),
+            };
+            let desc_room = inner_w.saturating_sub(count.chars().count() + 6);
+            let desc: String = item.description.chars().take(desc_room).collect();
+            let second = row_line(
+                vec![
+                    Span::raw("    "),
+                    Span::styled(desc, Style::default().fg(crate::theme::th().muted)),
+                ],
+                Span::styled(count, Style::default().fg(crate::theme::th().muted)),
+                inner_w,
+            );
+            let mut lines = vec![first, second];
+            if card_lines == 3 {
+                let path = info
+                    .and_then(|s| s.top_path.as_deref())
+                    .map(|p| format!("📁 {}", shorten_left(p, inner_w.saturating_sub(8))))
+                    .unwrap_or_default();
+                lines.push(Line::from(vec![
+                    Span::raw("    "),
+                    Span::styled(path, Style::default().fg(crate::theme::th().info)),
+                ]));
+            }
+            ListItem::new(lines)
         })
         .collect();
 
@@ -910,16 +995,12 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
         )
     };
 
-    let mut block = Block::default().title(title).borders(Borders::ALL);
+    let mut block = panel(title);
     if app.filter_active {
-        block = block.border_style(Style::default().fg(crate::theme::th().accent));
+        block = block.border_style(Style::default().fg(crate::theme::th().border_focused));
     }
     let block = block.title_bottom({
         let mut spans = scan_line(app).spans;
-        spans.push(Span::styled(
-            "   ~ moderate  ! caution",
-            Style::default().fg(crate::theme::th().muted),
-        ));
         spans.push(Span::styled(
             format!(
                 "   idle ≥ {} [ ]",
@@ -970,9 +1051,9 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
         .highlight_style(
             Style::default()
                 .add_modifier(Modifier::BOLD)
-                .bg(crate::theme::th().muted),
+                .bg(crate::theme::th().selection_bg),
         )
-        .highlight_symbol("> ");
+        .highlight_symbol("▎");
 
     f.render_stateful_widget(items_list, area, &mut app.list_view_state);
 }
@@ -1032,12 +1113,182 @@ fn render_item_detail(f: &mut Frame, app: &App, area: Rect) {
         }
     }
     let widget = Paragraph::new(lines)
-        .block(Block::default().title("Details").borders(Borders::ALL))
+        .block(panel("Details"))
         .wrap(Wrap { trim: true });
     f.render_widget(widget, area);
 }
 
+/// The GUI's bottom action bar: selection summary on the left, key hints in the middle and
+/// the big "Clean" button on the right. Needs 4 rows (box + two lines).
+fn render_action_bar(f: &mut Frame, app: &App, area: Rect) {
+    let t = crate::theme::th();
+    let block = Block::default()
+        .borders(Borders::ALL)
+        .border_type(BorderType::Rounded)
+        .border_style(Style::default().fg(t.border));
+    let inner = block.inner(area);
+    f.render_widget(block, area);
+    if inner.height == 0 || inner.width < 20 {
+        return;
+    }
+
+    let n = app
+        .categories
+        .iter()
+        .flat_map(|c| &c.items)
+        .filter(|i| i.selected)
+        .count();
+    let bytes = app.board.selected_bytes(&app.categories);
+
+    // Right: the Clean button (two rows tall, filled).
+    let label = if app.is_running {
+        format!("{} Cleaning…", cleansys_core::anim::spinner(app.anim_tick))
+    } else if n == 0 {
+        "🧹 Clean".to_string()
+    } else if app.board.is_scanning() {
+        format!("🧹 Clean {n}")
+    } else {
+        format!("🧹 Clean {n} · {}", format_size(bytes))
+    };
+    let btn_w = (label.chars().count() as u16 + 6).min(inner.width / 2);
+    let parts = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([
+            Constraint::Length(34.min(inner.width / 2)),
+            Constraint::Min(0),
+            Constraint::Length(btn_w),
+        ])
+        .split(inner);
+
+    let active = n > 0 && !app.is_running;
+    let btn_style = if active {
+        Style::default()
+            .fg(on_accent())
+            .bg(t.primary)
+            .add_modifier(Modifier::BOLD)
+    } else {
+        Style::default()
+            .fg(t.muted)
+            .bg(t.surface.unwrap_or(t.selection_bg))
+    };
+    let btn_rows: Vec<Line> = (0..inner.height)
+        .map(|r| {
+            if r == (inner.height - 1) / 2 {
+                Line::from(label.clone())
+            } else {
+                Line::default()
+            }
+        })
+        .collect();
+    f.render_widget(
+        Paragraph::new(btn_rows)
+            .style(btn_style)
+            .alignment(ratatui::layout::Alignment::Center),
+        parts[2],
+    );
+
+    // Left: "N selected · X to free" / "Y reclaimable in total".
+    let mut top = vec![
+        Span::styled(
+            format!("{n} selected"),
+            Style::default()
+                .fg(t.foreground)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::styled(" · ", Style::default().fg(t.muted)),
+    ];
+    if app.board.is_scanning() {
+        top.extend(spinner_spans(app));
+        top.push(Span::styled(" measuring…", Style::default().fg(t.muted)));
+    } else if n == 0 {
+        top.push(Span::styled(
+            "tick cleaners to free space",
+            Style::default().fg(t.muted),
+        ));
+    } else {
+        top.push(Span::styled(
+            format!("{} to free", format_size(bytes)),
+            Style::default().fg(t.success).add_modifier(Modifier::BOLD),
+        ));
+    }
+    let second = if app.board.complete() {
+        Span::styled(
+            format!(
+                "{} reclaimable in total",
+                format_size(app.board.total_bytes())
+            ),
+            Style::default().fg(t.muted),
+        )
+    } else {
+        Span::styled(
+            format!(
+                "idle ≥ {}  ([ ])",
+                cleansys_core::engine::config::min_age_label(app.min_age_days)
+            ),
+            Style::default().fg(t.muted),
+        )
+    };
+    f.render_widget(
+        Paragraph::new(vec![Line::from(top), Line::from(second)]),
+        Rect {
+            x: parts[0].x + 1,
+            width: parts[0].width.saturating_sub(1),
+            ..parts[0]
+        },
+    );
+
+    // Middle: the keys, two lines, right-aligned.
+    let compact = parts[1].width < 72;
+    let (l1, l2) = if compact {
+        (
+            key_hints(&[
+                ("Space", "sel", t.warning),
+                ("Enter", "run", t.success),
+                ("Tab", "cat", t.accent),
+            ]),
+            key_hints(&[
+                ("S", "", t.accent),
+                ("D", "", t.accent),
+                ("v", "", t.accent),
+                ("?", "help", t.accent),
+                ("q", "quit", t.error),
+            ]),
+        )
+    } else {
+        (
+            key_hints(&[
+                ("Space", "select", t.warning),
+                ("Enter", "run", t.success),
+                ("Tab", "category", t.accent),
+                ("r", "recommended", t.accent),
+                ("/", "search", t.accent),
+            ]),
+            key_hints(&[
+                ("S", "schedule", t.accent),
+                ("D", "dashboard", t.accent),
+                ("v", "details", t.accent),
+                ("L", "log", t.accent),
+                ("?", "help", t.accent),
+                ("q", "quit", t.error),
+            ]),
+        )
+    };
+    let mid = Rect {
+        width: parts[1].width.saturating_sub(1),
+        ..parts[1]
+    };
+    f.render_widget(
+        Paragraph::new(vec![Line::from(l1), Line::from(l2)])
+            .alignment(ratatui::layout::Alignment::Right),
+        mid,
+    );
+}
+
 fn render_footer(f: &mut Frame, app: &App, area: Rect) {
+    if area.height >= 4 && area.width >= 70 {
+        render_action_bar(f, app, area);
+        return;
+    }
     let block = Block::default()
         .borders(Borders::TOP)
         .border_style(Style::default().fg(crate::theme::th().muted));

@@ -40,7 +40,6 @@ crossterm     = "0.29"
 tui-checkbox  = "0.5"
 tui-chart     = "0.6"
 tui-piechart  = "1.4"
-tui-spinner   = "0.5"
 tui-nuances   = "0.1.10"
 clap          = { version = "4.6", features = ["derive", "env"] }
 

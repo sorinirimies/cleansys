@@ -754,7 +754,6 @@ dependencies = [
  "tui-checkbox",
  "tui-nuances",
  "tui-piechart",
- "tui-spinner",
 ]
 
 [[package]]
@@ -5864,16 +5863,6 @@ name = "tui-piechart"
 version = "1.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a3b3d9dfaa69b001a51f98e35af00ad98ebe1a5d8ac4e2e98631704f61ac0536"
-dependencies = [
- "ratatui",
- "tui-nuances",
-]
-
-[[package]]
-name = "tui-spinner"
-version = "0.5.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "94adf69de1718fb5db406fa79e2a674c75ec8016ed04ab3bdf698e757c9856eb"
 dependencies = [
  "ratatui",
  "tui-nuances",
