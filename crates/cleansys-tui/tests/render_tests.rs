@@ -624,6 +624,14 @@ fn report_summarises_a_finished_run() {
     assert_eq!(r.cleaners.len(), 1);
     assert_eq!(r.nothing, 1);
     assert_eq!(r.failed.len(), 1);
+    // Every cleaner that ran is listed, biggest first, with what the scan expected.
+    assert_eq!(r.rows.len(), 3);
+    assert_eq!(r.rows[0].freed, 4_000_000_000);
+    assert_eq!(r.rows[0].planned, 5_000_000_000);
+    assert!(matches!(
+        r.rows[2].outcome,
+        cleansys_tui::charts::Outcome::Failed(_)
+    ));
 }
 
 #[test]

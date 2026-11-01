@@ -16,7 +16,9 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Widget},
     Frame,
 };
-use tui_chart::{RadialBar, RadialRing, RadialSweep, Sankey, SankeyLink, Sparkline};
+use tui_chart::{
+    Bullet, BulletItem, RadialBar, RadialRing, RadialSweep, Sankey, SankeyLink, Sparkline,
+};
 use tui_piechart::{PieChart, PieSlice};
 
 use crate::app::App;
@@ -143,13 +145,41 @@ pub struct ReportData {
     pub nothing: usize,
     /// `(name, message)` of cleaners that failed or were cancelled.
     pub failed: Vec<(String, String)>,
+    /// Every cleaner that ran, biggest freed first, with what the scan expected.
+    pub rows: Vec<ReportRow>,
+}
+
+/// How one cleaner ended, next to what the scan expected from it.
+#[derive(Debug, Clone, PartialEq)]
+pub struct ReportRow {
+    pub name: String,
+    pub outcome: Outcome,
+    pub freed: u64,
+    /// Bytes the scan reported before the clean (0 when unknown).
+    pub planned: u64,
+    pub items: usize,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum Outcome {
+    Freed,
+    Nothing,
+    Failed(String),
 }
 
 pub fn report_data(app: &App) -> ReportData {
     let mut r = ReportData::default();
-    for cat in &app.categories {
+    for (ci, cat) in app.categories.iter().enumerate() {
         let mut cat_sum = 0;
-        for item in &cat.items {
+        for (ii, item) in cat.items.iter().enumerate() {
+            let planned = app.board.get(ci, ii).map_or(0, |i| i.bytes);
+            let row = |outcome, freed, items| ReportRow {
+                name: item.name.clone(),
+                outcome,
+                freed,
+                planned,
+                items,
+            };
             match &item.status {
                 Some(Status::Success(_)) => {
                     r.ok += 1;
@@ -159,9 +189,19 @@ pub fn report_data(app: &App) -> ReportData {
                         r.cleaners.push((item.name.clone(), item.bytes_cleaned));
                         cat_sum += item.bytes_cleaned;
                     }
-                    r.items += item.last_result.as_ref().map_or(0, |x| x.item_count());
+                    let n = item.last_result.as_ref().map_or(0, |x| x.item_count());
+                    r.items += n;
+                    let outcome = if item.bytes_cleaned == 0 {
+                        Outcome::Nothing
+                    } else {
+                        Outcome::Freed
+                    };
+                    r.rows.push(row(outcome, item.bytes_cleaned, n));
                 }
-                Some(Status::Error(m)) => r.failed.push((item.name.clone(), m.clone())),
+                Some(Status::Error(m)) => {
+                    r.failed.push((item.name.clone(), m.clone()));
+                    r.rows.push(row(Outcome::Failed(m.clone()), 0, 0));
+                }
                 _ => {}
             }
         }
@@ -173,6 +213,7 @@ pub fn report_data(app: &App) -> ReportData {
             r.by_category.push((name, cat_sum));
         }
     }
+    r.rows.sort_by_key(|x| std::cmp::Reverse(x.freed));
     r.cleaners.sort_by_key(|(_, b)| std::cmp::Reverse(*b));
     r.by_category.sort_by_key(|(_, b)| std::cmp::Reverse(*b));
     r.freed = r.cleaners.iter().map(|(_, b)| b).sum();
@@ -1099,47 +1140,95 @@ pub fn render_report(f: &mut Frame, app: &App, area: Rect) {
         );
         return;
     }
-    let (left, right_area) = two_panes(rows[2]);
-    f.render_widget(
-        bytes_bars(
-            "Freed per cleaner",
-            &r.cleaners,
-            (left.height.saturating_sub(2) as usize).clamp(1, 10),
-            th().success,
-        ),
-        left,
-    );
-    let Some(right_area) = right_area else {
-        return;
-    };
-    let right = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(if r.failed.is_empty() || right_area.height < 14 {
-            vec![Constraint::Min(6)]
-        } else {
-            vec![
-                Constraint::Min(6),
-                Constraint::Length(2 + r.failed.len().min(4) as u16),
-            ]
-        })
-        .split(right_area);
-    f.render_widget(share_pie("Freed by category", &r.by_category, 6), right[0]);
-    if right.len() > 1 {
-        let lines: Vec<Line> = r
-            .failed
+    let (left, right) = two_panes(rows[2]);
+    f.render_widget(freed_bullets(&r.rows), left);
+    if let Some(right) = right {
+        f.render_widget(ResultList { rows: &r.rows }, right);
+    }
+}
+
+/// Bullet chart: the bar is what was freed, the marker and the shaded bands are what
+/// the scan expected, in the unit that fits the biggest value.
+fn freed_bullets(rows: &[ReportRow]) -> Bullet {
+    let t = th();
+    let top = rows
+        .iter()
+        .map(|x| x.freed.max(x.planned))
+        .max()
+        .unwrap_or(0);
+    let (div, unit) = unit_for(top);
+    let items = rows
+        .iter()
+        .filter(|x| x.freed > 0 || x.planned > 0)
+        .take(8)
+        .map(|x| {
+            let v = x.freed as f64 / div;
+            let item = BulletItem::new(clip(&x.name, 18), v);
+            if x.planned > 0 {
+                let p = x.planned as f64 / div;
+                item.target(p).ranges([p * 0.5, p * 0.8, p])
+            } else {
+                item
+            }
+        });
+    Bullet::new(items)
+        .max(top as f64 / div)
+        .color(t.success)
+        .block(frame_block(format!(" Freed vs expected ({unit}) ")))
+}
+
+/// Every cleaner that ran, with its outcome: freed / expected, item count, or the error.
+struct ResultList<'a> {
+    rows: &'a [ReportRow],
+}
+
+impl Widget for ResultList<'_> {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let block = frame_block(" Results ");
+        let inner = block.inner(area);
+        block.render(area, buf);
+        if inner.width < 24 || inner.height == 0 {
+            return;
+        }
+        let t = th();
+        let w = inner.width as usize;
+        let lines: Vec<Line> = self
+            .rows
             .iter()
-            .take(4)
-            .map(|(n, m)| {
-                Line::from(Span::styled(
-                    format!("✗ {}: {}", clip(n, 22), clip(m, 40)),
-                    Style::default().fg(th().error),
-                ))
+            .take(inner.height as usize)
+            .map(|x| {
+                let (glyph, color, detail) = match &x.outcome {
+                    Outcome::Freed => {
+                        let of = if x.planned > 0 && x.planned != x.freed {
+                            format!(" of ~{}", format_size(x.planned))
+                        } else {
+                            String::new()
+                        };
+                        (
+                            "✓",
+                            t.success,
+                            format!("{}{of} · {} item(s)", format_size(x.freed), x.items),
+                        )
+                    }
+                    Outcome::Nothing => ("○", t.muted, "nothing to clean".to_string()),
+                    Outcome::Failed(m) => ("✗", t.error, m.clone()),
+                };
+                let name_w = (w / 3).clamp(10, 22);
+                Line::from(vec![
+                    Span::styled(format!("{glyph} "), Style::default().fg(color)),
+                    Span::styled(fit(&x.name, name_w), Style::default().fg(t.foreground)),
+                    Span::styled(
+                        clip(&detail, w.saturating_sub(name_w + 3)),
+                        Style::default().fg(if matches!(x.outcome, Outcome::Freed) {
+                            t.muted
+                        } else {
+                            color
+                        }),
+                    ),
+                ])
             })
             .collect();
-        f.render_widget(
-            Paragraph::new(lines).block(frame_block(" Problems ")),
-            right[1],
-        );
+        Paragraph::new(lines).render(inner, buf);
     }
 }
 
