@@ -16,7 +16,7 @@ use ratatui::{
     widgets::{Block, Borders, Clear, Paragraph, Widget},
     Frame,
 };
-use tui_chart::{RadialBar, RadialRing, RadialSweep, Sankey, SankeyLink, Sparkline, Waterfall};
+use tui_chart::{RadialBar, RadialRing, RadialSweep, Sankey, SankeyLink, Sparkline};
 use tui_piechart::{PieChart, PieSlice};
 
 use crate::app::App;
@@ -333,7 +333,7 @@ impl Widget for ShareChart<'_> {
             .collect();
         // Cells are ~twice as tall as wide: a circle needs 2*height columns.
         let pie_h = inner.height.min(14);
-        let pie_w = (pie_h * 2).min(inner.width.saturating_sub(26)).max(6);
+        let pie_w = (pie_h * 2).min(inner.width.saturating_sub(33)).max(6);
         let cols = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Length(pie_w + 1), Constraint::Min(10)])
@@ -480,6 +480,49 @@ impl Widget for PercentBar {
                 pct_txt,
                 Style::default().fg(self.color).add_modifier(Modifier::BOLD),
             ),
+        ]))
+        .render(inner, buf);
+    }
+}
+
+/// The volume as one bar: what is still used, what this clean just freed, what is free.
+struct DiskDelta {
+    total: u64,
+    used_now: u64,
+    freed: u64,
+    label: String,
+}
+
+impl Widget for DiskDelta {
+    fn render(self, area: Rect, buf: &mut Buffer) {
+        let block = frame_block(" Disk · used / freed now / free ");
+        let inner = block.inner(area);
+        block.render(area, buf);
+        if inner.width < 24 || inner.height == 0 || self.total == 0 {
+            return;
+        }
+        let w = inner.width as usize;
+        let label_w = self.label.chars().count().min(w * 3 / 5);
+        let bar_w = w.saturating_sub(label_w + 2).max(8);
+        let cells = |b: u64| (b as f64 / self.total as f64 * bar_w as f64).round() as usize;
+        // A freed sliver must stay visible even when it is 0.3 % of the disk.
+        let freed = if self.freed > 0 {
+            cells(self.freed).max(1)
+        } else {
+            0
+        };
+        let used = cells(self.used_now).min(bar_w.saturating_sub(freed));
+        let free = bar_w.saturating_sub(used + freed);
+        let t = th();
+        Paragraph::new(Line::from(vec![
+            Span::styled(
+                clip(&self.label, label_w),
+                Style::default().fg(t.foreground),
+            ),
+            Span::raw("  "),
+            Span::styled("█".repeat(used), Style::default().fg(t.accent)),
+            Span::styled("█".repeat(freed), Style::default().fg(t.success)),
+            Span::styled("░".repeat(free), Style::default().fg(t.border)),
         ]))
         .render(inner, buf);
     }
@@ -749,25 +792,6 @@ fn category_risk_sankey(d: &DashboardData) -> Sankey {
         .block(frame_block(" Where it comes from · GB by risk "))
 }
 
-/// Disk used before → minus what each category freed → used now.
-fn freed_waterfall(r: &ReportData, used_before: u64) -> Waterfall {
-    let t = th();
-    let gb = 1e9;
-    let mut w = Waterfall::new()
-        .initial(used_before as f64 / gb)
-        .colors(t.error, t.success, t.accent);
-    w = w.total("Used before");
-    let shown: u64 = r.by_category.iter().take(4).map(|(_, b)| *b).sum();
-    for (n, b) in r.by_category.iter().take(4) {
-        w = w.delta(clip(n, 10), -(*b as f64) / gb);
-    }
-    if r.freed > shown {
-        w = w.delta("others", -((r.freed - shown) as f64) / gb);
-    }
-    w.total("Used now")
-        .block(frame_block(" Disk used, before → after (GB) "))
-}
-
 // ── per-cleaner detail ─────────────────────────────────────────────────
 
 pub fn render_detail(f: &mut Frame, app: &App, area: Rect) {
@@ -789,7 +813,7 @@ pub fn render_detail(f: &mut Frame, app: &App, area: Rect) {
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(if tall { 4 } else { 2 }),
+            Constraint::Length(if tall { 3 } else { 2 }),
             Constraint::Length(if tall { 3 } else { 0 }),
             Constraint::Min(3),
         ])
@@ -948,11 +972,21 @@ pub fn render_detail(f: &mut Frame, app: &App, area: Rect) {
 
 pub fn render_report(f: &mut Frame, app: &App, area: Rect) {
     let live = app.is_running;
+    let r = report_data(app);
+    // Size the popup to its content instead of stretching charts over the screen.
+    let lower = (r.cleaners.len().min(10) as u16 + 2).clamp(10, 16)
+        + if r.failed.is_empty() {
+            0
+        } else {
+            2 + r.failed.len().min(4) as u16
+        };
+    let want = 3 + 3 + lower + 2;
+    let h_pct = (want * 100 / area.height.max(1) + 1).clamp(40, 92);
     let inner = popup(
         f,
         area,
         94,
-        92,
+        h_pct,
         if live {
             " Cleaning report (live) "
         } else {
@@ -960,9 +994,8 @@ pub fn render_report(f: &mut Frame, app: &App, area: Rect) {
         },
         " Esc/Enter close · P reopen ",
     );
-    let r = report_data(app);
     let summary = app.run_summary.as_ref();
-    let tall = inner.height >= 20;
+    let tall = inner.height >= 16;
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
@@ -1034,19 +1067,18 @@ pub fn render_report(f: &mut Frame, app: &App, area: Rect) {
         (Some(before), Some(now)) => {
             let gain = now.free as i64 - before.free as i64;
             f.render_widget(
-                percent_gauge(
-                    "Disk used now",
-                    now.used_percent(),
-                    format!(
-                        "{:.1}% → was {:.1}% · free {} ({}{})",
-                        now.used_percent(),
+                DiskDelta {
+                    total: now.total,
+                    used_now: now.used(),
+                    freed: r.freed.min(before.used()),
+                    label: format!(
+                        "{:.1}→{:.1}% used · {}{}",
                         before.used_percent(),
-                        format_size(now.free),
+                        now.used_percent(),
                         if gain >= 0 { "+" } else { "-" },
                         format_size(gain.unsigned_abs())
                     ),
-                    th().accent,
-                ),
+                },
                 gauges[1],
             );
         }
@@ -1091,12 +1123,7 @@ pub fn render_report(f: &mut Frame, app: &App, area: Rect) {
             ]
         })
         .split(right_area);
-    match app.disk_before {
-        Some(before) if right[0].height >= 9 => {
-            f.render_widget(freed_waterfall(&r, before.used()), right[0]);
-        }
-        _ => f.render_widget(share_pie("Freed by category", &r.by_category, 6), right[0]),
-    }
+    f.render_widget(share_pie("Freed by category", &r.by_category, 6), right[0]);
     if right.len() > 1 {
         let lines: Vec<Line> = r
             .failed
