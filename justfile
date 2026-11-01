@@ -72,9 +72,13 @@ run-tui:
 run-gui:
     cargo run -p cleansys-gui
 
-# Short aliases
+# Alias for run-tui
 tui: run-tui
+
+# Alias for run-gui
 gui: run-gui
+
+# Alias for run-web
 web: run-web
 
 # Alias: default run launches the TUI (matches historical `cleansys` behavior)
