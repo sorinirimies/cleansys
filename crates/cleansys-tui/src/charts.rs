@@ -704,26 +704,34 @@ fn disk_gauges(f: &mut Frame, app: &App, area: Rect, reclaimable: u64) {
 // ── dashboard ──────────────────────────────────────────────────────────
 
 pub fn render_dashboard(f: &mut Frame, app: &App, area: Rect) {
+    let d = dashboard_data(app);
+    // Size the popup to its content so the charts are not stretched over the screen.
+    let mid = (d.by_category.len() as u16 + 2).clamp(10, 14);
+    let want = 3 + mid + 11 + 2;
+    let h_pct = (want * 100 / area.height.max(1) + 1).clamp(40, 92);
     let inner = popup(
         f,
         area,
         94,
-        92,
+        h_pct,
         " System dashboard ",
         " Esc/D close · R rescan ",
     );
-    let d = dashboard_data(app);
-    let roomy = inner.height >= 26;
+    let roomy = inner.height >= 22;
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(if inner.height >= 12 { 3 } else { 0 }),
-            Constraint::Min(6),
-            Constraint::Length(if roomy {
-                (inner.height / 3).clamp(6, 9)
+            if roomy {
+                Constraint::Length(mid)
             } else {
-                0
-            }),
+                Constraint::Min(6)
+            },
+            if roomy {
+                Constraint::Min(7)
+            } else {
+                Constraint::Length(0)
+            },
         ])
         .split(inner);
     if rows[0].height > 0 {
@@ -824,7 +832,13 @@ fn category_risk_sankey(d: &DashboardData) -> Sankey {
         .flows
         .iter()
         .filter(|(n, _, _)| top.contains(&n.as_str()))
-        .map(|(n, r, b)| SankeyLink::new(clip(n, 16), RISK[*r], *b as f64 / 1e9));
+        .map(|(n, r, b)| {
+            SankeyLink::new(
+                clip(n, 16),
+                RISK[*r],
+                *b as f64 / (1024.0 * 1024.0 * 1024.0),
+            )
+        });
     let t = th();
     Sankey::new(links)
         .node_color("Safe", t.success)
@@ -1021,7 +1035,7 @@ pub fn render_report(f: &mut Frame, app: &App, area: Rect) {
         } else {
             2 + r.failed.len().min(4) as u16
         };
-    let want = 3 + 3 + lower + 2;
+    let want = 6 + lower + 2;
     let h_pct = (want * 100 / area.height.max(1) + 1).clamp(40, 92);
     let inner = popup(
         f,
@@ -1036,95 +1050,122 @@ pub fn render_report(f: &mut Frame, app: &App, area: Rect) {
         " Esc/Enter close · P reopen ",
     );
     let summary = app.run_summary.as_ref();
-    let tall = inner.height >= 16;
+    let tall = inner.height >= 18;
     let rows = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(if tall { 4 } else { 2 }),
-            Constraint::Length(if tall { 3 } else { 0 }),
+            Constraint::Length(if tall { 6 } else { 3 }),
             Constraint::Min(3),
         ])
         .split(inner);
-
+    let t = th();
     let (icon, color) = match summary {
-        Some(s) if s.cancelled => ("⏹ Cancelled", th().warning),
-        Some(s) if s.failed > 0 => ("! Done with problems", th().warning),
-        Some(_) => ("✓ Done", th().success),
-        None => ("⠿ Running", th().accent),
+        Some(s) if s.cancelled => ("⏹ Cancelled", t.warning),
+        Some(s) if s.failed > 0 => ("! Done with problems", t.warning),
+        Some(_) => ("✓ Done", t.success),
+        None => ("⠿ Running", t.accent),
     };
     let elapsed = summary.map_or_else(|| app.get_elapsed_time(), |s| s.elapsed.clone());
-    f.render_widget(
-        Paragraph::new(vec![
-            Line::from(vec![
-                Span::styled(
-                    format!("{icon} — freed {}", format_size(r.freed)),
-                    Style::default().fg(color).add_modifier(Modifier::BOLD),
-                ),
-                Span::styled(
-                    format!("  in {elapsed}"),
-                    Style::default().fg(th().secondary),
-                ),
-            ]),
-            Line::from(Span::styled(
-                format!(
-                    "{} cleaner(s) ran · {} freed something · {} nothing to clean · {} failed · {} item(s) removed",
-                    r.ok + r.failed.len(),
-                    r.cleaners.len(),
-                    r.nothing,
-                    r.failed.len(),
-                    r.items
-                ),
-                Style::default().fg(th().secondary),
-            )),
-        ]),
-        rows[0],
-    );
-
-    // Freed out of the planned run, and the disk before/after as free space.
-    let gauges = Layout::default()
-        .direction(Direction::Horizontal)
-        .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
-        .split(rows[1]);
     let planned = app.run_planned.max(r.freed);
     let pct = if planned == 0 {
         0.0
     } else {
         r.freed as f64 * 100.0 / planned as f64
     };
+
+    let story = Layout::default()
+        .direction(Direction::Vertical)
+        .constraints([
+            Constraint::Length(if tall { 3 } else { 2 }),
+            Constraint::Min(0),
+        ])
+        .split(rows[0]);
+    let pill = |text: String, bg: Color| {
+        Span::styled(
+            format!(" {text} "),
+            Style::default()
+                .fg(Color::Black)
+                .bg(bg)
+                .add_modifier(Modifier::BOLD),
+        )
+    };
+    let freed_n = r.ok - r.nothing;
     f.render_widget(
-        percent_gauge(
-            "Freed of planned",
-            pct,
-            format!(
-                "{} of {} ({pct:.0}%)",
-                format_size(r.freed),
-                format_size(planned)
-            ),
-            th().success,
-        ),
-        gauges[0],
+        Paragraph::new(vec![
+            Line::from(vec![
+                Span::styled(
+                    format!("{icon}  "),
+                    Style::default().fg(color).add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format_size(r.freed),
+                    Style::default()
+                        .fg(t.foreground)
+                        .add_modifier(Modifier::BOLD),
+                ),
+                Span::styled(
+                    format!(" freed in {elapsed}"),
+                    Style::default().fg(t.secondary),
+                ),
+            ]),
+            Line::from(vec![
+                pill(format!("✓ {freed_n} freed"), t.success),
+                Span::raw(" "),
+                pill(format!("○ {} nothing", r.nothing), t.muted),
+                Span::raw(" "),
+                pill(
+                    format!("✗ {} failed", r.failed.len()),
+                    if r.failed.is_empty() {
+                        t.muted
+                    } else {
+                        t.error
+                    },
+                ),
+                Span::styled(
+                    format!("   {} item(s) removed", r.items),
+                    Style::default().fg(t.secondary),
+                ),
+            ]),
+        ]),
+        story[0],
     );
-    match (app.disk_before, cleansys_core::utils::disk_usage()) {
-        (Some(before), Some(now)) => {
-            let gain = now.free as i64 - before.free as i64;
-            f.render_widget(
-                DiskDelta {
-                    total: now.total,
-                    used_now: now.used(),
-                    freed: r.freed.min(before.used()),
-                    label: format!(
-                        "{:.1}→{:.1}% used · {}{}",
-                        before.used_percent(),
-                        now.used_percent(),
-                        if gain >= 0 { "+" } else { "-" },
-                        format_size(gain.unsigned_abs())
-                    ),
-                },
-                gauges[1],
-            );
+    if tall {
+        let gauges = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Percentage(50), Constraint::Percentage(50)])
+            .split(story[1]);
+        f.render_widget(
+            percent_gauge(
+                "Freed of planned",
+                pct,
+                format!("{} of {}", format_size(r.freed), format_size(planned)),
+                color,
+            ),
+            gauges[0],
+        );
+        match (app.disk_before, cleansys_core::utils::disk_usage()) {
+            (Some(before), Some(now)) => {
+                let gain = now.free as i64 - before.free as i64;
+                f.render_widget(
+                    DiskDelta {
+                        total: now.total,
+                        used_now: now.used(),
+                        freed: r.freed.min(before.used()),
+                        label: format!(
+                            "{:.1}→{:.1}% used · {}{}",
+                            before.used_percent(),
+                            now.used_percent(),
+                            if gain >= 0 { "+" } else { "-" },
+                            format_size(gain.unsigned_abs())
+                        ),
+                    },
+                    gauges[1],
+                );
+            }
+            _ => f.render_widget(frame_block(" Disk "), gauges[1]),
         }
-        _ => f.render_widget(frame_block(" Disk "), gauges[1]),
     }
+    let rows = [rows[0], rows[0], rows[1]];
 
     if r.cleaners.is_empty() {
         let mut lines = vec![heading("Nothing was freed.".to_string())];
@@ -1166,7 +1207,7 @@ fn freed_bullets(rows: &[ReportRow]) -> Bullet {
             let item = BulletItem::new(clip(&x.name, 18), v);
             if x.planned > 0 {
                 let p = x.planned as f64 / div;
-                item.target(p).ranges([p * 0.5, p * 0.8, p])
+                item.target(p).ranges([p])
             } else {
                 item
             }
