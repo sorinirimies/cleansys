@@ -19,8 +19,10 @@ sed -i "s/^pkgver=.*/pkgver=${VERSION}/" "$PKGBUILD"
 sed -i "s/sha256sums=('[^']*')/sha256sums=('${SHA256}')/" "$PKGBUILD"
 
 # Update .SRCINFO version references
-sed -i "s/pkgver = .*/pkgver = ${VERSION}/" "$SRCINFO"
-sed -i "s/v[0-9]*\.[0-9]*\.[0-9]*/v${VERSION}/g" "$SRCINFO"
+if [ -f "$SRCINFO" ]; then
+    sed -i "s/pkgver = .*/pkgver = ${VERSION}/" "$SRCINFO"
+    sed -i "s/v[0-9]*\.[0-9]*\.[0-9]*/v${VERSION}/g" "$SRCINFO"
+fi
 
 echo "✅ Updated PKGBUILD and .SRCINFO to v${VERSION}"
 echo ""

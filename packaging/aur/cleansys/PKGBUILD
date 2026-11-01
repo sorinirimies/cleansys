@@ -1,7 +1,7 @@
 # Maintainer: Sorin Albu-Irimies <sorinirimies@gmail.com>
 pkgbase=cleansys
 pkgname=('cleansys' 'cleansys-gui')
-pkgver=0.4.0
+pkgver=0.9.0
 pkgrel=1
 pkgdesc="Modern system cleaner for Linux — terminal UI/CLI and desktop GUI"
 arch=('x86_64' 'aarch64')
@@ -9,7 +9,7 @@ url="https://github.com/sorinirimies/cleansys"
 license=('MIT')
 makedepends=('rust' 'cargo' 'pkg-config')
 source=("$pkgbase-$pkgver.tar.gz::https://github.com/sorinirimies/cleansys/archive/refs/tags/v$pkgver.tar.gz")
-sha256sums=('SKIP')
+sha256sums=('f2dfc1ed2c33411c77f94302dd50126753616cd3700b572cce1cf81fe461a7dc')
 
 # Required for the GUI binary
 _gui_deps=('libxkbcommon' 'wayland' 'libgl' 'fontconfig')
