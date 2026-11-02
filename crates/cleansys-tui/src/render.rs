@@ -225,6 +225,109 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
     );
 }
 
+/// One `key  label  value` row of the options panel.
+fn option_row(key: &str, label: &str, value: Span<'static>, width: usize) -> Line<'static> {
+    let t = crate::theme::th();
+    let used =
+        key.chars().count().max(4) + 1 + label.chars().count() + value.content.chars().count();
+    let gap = width.saturating_sub(used).max(1);
+    Line::from(vec![
+        Span::styled(
+            format!("{key:<4}"),
+            Style::default().fg(t.accent).add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" "),
+        Span::styled(label.to_string(), Style::default().fg(t.foreground)),
+        Span::raw(" ".repeat(gap)),
+        value,
+    ])
+}
+
+/// On/off value in the theme's success / muted colours.
+fn onoff(on: bool) -> Span<'static> {
+    let t = crate::theme::th();
+    if on {
+        Span::styled("● on", Style::default().fg(t.success))
+    } else {
+        Span::styled("○ off", Style::default().fg(t.muted))
+    }
+}
+
+/// The live options side panel (`O`): grouped cells, every key works as shown.
+fn render_options(f: &mut Frame, app: &App, area: Rect) {
+    let t = crate::theme::th();
+    let outer = panel(" ⚙ Options ").title_bottom(Line::from(" Shift+O close ").right_aligned());
+    let inner = outer.inner(area);
+    f.render_widget(outer, area);
+    let w = inner.width.saturating_sub(2) as usize;
+    let val = |s: String| Span::styled(s, Style::default().fg(t.secondary));
+    let theme_name = if app.follow_system {
+        format!(
+            "System · {}",
+            crate::theme::picker_name(app.theme_index + 1)
+        )
+    } else {
+        crate::theme::picker_name(app.theme_index + 1).to_string()
+    };
+    let groups: Vec<(&str, Vec<Line<'static>>)> = vec![
+        (
+            "View",
+            vec![
+                option_row("e", "hide empty", onoff(app.hide_empty), w),
+                option_row("L", "activity log", onoff(app.show_log), w),
+                option_row("D", "storage chart", val("›".into()), w),
+            ],
+        ),
+        (
+            "Cleaning",
+            vec![
+                option_row("y", "confirm run", onoff(app.confirmation_mode), w),
+                option_row(
+                    "[ ]",
+                    "idle days",
+                    val(cleansys_core::engine::config::min_age_label(app.min_age_days).to_string()),
+                    w,
+                ),
+                option_row("r", "recommended", val("›".into()), w),
+            ],
+        ),
+        ("Theme", vec![option_row("T", "theme", val(theme_name), w)]),
+        (
+            "More",
+            vec![
+                option_row("o", "settings", val("›".into()), w),
+                option_row("S", "schedule", val("›".into()), w),
+                option_row("i", "about", val("›".into()), w),
+            ],
+        ),
+    ];
+    let mut y = inner.y;
+    for (name, lines) in groups {
+        let h = lines.len() as u16 + 2;
+        if y + 1 + h > inner.y + inner.height {
+            break;
+        }
+        f.render_widget(
+            Paragraph::new(Span::styled(
+                format!(" {name}"),
+                Style::default().fg(t.muted).add_modifier(Modifier::BOLD),
+            )),
+            Rect::new(inner.x, y, inner.width, 1),
+        );
+        let cell = Rect::new(inner.x, y + 1, inner.width, h);
+        f.render_widget(
+            Paragraph::new(lines).block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .border_type(BorderType::Rounded)
+                    .border_style(Style::default().fg(t.border)),
+            ),
+            cell,
+        );
+        y += 1 + h;
+    }
+}
+
 fn render_main_content(f: &mut Frame, app: &mut App, area: Rect) {
     // Responsive: a sidebar of categories on wide terminals; on narrow ones the
     // sidebar is replaced by a one-line category bar (Tab / Shift+Tab to switch).
@@ -239,6 +342,16 @@ fn render_main_content(f: &mut Frame, app: &mut App, area: Rect) {
         (split[0], Some(split[1]))
     } else {
         (area, None)
+    };
+    let area = if app.options_open && area.width >= 70 {
+        let split = Layout::default()
+            .direction(Direction::Horizontal)
+            .constraints([Constraint::Min(40), Constraint::Length(34)])
+            .split(area);
+        render_options(f, app, split[1]);
+        split[0]
+    } else {
+        area
     };
     let use_sidebar = area.width >= 90;
     let content = if use_sidebar {
@@ -282,7 +395,12 @@ fn status_rows(app: &App) -> u16 {
 /// Rows of the activity log (only on tall enough terminals).
 fn log_rows(app: &App, avail: u16) -> u16 {
     if app.show_log && avail >= 22 {
-        7
+        // Taller while it has the focus, so there is something to scroll through.
+        if app.focus == crate::app::Focus::Activity && avail >= 30 {
+            14
+        } else {
+            7
+        }
     } else {
         0
     }
@@ -425,15 +543,26 @@ fn render_summary(f: &mut Frame, sum: &crate::app::RunSummary, area: Rect) {
 }
 
 fn render_activity_log(f: &mut Frame, app: &App, area: Rect) {
-    let block = Block::default()
-        .title(" Activity ")
-        .borders(Borders::ALL)
-        .border_style(Style::default().fg(crate::theme::th().muted));
+    let focused = app.focus == crate::app::Focus::Activity;
+    let total = app.operation_logs.len();
+    let rows = area.height.saturating_sub(2) as usize;
+    let scroll = app.log_scroll.min(total.saturating_sub(rows));
+    let end = total - scroll;
+    let start = end.saturating_sub(rows);
+    let title = if scroll > 0 {
+        format!(" Activity · {}-{end}/{total} ↑ ", start + 1)
+    } else {
+        " Activity ".to_string()
+    };
+    let hint = if focused {
+        " ↑/↓ PgUp/PgDn scroll · End latest · Tab next "
+    } else {
+        " L: focus "
+    };
+    let block = focus_panel(title, focused).title_bottom(Line::from(hint).right_aligned());
     let inner = block.inner(area);
-    let rows = inner.height as usize;
     let width = inner.width as usize;
-    let start = app.operation_logs.len().saturating_sub(rows);
-    let lines: Vec<Line> = app.operation_logs[start..]
+    let lines: Vec<Line> = app.operation_logs[start..end]
         .iter()
         .map(|l| {
             let color = if l.starts_with('✗') {
@@ -525,6 +654,16 @@ fn row_line_spans<'a>(mut left: Vec<Span<'a>>, right: Vec<Span<'a>>, width: usiz
     left.push(Span::raw(" ".repeat(gap)));
     left.extend(right);
     Line::from(left)
+}
+
+/// A [`panel`] whose border switches to the theme's focus colour when `focused`.
+fn focus_panel<'a>(title: impl Into<Line<'a>>, focused: bool) -> Block<'a> {
+    let t = crate::theme::th();
+    panel(title).border_style(Style::default().fg(if focused {
+        t.border_focused
+    } else {
+        t.border
+    }))
 }
 
 /// A rounded panel in the theme's border colour (the GUI's cards).
@@ -695,8 +834,10 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
         items.push(ListItem::new(row_line_spans(left, right, inner_w)).style(style));
     }
 
-    let list =
-        List::new(items).block(panel("Categories").title_bottom(scan_line(app).right_aligned()));
+    let list = List::new(items).block(
+        focus_panel("Categories", app.focus == crate::app::Focus::Categories)
+            .title_bottom(scan_line(app).right_aligned()),
+    );
     f.render_widget(list, area);
 }
 
@@ -995,10 +1136,10 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
         )
     };
 
-    let mut block = panel(title);
-    if app.filter_active {
-        block = block.border_style(Style::default().fg(crate::theme::th().border_focused));
-    }
+    let block = focus_panel(
+        title,
+        app.filter_active || app.focus == crate::app::Focus::Items,
+    );
     let block = block.title_bottom({
         let mut spans = scan_line(app).spans;
         spans.push(Span::styled(
@@ -1507,7 +1648,9 @@ fn render_help(f: &mut Frame, area: Rect) {
         l(""),
         h("Navigation:"),
         l("  ↑/↓ (j/k): Navigate cleaners      Home/End: first / last"),
-        l("  Tab/Shift+Tab: Switch categories"),
+        l("  Tab/Shift+Tab: Switch pane (categories · cleaners · activity)"),
+        l("  ←/→: Back out / go in (categories → cleaners → details)"),
+        l("  O: Options panel     L: Activity log (↑/↓ PgUp/PgDn scroll)"),
         l("  /: Filter cleaners across all categories (Esc clears)"),
         l("  e: Hide/show cleaners with nothing to clean"),
         l(""),

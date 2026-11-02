@@ -917,3 +917,61 @@ fn report_opens_only_after_a_finished_clean() {
     key(&mut app, KeyCode::Char('P'));
     assert!(app.report_open, "available once finished");
 }
+
+#[test]
+fn tab_cycles_panes_and_arrows_act_on_the_focused_one() {
+    use cleansys_tui::app::Focus;
+    let mut app = App::new();
+    app.persist = false;
+    assert_eq!(app.focus, Focus::Items);
+    key(&mut app, KeyCode::Tab); // Items -> (Activity hidden) -> Categories
+    assert_eq!(app.focus, Focus::Categories);
+    key(&mut app, KeyCode::Right);
+    assert_eq!(app.focus, Focus::Items);
+    key(&mut app, KeyCode::Left);
+    assert_eq!(app.focus, Focus::Categories);
+    key(&mut app, KeyCode::BackTab);
+    assert_eq!(app.focus, Focus::Items);
+}
+
+#[test]
+fn activity_log_can_be_focused_and_scrolled() {
+    use cleansys_tui::app::Focus;
+    let mut app = App::new();
+    app.persist = false;
+    for i in 0..40 {
+        app.log(format!("line {i}"));
+    }
+    key(&mut app, KeyCode::Char('L'));
+    assert!(app.show_log);
+    assert_eq!(app.focus, Focus::Activity);
+    key(&mut app, KeyCode::Up);
+    key(&mut app, KeyCode::Up);
+    assert_eq!(app.log_scroll, 2);
+    key(&mut app, KeyCode::PageUp);
+    assert_eq!(app.log_scroll, 7);
+    app.log("new line");
+    assert_eq!(
+        app.log_scroll, 8,
+        "scrolled view stays put when lines arrive"
+    );
+    key(&mut app, KeyCode::End);
+    assert_eq!(app.log_scroll, 0);
+    key(&mut app, KeyCode::Home);
+    assert!(app.log_scroll > 30);
+    key(&mut app, KeyCode::Esc);
+    assert_eq!(app.focus, Focus::Items);
+    assert!(app.show_log, "Esc leaves the log, it does not close it");
+    key(&mut app, KeyCode::Tab);
+    assert_eq!(app.focus, Focus::Activity);
+}
+
+#[test]
+fn shift_o_toggles_the_options_panel() {
+    let mut app = App::new();
+    app.persist = false;
+    key(&mut app, KeyCode::Char('O'));
+    assert!(app.options_open);
+    key(&mut app, KeyCode::Char('O'));
+    assert!(!app.options_open);
+}

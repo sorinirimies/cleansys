@@ -79,6 +79,18 @@ pub type PendingOperation = (usize, usize, String, CleanerFn, bool);
 // `Status`, `CleanerItem`, and `CleanerCategory` now live in `cleansys-core`
 // so the TUI and GUI front-ends share the exact same domain model.
 
+/// Which main-screen pane the arrow keys act on (`Tab` / `Shift+Tab` cycle them).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum Focus {
+    /// Category list: ↑/↓ switch category.
+    Categories,
+    /// Cleaner list: ↑/↓ move, → opens the details.
+    #[default]
+    Items,
+    /// Activity log: ↑/↓ scroll.
+    Activity,
+}
+
 pub struct App {
     pub categories: Vec<CleanerCategory>,
     pub category_index: usize,
@@ -147,6 +159,12 @@ pub struct App {
     pub run_summary: Option<RunSummary>,
     /// Whether the activity log panel is open (`L`).
     pub show_log: bool,
+    /// Pane the arrow keys act on.
+    pub focus: Focus,
+    /// Activity log scroll: lines above the newest one (`0` = follow the tail).
+    pub log_scroll: usize,
+    /// Side panel with the live options (`O`).
+    pub options_open: bool,
     /// Activity log lines (most recent last, capped).
     pub operation_logs: Vec<String>,
     /// One-line notice shown under the list (cleared on the next key).
@@ -253,6 +271,9 @@ impl App {
             run_current: None,
             run_summary: None,
             show_log: false,
+            focus: Focus::Items,
+            log_scroll: 0,
+            options_open: false,
             operation_logs: Vec::new(),
             notice: None,
             confirmation_mode: true,
@@ -820,6 +841,50 @@ impl App {
         self.item_list_state.select(Some(0));
     }
 
+    /// Panes `Tab` cycles through, in order.
+    fn focus_order(&self) -> Vec<Focus> {
+        let mut v = vec![Focus::Categories, Focus::Items];
+        if self.show_log {
+            v.push(Focus::Activity);
+        }
+        v
+    }
+
+    /// Move the focus `step` panes along (`Tab` = 1, `Shift+Tab` = -1).
+    pub fn cycle_focus(&mut self, step: isize) {
+        let order = self.focus_order();
+        let at = order.iter().position(|f| *f == self.focus).unwrap_or(1) as isize;
+        self.focus = order[(at + step).rem_euclid(order.len() as isize) as usize];
+    }
+
+    /// Scroll the activity log by `lines` (positive = towards older lines).
+    pub fn scroll_log(&mut self, lines: isize) {
+        let max = self.operation_logs.len().saturating_sub(1);
+        self.log_scroll = (self.log_scroll as isize + lines).clamp(0, max as isize) as usize;
+    }
+
+    /// ↑/↓ (`step` = ∓1) in whichever pane has the focus.
+    fn move_focused(&mut self, step: isize) {
+        match self.focus {
+            Focus::Items => {
+                if step > 0 {
+                    self.next_item();
+                } else {
+                    self.previous_item();
+                }
+            }
+            Focus::Categories => {
+                if step > 0 {
+                    self.next_category();
+                } else {
+                    self.previous_category();
+                }
+            }
+            // Down = towards newer lines.
+            Focus::Activity => self.scroll_log(-step),
+        }
+    }
+
     pub fn toggle_help(&mut self) {
         self.show_help = !self.show_help;
     }
@@ -1127,6 +1192,10 @@ impl App {
     /// Append a line to the activity log (bounded).
     pub fn log(&mut self, line: impl Into<String>) {
         self.operation_logs.push(line.into());
+        // Keep the scrolled-to lines in place while new ones arrive.
+        if self.log_scroll > 0 {
+            self.log_scroll += 1;
+        }
         if self.operation_logs.len() > MAX_LOG_LINES {
             let excess = self.operation_logs.len() - MAX_LOG_LINES;
             self.operation_logs.drain(..excess);
@@ -1571,62 +1640,93 @@ impl App {
                 }
             }
 
-            // Navigation (stays usable while a clean is running)
-            (KeyCode::Down, _) => {
+            // Navigation (stays usable while a clean is running): ↑/↓ act on the focused pane.
+            (KeyCode::Down | KeyCode::Char('j'), _) => {
                 if !self.show_help {
-                    self.next_item();
+                    self.move_focused(1);
                 }
             }
-            (KeyCode::Up, _) => {
+            (KeyCode::Up | KeyCode::Char('k'), _) => {
                 if !self.show_help {
-                    self.previous_item();
-                }
-            }
-            (KeyCode::Char('j'), _) => {
-                if !self.show_help {
-                    self.next_item();
-                }
-            }
-            (KeyCode::Char('k'), _) => {
-                if !self.show_help {
-                    self.previous_item();
+                    self.move_focused(-1);
                 }
             }
             (KeyCode::Tab, _) => {
                 if !self.show_help {
-                    self.next_category();
+                    self.cycle_focus(1);
                 }
             }
             (KeyCode::BackTab, _) => {
                 if !self.show_help {
-                    self.previous_category();
+                    self.cycle_focus(-1);
                 }
             }
-            (KeyCode::Home, _) if !self.show_help => {
-                self.item_list_state.select(Some(0));
-            }
-            (KeyCode::End, _) if !self.show_help => {
-                let len = self.view_items().len();
-                if len > 0 {
-                    self.item_list_state.select(Some(len - 1));
+            (KeyCode::PageDown, _) if !self.show_help => match self.focus {
+                Focus::Activity => self.scroll_log(-5),
+                _ => (0..5).for_each(|_| self.move_focused(1)),
+            },
+            (KeyCode::PageUp, _) if !self.show_help => match self.focus {
+                Focus::Activity => self.scroll_log(5),
+                _ => (0..5).for_each(|_| self.move_focused(-1)),
+            },
+            (KeyCode::Home, _) if !self.show_help => match self.focus {
+                Focus::Items => self.item_list_state.select(Some(0)),
+                Focus::Categories => {
+                    if let Some(c) = (0..self.categories.len()).find(|c| self.category_shown(*c)) {
+                        self.category_index = c;
+                        self.item_list_state.select(Some(0));
+                    }
                 }
-            }
-            // Expand the highlighted cleaner's per-path details
+                Focus::Activity => self.scroll_log(isize::MAX / 2),
+            },
+            (KeyCode::End, _) if !self.show_help => match self.focus {
+                Focus::Items => {
+                    let len = self.view_items().len();
+                    if len > 0 {
+                        self.item_list_state.select(Some(len - 1));
+                    }
+                }
+                Focus::Categories => {
+                    if let Some(c) = (0..self.categories.len())
+                        .rev()
+                        .find(|c| self.category_shown(*c))
+                    {
+                        self.category_index = c;
+                        self.item_list_state.select(Some(0));
+                    }
+                }
+                Focus::Activity => self.log_scroll = 0,
+            },
+            // ← goes back out one level: details → cleaners → categories.
+            (KeyCode::Left, _) if !self.show_help => match self.focus {
+                Focus::Activity => self.focus = Focus::Items,
+                Focus::Items => self.focus = Focus::Categories,
+                Focus::Categories => {}
+            },
+            // → goes one level in: categories → cleaners → details.
             (KeyCode::Right, _) => {
                 if !self.show_help {
-                    if !self.is_running {
-                        self.expand_current();
-                    }
-                    // Nothing to expand: show the charts instead (not mid-clean, when the
-                    // numbers are changing under you).
-                    if self.entry_cursor.is_none()
-                        && !self.is_running
-                        && self.current_item().is_some()
-                    {
-                        self.detail_open = true;
+                    match self.focus {
+                        Focus::Categories => self.focus = Focus::Items,
+                        Focus::Activity => {}
+                        Focus::Items => {
+                            if !self.is_running {
+                                self.expand_current();
+                            }
+                            // Nothing to expand: show the charts instead (not mid-clean,
+                            // when the numbers are changing under you).
+                            if self.entry_cursor.is_none()
+                                && !self.is_running
+                                && self.current_item().is_some()
+                            {
+                                self.detail_open = true;
+                            }
+                        }
                     }
                 }
             }
+            // Options side panel
+            (KeyCode::Char('O'), _) if !self.show_help => self.options_open = !self.options_open,
             // Theme picker
             (KeyCode::Char('T'), _) if !self.show_help => {
                 self.theme_picker_open = true;
@@ -1710,7 +1810,16 @@ impl App {
             // Activity log panel
             (KeyCode::Char('L'), _) => {
                 if !self.show_help {
-                    self.show_log = !self.show_log;
+                    if self.show_log && self.focus != Focus::Activity {
+                        self.focus = Focus::Activity;
+                    } else {
+                        self.show_log = !self.show_log;
+                        self.focus = if self.show_log {
+                            Focus::Activity
+                        } else {
+                            Focus::Items
+                        };
+                    }
                 }
             }
             // Filter across every category
@@ -1741,6 +1850,8 @@ impl App {
             (KeyCode::Esc, _) => {
                 if self.show_help {
                     self.show_help = false;
+                } else if self.focus != Focus::Items {
+                    self.focus = Focus::Items;
                 } else if self.is_running {
                     self.cancel_run();
                 } else if self.run_summary.is_some() {

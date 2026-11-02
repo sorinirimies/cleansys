@@ -695,3 +695,26 @@ fn gui_style_header_cards_and_action_bar_are_drawn() {
         assert!(text.contains('╭'), "{w}x{h}: rounded panels");
     }
 }
+
+#[test]
+fn options_panel_and_focus_hint_are_drawn() {
+    let mut app = app_with_scan();
+    app.handle_resize(140, 40);
+    app.options_open = true;
+    app.show_log = true;
+    for i in 0..30 {
+        app.log(format!("log line {i}"));
+    }
+    app.scroll_log(5);
+    let text = screen_text(&mut app, 140, 40);
+    for needle in [
+        "Options",
+        "hide empty",
+        "confirm run",
+        "idle days",
+        "Theme",
+        "Activity ·",
+    ] {
+        assert!(text.contains(needle), "missing {needle}");
+    }
+}
