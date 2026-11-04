@@ -3,211 +3,98 @@ name: CI
 on:
   pull_request:
   push:
-    branches:
-      - main
-      - master
-      - develop
+    branches: [main, master, develop]
+  workflow_dispatch:
+    inputs:
+      full_matrix:
+        description: Also test on macOS and Windows (automatic on public repos)
+        type: boolean
+        default: false
 
 env:
   CARGO_TERM_COLOR: always
 
-# ensure that the workflow is only triggered once per PR, subsequent pushes to the PR will cancel
-# and restart the workflow. See https://docs.github.com/en/actions/using-jobs/using-concurrency
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
   cancel-in-progress: true
 
-# ── Shared setup ───────────────────────────────────────────────────────────────
-# GUI jobs need the native libraries that Iced links against on Linux.
-# TUI/core jobs (ratatui/crossterm, plain Rust) need no extra system deps.
-
 jobs:
-  # ── 1. Formatting ────────────────────────────────────────────────────────────
-  fmt:
-    name: fmt
+  # fmt + clippy + tests + versions + nu tests —
+  # the same script `just check-all` runs.
+  gate:
+    name: quality gate
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Install Rust stable + rustfmt
-        uses: dtolnay/rust-toolchain@stable
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          components: rustfmt
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-      - name: Check formatting (workspace)
-        run: cargo fmt --all -- --check
-
-  # ── 2. Clippy ────────────────────────────────────────────────────────────────
-  clippy:
-    name: clippy
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      checks: write
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux GUI system libraries
-        run: |
-          # Retry: the runner's route to archive.ubuntu.com is occasionally flaky.
-          for attempt in 1 2 3 4; do
-            sudo apt-get update -qq -o Acquire::Retries=5 && \
-            sudo apt-get install -y --no-install-recommends --fix-missing -o Acquire::Retries=5 \
-              pkg-config \
-              libxkbcommon-dev \
-              libx11-dev \
-              libxrandr-dev \
-              libxinerama-dev \
-              libxcursor-dev \
-              libxi-dev \
-              libwayland-dev \
-              libgl1-mesa-dev \
-              libfontconfig1-dev \
-              libssl-dev && break
-            echo "apt failed (attempt $attempt/4), retrying in $((attempt*15))s..."
-            sleep $((attempt*15))
-            [ "$attempt" = 4 ] && exit 1
-          done
-      - name: Install Rust stable + clippy
-        uses: dtolnay/rust-toolchain@stable
+          components: rustfmt,clippy
+      - uses: Swatinem/rust-cache@v2
+      - uses: hustcer/setup-nu@v3
         with:
-          components: clippy
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-      - name: Run clippy (workspace)
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings -A deprecated
+          version: "0.116.1"
+      - name: Install system packages
+        run: nu scripts/ci/apt.nu
+      - name: Quality gate
+        run: nu scripts/ci/quality_gate.nu
 
-  # ── 3. Tests ─────────────────────────────────────────────────────────────────
+  # The binary ships for all three systems: paths, line endings and process
+  # handling differ there.
   test:
-    name: test
-    runs-on: ubuntu-latest
+    name: test (${{ matrix.os }})
+    # A private repo pays 10x for macOS and 2x for Windows minutes: there this
+    # runs only when dispatched with full_matrix.
+    if: ${{ !github.event.repository.private || inputs.full_matrix }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [macos-latest, windows-latest]
     steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux GUI system libraries
-        run: |
-          # Retry: the runner's route to archive.ubuntu.com is occasionally flaky.
-          for attempt in 1 2 3 4; do
-            sudo apt-get update -qq -o Acquire::Retries=5 && \
-            sudo apt-get install -y --no-install-recommends --fix-missing -o Acquire::Retries=5 \
-              pkg-config \
-              libxkbcommon-dev \
-              libx11-dev \
-              libxrandr-dev \
-              libxinerama-dev \
-              libxcursor-dev \
-              libxi-dev \
-              libwayland-dev \
-              libgl1-mesa-dev \
-              libfontconfig1-dev \
-              libssl-dev && break
-            echo "apt failed (attempt $attempt/4), retrying in $((attempt*15))s..."
-            sleep $((attempt*15))
-            [ "$attempt" = 4 ] && exit 1
-          done
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-      - name: cargo generate-lockfile
-        if: hashFiles('Cargo.lock') == ''
-        run: cargo generate-lockfile
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
       - name: cargo test --workspace
-        run: cargo test --workspace --locked --all-features --all-targets
+        run: cargo test --workspace --all-features
 
-  # ── 4. Build (dev) ───────────────────────────────────────────────────────────
-  build:
-    name: build
+  # The Linux release binaries are static musl ones (any distro); skipped when
+  # scripts/project.nu sets LINUX to "gnu".
+  musl:
+    name: musl (static)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux GUI system libraries
+      - uses: actions/checkout@v7
+      - name: Install musl tools
         run: |
-          # Retry: the runner's route to archive.ubuntu.com is occasionally flaky.
-          for attempt in 1 2 3 4; do
-            sudo apt-get update -qq -o Acquire::Retries=5 && \
-            sudo apt-get install -y --no-install-recommends --fix-missing -o Acquire::Retries=5 \
-              pkg-config \
-              libxkbcommon-dev \
-              libx11-dev \
-              libxrandr-dev \
-              libxinerama-dev \
-              libxcursor-dev \
-              libxi-dev \
-              libwayland-dev \
-              libgl1-mesa-dev \
-              libfontconfig1-dev \
-              libssl-dev && break
-            echo "apt failed (attempt $attempt/4), retrying in $((attempt*15))s..."
-            sleep $((attempt*15))
-            [ "$attempt" = 4 ] && exit 1
-          done
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-      - name: Build core (dev)
-        run: cargo build -p cleansys-core
-      - name: Build TUI (dev)
-        run: cargo build -p cleansys
-      - name: Build GUI (dev)
-        run: cargo build -p cleansys-gui
-      - name: Build web UI (dev, needs Rust 1.98+)
-        run: cargo build -p cleansys-web
+          sudo apt-get -o Acquire::Retries=5 update -qq
+          sudo apt-get -o Acquire::Retries=5 install -y --no-install-recommends musl-tools
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-unknown-linux-musl
+      - uses: Swatinem/rust-cache@v2
+      - uses: hustcer/setup-nu@v3
+        with:
+          version: "0.116.1"
+      - name: Install system packages
+        run: nu scripts/ci/apt.nu
+      - name: Build, statically linked and runs
+        run: nu scripts/ci/check_static.nu x86_64-unknown-linux-musl --build
 
-  # ── 5. Docs ──────────────────────────────────────────────────────────────────
-  doc:
-    # Stable: nightly rustc currently hits a query-cycle error compiling zvariant_utils.
-    name: doc
+  msrv:
+    name: MSRV (1.90)
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Install Linux GUI system libraries
-        run: |
-          # Retry: the runner's route to archive.ubuntu.com is occasionally flaky.
-          for attempt in 1 2 3 4; do
-            sudo apt-get update -qq -o Acquire::Retries=5 && \
-            sudo apt-get install -y --no-install-recommends --fix-missing -o Acquire::Retries=5 \
-              pkg-config \
-              libxkbcommon-dev \
-              libx11-dev \
-              libxrandr-dev \
-              libxinerama-dev \
-              libxcursor-dev \
-              libxi-dev \
-              libwayland-dev \
-              libgl1-mesa-dev \
-              libfontconfig1-dev \
-              libssl-dev && break
-            echo "apt failed (attempt $attempt/4), retrying in $((attempt*15))s..."
-            sleep $((attempt*15))
-            [ "$attempt" = 4 ] && exit 1
-          done
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-      - name: cargo doc (workspace)
-        run: cargo doc --no-deps --workspace --all-features
-        env:
-          RUSTDOCFLAGS: --cfg docsrs
-
-  # ── 6. Nu script tests ───────────────────────────────────────────────────────
-  test-nu:
-    name: test-nu
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Install Rust stable
-        uses: dtolnay/rust-toolchain@stable
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-      - name: Generate lockfile (if absent)
-        if: hashFiles('Cargo.lock') == ''
-        run: cargo generate-lockfile
-      - name: Install Nushell
-        run: |
-          V=0.116.1
-          curl -fsSL https://github.com/nushell/nushell/releases/download/$V/nu-$V-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /tmp
-          sudo install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu /usr/local/bin/nu || install -D -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu $HOME/.cargo/bin/nu
-          nu --version
-      - name: Run Nu script tests
-        run: nu scripts/tests/run_all.nu
+      - uses: actions/checkout@v7
+      # @master + toolchain, not @1.90: Dependabot would bump a version ref.
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: "1.90"
+      - uses: Swatinem/rust-cache@v2
+      - uses: hustcer/setup-nu@v3
+        with:
+          version: "0.116.1"
+      - name: Install system packages
+        run: nu scripts/ci/apt.nu
+      # cleansys-web declares its own, higher MSRV (Topcoat).
+      - name: cargo check
+        run: cargo check --workspace --locked --exclude cleansys-web

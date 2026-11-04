@@ -1,47 +1,12 @@
-# cargo-deny configuration: `cargo deny check`
-[graph]
-all-features = true
-
 [advisories]
-version = 2
-ignore = [
-    # Unmaintained transitive deps of the iced/wgpu GUI stack; no upstream fix yet.
-    "RUSTSEC-2024-0436", # paste
-    "RUSTSEC-2026-0192", # ttf-parser
-    # zbus split crates merged into zbus 6 (unmaintained notice only); pulled in
-    # transitively by the GUI stack, no safe upgrade until upstream moves to zbus 6.
-    "RUSTSEC-2026-0370", # zvariant
-    "RUSTSEC-2026-0371", # zbus_names
-    "RUSTSEC-2026-0372", # zvariant_derive
-]
+yanked = "deny"
 
 [licenses]
-version = 2
-allow = [
-    "MIT",
-    "Apache-2.0",
-    "Apache-2.0 WITH LLVM-exception",
-    "BSD-2-Clause",
-    "BSD-3-Clause",
-    "ISC",
-    "Unicode-3.0",
-    "Unicode-DFS-2016",
-    "Zlib",
-    "MPL-2.0",
-    "BSL-1.0",
-    "Unlicense",
-    "WTFPL",
-    "CC0-1.0",
-]
-confidence-threshold = 0.8
+allow = ["MIT", "Apache-2.0", "Apache-2.0 WITH LLVM-exception", "BSD-2-Clause", "BSD-3-Clause", "ISC", "Unicode-3.0", "Zlib", "MPL-2.0", "CC0-1.0", "BSL-1.0"]
 
 [bans]
 multiple-versions = "warn"
-wildcards = "allow"
-highlight = "all"
 
 [sources]
 unknown-registry = "deny"
 unknown-git = "deny"
-allow-registry = ["https://github.com/rust-lang/crates.io-index"]
-allow-git = []

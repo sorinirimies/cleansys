@@ -1,225 +1,80 @@
-name: Nightly Dependency Upgrade
+name: Nightly dependency update
 
-# Upgrades workspace dependencies every night, and — if anything actually
-# changed — automatically cuts a new patch release (bump + changelog + tag +
-# push) with no human approval step. The quality gate (fmt, clippy, test)
-# must pass before either the dependency commit or the release tag are ever
-# pushed, so a bad upgrade simply fails the workflow instead of shipping.
+# `cargo update` within the semver ranges (and in fuzz/), then the full gate; if
+# it is green, commit the lockfiles straight to main as `chore(deps)`. Nothing changed ⇒ nothing happens.
+# Releases stay manual (`just release X.Y.Z`).
 #
-# NOTE: the `schedule:` trigger is intentionally disabled here. GitHub
-# (.github/workflows/deps-update.yml) is the single source of truth for the
-# nightly auto-release; this Gitea mirror previously ran its own independent
-# nightly job on a separate schedule, and the two cut colliding version
-# numbers (0.6.8-0.6.12 diverged with different content on each side,
-# requiring a manual history reconciliation). Keep workflow_dispatch only, so
-# it can still be run by hand if the mirror ever needs to catch up manually.
+# This host runs on its own: deliberately NO mirroring to GitHub, which has its own
+# nightly (.github/workflows/deps-update.yml, 02:00). If the two histories diverge,
+# force-push whichever one you want to keep.
 
 on:
+  schedule:
+    - cron: "30 2 * * *" # 02:30 UTC (GitHub runs at 02:00)
   workflow_dispatch:
 
 env:
   CARGO_TERM_COLOR: always
+  # Self-hosted runner behind a flaky network: let rustup and cargo retry.
+  RUSTUP_MAX_RETRIES: "10"
+  CARGO_NET_RETRY: "10"
 
+# Never cancel mid-run: a half-finished push would leave main inconsistent.
 concurrency:
   group: deps-update
-  cancel-in-progress: true
-
-permissions:
-  contents: write
-  actions: write
+  cancel-in-progress: false
 
 jobs:
-  upgrade-deps:
-    name: Upgrade Dependencies
+  update:
+    name: Update Cargo dependencies
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v4
         with:
+          ref: main
+          token: ${{ secrets.GITEA_TOKEN || github.token }}
           fetch-depth: 0
 
-      # ── System libraries (required by the Iced GUI crate) ────────────────────
-      - name: Install Linux GUI system libraries
+      - name: Install Rust stable (+ rustfmt, clippy)
         run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config \
-            libxkbcommon-dev \
-            libx11-dev \
-            libxrandr-dev \
-            libxinerama-dev \
-            libxcursor-dev \
-            libxi-dev \
-            libwayland-dev \
-            libgl1-mesa-dev \
-            libfontconfig1-dev \
-            libssl-dev
-
-      # ── Rust toolchain ────────────────────────────────────────────────────────
-      - name: Install Rust stable (rustfmt + clippy)
-        uses: dtolnay/rust-toolchain@stable
-        with:
-          components: rustfmt, clippy
-
-      - name: Cache Cargo dependencies
-        uses: Swatinem/rust-cache@v2
-
-      # ── cargo-edit (provides `cargo upgrade`) ────────────────────────────────
-      - name: Install cargo-edit
-        run: cargo install cargo-edit --locked
-
-      # ── Pre-warm cargo registry (refresh index + fetch sources) ───────────
-      - name: Pre-warm cargo registry (refresh index + fetch sources)
-        run: cargo update && cargo fetch
-
-      # Snapshot the lockfile as committed on main, to tell later whether any
-      # *direct* dependency really moved (vs. transitive-only churn).
-      - name: Snapshot committed Cargo.lock (release gate)
-        run: |
-          git show HEAD:Cargo.lock > "$RUNNER_TEMP/Cargo.lock.head"
-          cargo metadata --no-deps --format-version 1 | jq -S -c '[.packages[].dependencies[] | {name,req,kind,features,optional,target,uses_default_features}] | sort_by(.name,.kind,.target)' > "$RUNNER_TEMP/reqs-before.json"
-
-      # ── Snapshot Cargo.lock BEFORE upgrading, for the downgrade guard ───────
-      - name: Snapshot Cargo.lock (pre-upgrade)
-        run: cp Cargo.lock Cargo.lock.before
-
-      # ── Upgrade all dependency pins ──────────────────────────────────────────
-      # `cargo upgrade --incompatible allow` rewrites version constraints in
-      # [workspace.dependencies] so pinned libs like `dirs = "5.0"` can advance
-      # to "6.0", `nix = "0.29"` to "0.31", etc.
-      # `cargo update` then resolves the new constraints into Cargo.lock.
-      - name: Upgrade workspace dependency pins
-        run: cargo upgrade --incompatible allow
-
-      - name: Sync Cargo.lock
-        run: cargo update
-
-      # ── Downgrade guard ──────────────────────────────────────────────────────
-      # Explicit safety net: fail the workflow if any crate's resolved version
-      # went *down* relative to the pre-upgrade snapshot, before anything is
-      # ever committed or released.
-      - name: Install Nushell (needed for the downgrade guard)
+          for i in 1 2 3 4 5; do
+            curl --proto '=https' --tlsv1.2 -sSf --retry 5 --retry-all-errors --retry-delay 5 https://sh.rustup.rs | sh -s -- -y --default-toolchain stable && break
+            [ $i = 5 ] && exit 1
+            echo "rustup install failed, retrying..."; sleep 15
+          done
+          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+          . "$HOME/.cargo/env"
+          rustup component add rustfmt clippy
+      - uses: Swatinem/rust-cache@v2
+      - name: Install Nushell
         run: |
           V=0.116.1
-          curl -fsSL https://github.com/nushell/nushell/releases/download/$V/nu-$V-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /tmp
-          sudo install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu /usr/local/bin/nu || install -D -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu $HOME/.cargo/bin/nu
+          curl -fsSL --retry 5 https://github.com/nushell/nushell/releases/download/$V/nu-$V-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /tmp
+          sudo install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu /usr/local/bin/nu || { mkdir -p $HOME/.cargo/bin; install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu $HOME/.cargo/bin/nu; }
           nu --version
+      - name: Install system packages
+        run: nu scripts/ci/apt.nu
 
-      - name: Guard against dependency downgrades
-        run: nu scripts/ci/check_no_downgrade.nu --before Cargo.lock.before --after Cargo.lock
+      # Scheduled runs can start from a stale commit; diff against the real tip.
+      - name: Sync to latest main
+        run: nu scripts/ci/deps_update.nu sync
 
-      - name: Remove downgrade-guard snapshot
-        run: rm -f Cargo.lock.before
+      - name: cargo update
+        run: nu scripts/ci/deps_update.nu update
 
-      # ── Check for changes ────────────────────────────────────────────────────
-      # `cargo upgrade` (cargo-edit) reserializes the whole Cargo.toml via
-      # toml_edit — it can reorder/reformat keys and whitespace even when no
-      # dependency version actually changed. That alone must NOT count as a
-      # real update (it previously caused empty releases to be tagged in a
-      # sibling project). Cargo.lock is the ground truth: it only changes
-      # when a resolved dependency version actually moves. Gate `has_changes`
-      # on Cargo.lock only; Cargo.toml is still committed alongside it.
-      - name: Check for changes
-        id: check
-        run: |
-          if git diff --quiet Cargo.lock; then
-            echo "has_changes=false" >> "$GITHUB_OUTPUT"
-          else
-            echo "has_changes=true" >> "$GITHUB_OUTPUT"
-          fi
+      - name: Anything to do?
+        id: diff
+        run: nu scripts/ci/deps_update.nu changed >> "$GITHUB_OUTPUT"
 
-      # Release ONLY if a Cargo.toml dependency requirement changed (compared as data:
-      # cargo-edit also reformats manifests, which must not count). A lockfile-only
-      # update, including a direct dependency that merely resolves to a new version,
-      # is committed without a version bump, tag or release.
-      - name: Check for dependency requirement changes
-        id: direct
-        run: |
-          cargo metadata --no-deps --format-version 1 | jq -S -c '[.packages[].dependencies[] | {name,req,kind,features,optional,target,uses_default_features}] | sort_by(.name,.kind,.target)' > "$RUNNER_TEMP/reqs-after.json"
-          if cmp -s "$RUNNER_TEMP/reqs-before.json" "$RUNNER_TEMP/reqs-after.json"; then
-            echo "release=false" >> "$GITHUB_OUTPUT"
-            # Lock-only: drop cosmetic manifest reformatting from cargo-edit.
-            git ls-files -m -- '*Cargo.toml' | xargs -r git checkout --
-          else
-            echo "release=true" >> "$GITHUB_OUTPUT"
-            echo "Cargo.toml dependency requirements changed -> patch release."
-          fi
+      - name: Quality gate
+        if: steps.diff.outputs.changed == 'true'
+        run: nu scripts/ci/quality_gate.nu
 
-      # ── Quality gate ───────────────────────────────────────────────────────
-      - name: Check formatting
-        if: steps.check.outputs.has_changes == 'true'
-        run: cargo fmt --all -- --check
-
-      - name: Run clippy
-        if: steps.check.outputs.has_changes == 'true'
-        run: cargo clippy --workspace --all-targets --all-features -- -D warnings -A deprecated
-
-      - name: Run tests
-        if: steps.check.outputs.has_changes == 'true'
-        run: cargo test --workspace --all-features --all-targets
-
-      # ── Commit and push directly to main ───────────────────────────────────────
-      # The quality gate already passed — safe to push directly.
-      - name: Commit and push dependency updates
-        if: steps.check.outputs.has_changes == 'true'
-        run: |
-          DATE=$(date -u '+%Y-%m-%d')
-
-          git config user.name  "gitea-actions[bot]"
-          git config user.email "gitea-actions[bot]@noreply.gitea"
-
-          git add Cargo.toml Cargo.lock
-          git commit -m "chore(deps): nightly dependency upgrade $DATE"
-          git push origin main
-
-          echo "✅ Dependency updates pushed to main."
-
-      # ── Automatic patch release ─────────────────────────────────────────────
-      # Cuts a new patch version (X.Y.Z -> X.Y.Z+1) for the dependency bump
-      # above and pushes the tag, which triggers the full Release workflow
-      # (build, package, crates.io publish, AUR update) — no human approval
-      # in the loop, matching the "nightly libs auto update that merges
-      # automatically and creates a new patched version" requirement.
-      - name: Install git-cliff
-        if: steps.check.outputs.has_changes == 'true' && steps.direct.outputs.release == 'true'
-        run: cargo install git-cliff --locked
-
-      - name: Cut automatic patch release
-        if: steps.check.outputs.has_changes == 'true' && steps.direct.outputs.release == 'true'
-        run: nu scripts/ci/auto_patch_release.nu
-
-      # ── Explicitly dispatch the Release workflow ────────────────────────────
-      # A tag pushed with the default bot token does NOT auto-trigger other
-      # tag-push-triggered workflows (anti-recursion safeguard, both GitHub
-      # and Gitea) — so we dispatch release.yml directly via the Actions API,
-      # which the same default token IS allowed to do.
-      - name: Get newly-released version
-        if: steps.check.outputs.has_changes == 'true' && steps.direct.outputs.release == 'true'
-        id: new_version
-        run: echo "tag=v$(grep -m1 '^version' Cargo.toml | sed -E 's/version[[:space:]]*=[[:space:]]*"(.*)"/\1/')" >> "$GITHUB_OUTPUT"
-
-      - name: Dispatch Release workflow on Gitea
-        if: steps.check.outputs.has_changes == 'true' && steps.direct.outputs.release == 'true'
-        run: |
-          TAG="${{ steps.new_version.outputs.tag }}"
-          WORKFLOW_ID="release.yml"
-          API="${{ github.server_url }}/api/v1"
-          REPO="${{ github.repository }}"
-          TOKEN="${{ secrets.GITHUB_TOKEN }}"
-
-          curl -sf -X POST \
-            "${API}/repos/${REPO}/actions/workflows/${WORKFLOW_ID}/dispatches" \
-            -H "Authorization: token ${TOKEN}" \
-            -H "Content-Type: application/json" \
-            -d "{\"ref\":\"main\",\"inputs\":{\"tag\":\"${TAG}\"}}"
-
-          echo "✅ Dispatched release.yml for ${TAG}"
-
-      - name: Lockfile-only update — no release
-        if: steps.check.outputs.has_changes == 'true' && steps.direct.outputs.release != 'true'
-        run: echo "ℹ️ No Cargo.toml requirement changed — lockfile committed, no version bump or release."
+      # Fail loudly: a failed push must show as a failed run.
+      - name: Commit and push
+        if: steps.diff.outputs.changed == 'true'
+        run: nu scripts/ci/deps_update.nu commit "gitea-actions[bot]" "gitea-actions[bot]@noreply.gitea"
 
       - name: Nothing to update
-        if: steps.check.outputs.has_changes == 'false'
-        run: echo "✅ All dependencies already up to date — nothing to upgrade."
+        if: steps.diff.outputs.changed == 'false'
+        run: echo "✅ All dependencies already up to date — no commit."

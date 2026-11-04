@@ -1,160 +1,201 @@
 #!/usr/bin/env nu
 # ──────────────────────────────────────────────────────────────────────────────
-# CleanSys — Bump workspace version
+# CleanSys — Bump the version
 # ──────────────────────────────────────────────────────────────────────────────
 # Usage:
-#   nu scripts/bump_version.nu <new_version>
+#   nu scripts/bump_version.nu <new_version> [--yes] [--skip-checks] [--check]
 #
-# Example:
-#   nu scripts/bump_version.nu 0.5.0
+# One version, everywhere (the release workflow checks it):
+#   * the version in Cargo.toml: `[workspace.package]` (every crate inherits it),
+#     or `[package]` for a single crate at the root
+#   * the top-level `version` of each file in check_versions.nu's EXTRA_MANIFESTS
+#     (e.g. a Zed extension.toml, a package.json)
+#   * Cargo.lock
 #
-# What it does:
-#   1. Validates the supplied semantic version string.
-#   2. Updates `workspace.package.version` in the root Cargo.toml.
-#   3. Updates the `cleansys-core` dependency version wherever it appears.
-#   4. Updates the version badge in README.md (if present).
-#   5. Runs `cargo fmt`, `cargo clippy`, and `cargo test`.
-#   6. Generates / updates the CHANGELOG via git-cliff (if installed).
-#   7. Creates a Git commit and an annotated tag.
+# Order: validate (cheap) → quality gate on the untouched tree → edit, changelog,
+# commit and tag. Any failure after the first edit is rolled back, so a failed
+# bump never leaves a half-bumped tree behind.
+#
+# Flags:
+#   --check        only validate (well-formed, strictly newer), then exit
+#   --yes          non-interactive
+#   --skip-checks  the caller already ran the gate (`just bump` runs check-all)
 # ──────────────────────────────────────────────────────────────────────────────
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
+# Is `version` MAJOR.MINOR.PATCH with an optional pre-release?
+export def is_semver [version: string]: nothing -> bool {
+    $version =~ '^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$'
+}
 
-# Validate that a string looks like a semver (MAJOR.MINOR.PATCH with optional pre-release).
-def validate_version [version: string] {
-    let pattern = '^\d+\.\d+\.\d+(-[a-zA-Z0-9.]+)?$'
-    if ($version | find --regex $pattern | is-empty) {
-        print $"(ansi red)Error:(ansi reset) '($version)' is not a valid semantic version."
-        exit 1
+# Compare two semvers: 1 if a > b, -1 if a < b, 0 if equal (pre-releases sort
+# below their release, identifiers compare numerically when both are numbers).
+export def compare_versions [a: string, b: string]: nothing -> int {
+    let core = {|v| $v | split row "-" | first | split row "." | each {|x| $x | into int } }
+    let pa = (do $core $a)
+    let pb = (do $core $b)
+    for i in 0..2 {
+        if ($pa | get $i) > ($pb | get $i) { return 1 }
+        if ($pa | get $i) < ($pb | get $i) { return (-1) }
     }
+    let ra = ($a | split row "-" | skip 1 | str join "-")
+    let rb = ($b | split row "-" | skip 1 | str join "-")
+    if $ra == $rb { return 0 }
+    if ($ra | is-empty) { return 1 }
+    if ($rb | is-empty) { return (-1) }
+    let ia = ($ra | split row ".")
+    let ib = ($rb | split row ".")
+    let n = ([($ia | length) ($ib | length)] | math min)
+    for i in 0..<$n {
+        let x = ($ia | get $i)
+        let y = ($ib | get $i)
+        if $x == $y { continue }
+        let xn = ($x =~ '^\d+$')
+        let yn = ($y =~ '^\d+$')
+        if $xn and $yn { return (if ($x | into int) > ($y | into int) { 1 } else { -1 }) }
+        if $xn { return (-1) }
+        if $yn { return 1 }
+        return (if $x > $y { 1 } else { -1 })
+    }
+    if ($ia | length) > ($ib | length) { 1 } else if ($ia | length) < ($ib | length) { -1 } else { 0 }
 }
 
-# Replace the workspace.package.version line in the root Cargo.toml.
-def update_workspace_version [version: string] {
-    let cargo = (open Cargo.toml --raw)
-    let updated = ($cargo | str replace --regex 'version\s*=\s*"[^"]+"' $'version    = "($version)"' )
-    $updated | save --force Cargo.toml
-    print $"(ansi green)✓(ansi reset) Updated workspace.package.version → ($version)"
-}
-
-# Update the cleansys-core dependency version in the root Cargo.toml.
-def update_core_dep_version [version: string] {
-    let cargo = (open Cargo.toml --raw)
-    let lines = ($cargo | lines)
-    let updated_lines = ($lines | each {|line|
-        if ($line | find --regex '^cleansys-core\s*=' | is-not-empty) {
-            $line | str replace --regex 'version\s*=\s*"[^"]+"' $'version = "($version)"'
+# Set `version` inside `[workspace.package]` of a Cargo.toml text, or inside
+# `[package]` when there is no workspace version. Other dependency versions are
+# left alone, except workspace crates: a `[workspace.dependencies]` entry with a
+# `path` gets the new version too, or publishing its dependents fails.
+export def set_workspace_version [text: string, version: string]: nothing -> string {
+    let section = if ($text | lines | any {|l| ($l | str trim) == "[workspace.package]" }) { "[workspace.package]" } else { "[package]" }
+    mut current = ""
+    mut out = []
+    for line in ($text | lines) {
+        let trimmed = ($line | str trim)
+        if ($trimmed | str starts-with "[") { $current = $trimmed }
+        let internal = $current == "[workspace.dependencies]" and ($trimmed =~ '\bpath\s*=') and ($trimmed =~ '\bversion\s*=')
+        if $current == $section and ($trimmed =~ '^version\s*=') {
+            $out = ($out | append ($line | str replace --regex '"[^"]*"' $'"($version)"'))
+        } else if $internal {
+            $out = ($out | append ($line | str replace --regex '\bversion(\s*)=(\s*)"[^"]*"' $'version${1}=${2}"($version)"'))
         } else {
-            $line
+            $out = ($out | append $line)
         }
-    })
-    $updated_lines | str join "\n" | save --force Cargo.toml
-    print $"(ansi green)✓(ansi reset) Updated cleansys-core dependency → ($version)"
+    }
+    ($out | str join "\n") + "\n"
 }
 
-# Update the crates.io version badge in README.md (if the badge exists).
-def update_readme_badge [version: string] {
-    if not ("README.md" | path exists) {
-        print $"(ansi yellow)⚠(ansi reset) README.md not found — skipping badge update."
-        return
+# Set the first top-level `version = "…"` of a TOML text (extension.toml & co).
+export def set_extension_version [text: string, version: string]: nothing -> string {
+    mut done = false
+    mut out = []
+    for line in ($text | lines) {
+        if (not $done) and ($line =~ '^version\s*=') {
+            $out = ($out | append $'version = "($version)"')
+            $done = true
+        } else {
+            $out = ($out | append $line)
+        }
     }
-    let readme = (open README.md --raw)
-    if ($readme =~ 'version-[0-9]+\.[0-9]+\.[0-9]+-blue') {
-        let updated = (
-            $readme
-            | str replace --all --regex 'version-[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9]+)?-blue' $"version-($version)-blue"
-        )
-        $updated | save --force README.md
-        print $"(ansi green)✓(ansi reset) Updated README.md version badge."
-    } else {
-        print $"(ansi yellow)⚠(ansi reset) No version badge found in README.md — skipping."
-    }
+    ($out | str join "\n") + "\n"
 }
 
-# ── Main ──────────────────────────────────────────────────────────────────────
+use ci/check_versions.nu [EXTRA_MANIFESTS]
+use version.nu [cargo_version]
+
+const TOUCHED = ["Cargo.toml" "Cargo.lock" "fuzz/Cargo.lock" "CHANGELOG.md"]
+
+def run_checks [] {
+    print $"(ansi cyan)── quality gate: nothing is bumped until it is green ──(ansi reset)"
+    nu scripts/ci/quality_gate.nu
+}
+
+def roll_back [start: string, tag: string] {
+    print $"(ansi red)✗ Bump failed — rolling back.(ansi reset)"
+    do --ignore-errors { ^git tag -d $tag | ignore }
+    ^git reset --hard $start
+}
 
 def main [
-    new_version: string,  # New version in X.Y.Z format
-    --yes (-y),           # Skip confirmation prompt (non-interactive)
+    new_version: string,  # New version, X.Y.Z
+    --yes (-y),           # Non-interactive
+    --skip-checks,        # The caller already ran the quality gate
+    --check,              # Only validate, then exit
 ] {
-    print ""
-    print $"(ansi cyan)══════════════════════════════════════════════════════════════(ansi reset)"
-    print $"(ansi cyan)  CleanSys — Bump Version(ansi reset)"
-    print $"(ansi cyan)══════════════════════════════════════════════════════════════(ansi reset)"
-    print ""
-
-    # 0. Read current version
-    let current_version = (open Cargo.toml | get workspace.package.version)
-    print $"  Current version : (ansi yellow)($current_version)(ansi reset)"
+    let current = (cargo_version (open Cargo.toml))
+    let tag = $"v($new_version)"
+    print $"  Current version : (ansi yellow)($current)(ansi reset)"
     print $"  New version     : (ansi green)($new_version)(ansi reset)"
-    print ""
 
-    if $current_version == $new_version {
-        print $"(ansi yellow)⚠(ansi reset) Version is already ($new_version). Nothing to do."
-        exit 0
+    if not (is_semver $new_version) {
+        print $"(ansi red)Error:(ansi reset) '($new_version)' is not a valid semantic version."
+        exit 1
     }
+    let cmp = (compare_versions $new_version $current)
+    if $cmp == 0 {
+        print $"(ansi red)Error:(ansi reset) ($new_version) is already the current version."
+        exit 1
+    }
+    if $cmp < 0 {
+        print $"(ansi red)Error:(ansi reset) ($new_version) is older than ($current); a bump must go up."
+        exit 1
+    }
+    print $"(ansi green)✓(ansi reset) ($new_version) is valid and newer than ($current)."
+    if $check { return }
 
-    # 1. Validate
-    validate_version $new_version
-    print $"(ansi green)✓(ansi reset) Version string validated."
+    if (^git tag --list $tag | str trim | is-not-empty) {
+        print $"(ansi red)Error:(ansi reset) tag ($tag) already exists."
+        exit 1
+    }
+    # A tag someone else pushed would make our push fail after the commit.
+    let remote = do { ^git ls-remote --tags origin $"refs/tags/($tag)" } | complete
+    if $remote.exit_code == 0 and ($remote.stdout | str trim | is-not-empty) {
+        print $"(ansi red)Error:(ansi reset) tag ($tag) already exists on origin."
+        exit 1
+    }
+    if (^git status --porcelain | str trim | is-not-empty) {
+        print $"(ansi red)Error:(ansi reset) the working tree is dirty — commit or stash first."
+        exit 1
+    }
+    if not $yes {
+        let answer = (input $"Bump to ($new_version), commit and tag ($tag)? [y/N] ")
+        if ($answer | str lowercase) != "y" { print "Aborted."; exit 1 }
+    }
+    let start = (^git rev-parse HEAD | str trim)
 
-    # 2. Update workspace version
-    update_workspace_version $new_version
-
-    # 3. Update cleansys-core dependency version
-    update_core_dep_version $new_version
-
-    # 4. Update README badge
-    update_readme_badge $new_version
-
-    # 5. cargo fmt
-    print ""
-    print $"(ansi cyan)── cargo fmt ───────────────────────────────────────────────(ansi reset)"
-    run-external "cargo" "fmt" "--all"
-    print $"(ansi green)✓(ansi reset) cargo fmt completed."
-
-    # 6. cargo clippy
-    print ""
-    print $"(ansi cyan)── cargo clippy ────────────────────────────────────────────(ansi reset)"
-    run-external "cargo" "clippy" "--workspace" "--all-targets" "--" "-D" "warnings" "-A" "deprecated"
-    print $"(ansi green)✓(ansi reset) cargo clippy passed."
-
-    # 7. cargo test
-    print ""
-    print $"(ansi cyan)── cargo test ──────────────────────────────────────────────(ansi reset)"
-    run-external "cargo" "test" "--workspace"
-    print $"(ansi green)✓(ansi reset) cargo test passed."
-
-    # 8. Update Cargo.lock to reflect new workspace version
-    print ""
-    print $"(ansi cyan)── cargo update ────────────────────────────────────────────(ansi reset)"
-    run-external "cargo" "update" "-p" "cleansys-core" "-p" "cleansys" "-p" "cleansys-gui"
-    print $"(ansi green)✓(ansi reset) Cargo.lock updated."
-
-    # 9. Changelog (git-cliff)
-    print ""
-    print $"(ansi cyan)── changelog ───────────────────────────────────────────────(ansi reset)"
-    if (which git-cliff | is-not-empty) {
-        run-external "git-cliff" "--output" "CHANGELOG.md" "--tag" $"v($new_version)"
-        print $"(ansi green)✓(ansi reset) CHANGELOG.md updated via git-cliff."
+    if $skip_checks {
+        print $"(ansi yellow)⚠(ansi reset) --skip-checks: assuming the gate already ran."
     } else {
-        print $"(ansi yellow)⚠(ansi reset) git-cliff not found — skipping changelog generation."
+        run_checks
     }
 
-    # 10. Git commit & tag
-    print ""
-    print $"(ansi cyan)── git commit & tag ────────────────────────────────────────(ansi reset)"
-    run-external "git" "add" "-A"
-    run-external "git" "commit" "-m" $"chore: bump version to ($new_version)"
-    run-external "git" "tag" "-a" $"v($new_version)" "-m" $"Release v($new_version)"
-    print $"(ansi green)✓(ansi reset) Committed and tagged v($new_version)."
+    try {
+        set_workspace_version (open Cargo.toml --raw) $new_version | save --force Cargo.toml
+        for f in $EXTRA_MANIFESTS {
+            set_extension_version (open $f --raw) $new_version | save --force $f
+        }
+        print $"(ansi green)✓(ansi reset) Cargo.toml ($EXTRA_MANIFESTS | str join ' ') → ($new_version)"
 
-    print ""
-    print $"(ansi green)══════════════════════════════════════════════════════════════(ansi reset)"
-    print $"(ansi green)  CleanSys version bumped to ($new_version) 🚀(ansi reset)"
-    print $"(ansi green)══════════════════════════════════════════════════════════════(ansi reset)"
-    print ""
-    print "  Next steps:"
-    print $"    git push origin main --tags"
-    print ""
+        ^cargo update --workspace
+        ^cargo metadata --locked --format-version 1 | ignore
+        # fuzz/ is its own workspace and records our crate's version too; resolving
+        # it refreshes the path dependency without upgrading anything else.
+        if ("fuzz/Cargo.toml" | path exists) {
+            do { cd fuzz; ^cargo metadata --format-version 1 | ignore }
+        }
+        print $"(ansi green)✓(ansi reset) Cargo.lock updated."
+
+        if (which git-cliff | is-not-empty) {
+            ^git-cliff --output CHANGELOG.md --tag $tag
+            print $"(ansi green)✓(ansi reset) CHANGELOG.md regenerated."
+        } else {
+            print $"(ansi yellow)⚠(ansi reset) git-cliff not found — CHANGELOG.md unchanged."
+        }
+
+        ^git add ...($TOUCHED | where {|f| $f | path exists }) ...$EXTRA_MANIFESTS
+        ^git commit -m $"chore: bump version to ($new_version)"
+        ^git tag -a $tag -m $"Release ($tag)"
+        print $"(ansi green)✓(ansi reset) Committed and tagged ($tag)."
+    } catch {|err|
+        roll_back $start $tag
+        error make --unspanned { msg: $"bump to ($new_version) failed and was rolled back: ($err.msg)" }
+    }
+    print $"  Next: git push --follow-tags origin main"
 }

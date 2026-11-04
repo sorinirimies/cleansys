@@ -1,476 +1,282 @@
 name: Release
 
+# Push a vX.Y.Z tag (`just release X.Y.Z`): validate tag == Cargo.toml → gate →
+# build the binaries in scripts/project.nu for macOS (arm64, x86-64), Linux
+# (static musl arm64, x86-64) and Windows → GitHub release with the archives +
+# sha256 and git-cliff notes → crates.io, every crate in scripts/project.nu (only
+# if the CRATES_IO_TOKEN secret is set; idempotent).
+
 on:
   push:
-    tags:
-      - "v*"
+    tags: ["v*"]
   workflow_dispatch:
     inputs:
       tag:
-        description: "Tag to release (e.g. v0.4.0)"
+        description: "Tag to release (e.g. v0.2.0)"
         required: true
-        default: ""
 
 permissions:
   contents: write
 
 concurrency:
   group: release
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  # ── 0. Validate tag ──────────────────────────────────────────────────────────
   validate:
     name: Validate tag
     runs-on: ubuntu-latest
     outputs:
-      tag: ${{ steps.resolve.outputs.tag }}
-      version: ${{ steps.resolve.outputs.version }}
+      tag: ${{ steps.v.outputs.tag }}
+      version: ${{ steps.v.outputs.version }}
+      matrix: ${{ steps.m.outputs.matrix }}
     steps:
-      - name: Resolve and validate tag
-        id: resolve
-        run: |
-          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
-            TAG="${{ github.event.inputs.tag }}"
-          else
-            TAG="${{ github.ref_name }}"
-          fi
-          if [[ ! "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
-            echo "❌ Tag '${TAG}' does not match vX.Y.Z — aborting."
-            exit 1
-          fi
-          VERSION="${TAG#v}"
-          echo "tag=${TAG}"         >> "$GITHUB_OUTPUT"
-          echo "version=${VERSION}" >> "$GITHUB_OUTPUT"
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref_name }}
+      - uses: hustcer/setup-nu@v3
+        with:
+          version: "0.116.1"
+      - name: Validate tag
+        id: v
+        run: nu scripts/ci/validate_tag.nu "${{ github.event.inputs.tag || github.ref_name }}" >> "$GITHUB_OUTPUT"
+      - name: Versions match the tag
+        run: nu scripts/ci/check_versions.nu "${{ steps.v.outputs.tag }}"
+      - name: Build matrix
+        id: m
+        run: nu scripts/project.nu matrix >> "$GITHUB_OUTPUT"
 
-  # ── 1. Quality gate (Linux) ───────────────────────────────────────────────────
-  audit:
-    name: cargo audit
-    runs-on: ubuntu-latest
+  gate:
+    name: Quality gate
     needs: validate
+    runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
         with:
           ref: ${{ needs.validate.outputs.tag }}
-      - name: Install Rust stable
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain stable
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      - run: cargo install cargo-audit --locked
-      - run: cargo audit
-
-  fuzz:
-    name: cargo fuzz (smoke)
-    runs-on: ubuntu-latest
-    needs: validate
-    steps:
-      - uses: actions/checkout@v7
-        with:
-          ref: ${{ needs.validate.outputs.tag }}
-      - name: Install Rust nightly
-        run: |
-          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh -s -- -y --default-toolchain nightly
-          echo "$HOME/.cargo/bin" >> $GITHUB_PATH
-      - run: cargo install cargo-fuzz --locked
-      - name: Fuzz each target for 30s
-        run: |
-          for t in $(cargo +nightly fuzz list); do
-            cargo +nightly fuzz run "$t" -- -max_total_time=30
-          done
-
-  test:
-    name: Test & lint
-    needs: validate
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          ref: ${{ needs.validate.outputs.tag }}
-      - name: Install Linux GUI libraries
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libxkbcommon-dev libx11-dev libxrandr-dev \
-            libxinerama-dev libxcursor-dev libxi-dev libwayland-dev \
-            libgl1-mesa-dev libfontconfig1-dev libssl-dev
       - uses: dtolnay/rust-toolchain@stable
         with:
           components: rustfmt,clippy
       - uses: Swatinem/rust-cache@v2
-      - name: Install Nushell
-        run: |
-          V=0.116.1
-          curl -fsSL https://github.com/nushell/nushell/releases/download/$V/nu-$V-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /tmp
-          sudo install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu /usr/local/bin/nu || install -D -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu $HOME/.cargo/bin/nu
-          nu --version
-      - name: Quality gate
-        run: nu scripts/ci/quality_gate.nu
+      - uses: hustcer/setup-nu@v3
+        with:
+          version: "0.116.1"
+      - name: Install system packages
+        run: nu scripts/ci/apt.nu
+      - run: nu scripts/ci/quality_gate.nu
 
-  # ── 2. Build matrix ───────────────────────────────────────────────────────────
-  # GitHub provides free hosted runners for all three platforms.
   build:
-    name: Build — ${{ matrix.name }}
-    needs: [validate, test, audit, fuzz]
+    name: Build ${{ matrix.target }}
+    needs: [validate, gate]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      # release_matrix in scripts/project.nu: the targets for its LINUX flavour.
+      matrix: ${{ fromJSON(needs.validate.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: ${{ matrix.target }}
+      - uses: hustcer/setup-nu@v3
+        with:
+          version: "0.116.1"
+      - name: Install system packages
+        run: nu scripts/ci/apt.nu
+      # Static Linux binaries for both architectures from one runner: zig is the
+      # C cross-compiler for any bundled C code (sqlite, zstd, …).
+      - name: Install zig
+        if: matrix.zig
+        uses: mlugg/setup-zig@v2
+      - name: Install cargo-zigbuild
+        if: matrix.zig
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-zigbuild
+      - name: Build (zig)
+        if: matrix.zig
+        run: nu scripts/ci/build_release.nu ${{ matrix.target }} --zig
+      - name: Build
+        if: ${{ !matrix.zig }}
+        run: nu scripts/ci/build_release.nu ${{ matrix.target }}
+      - name: Package
+        run: nu scripts/ci/package.nu ${{ matrix.target }} --out dist
+      - uses: actions/upload-artifact@v7
+        with:
+          name: dist-${{ matrix.target }}
+          path: dist/*
+          if-no-files-found: error
+
+  # .deb, .rpm and AppImages, built on the OLDEST hosted runners: a binary needs
+  # at least the glibc it was linked against (22.04 = 2.35).
+  linux-packages:
+    name: Linux packages ${{ matrix.target }}
+    needs: [validate, gate]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
       matrix:
         include:
-          # ── Linux x86_64 (GitHub hosted) ─────────────────────────────────────
-          - name: Linux x86_64
-            runner: ubuntu-latest
-            target: x86_64-unknown-linux-gnu
-            suffix: ""
-            os: linux
-
-          # ── Linux aarch64 (cross-compiled on GitHub hosted ubuntu) ────────────
-          - name: Linux aarch64
-            runner: ubuntu-latest
-            target: aarch64-unknown-linux-gnu
-            suffix: ""
-            os: linux
-
-          # ── Windows x86_64 (GitHub hosted Windows runner) ─────────────────────
-          - name: Windows x86_64
-            runner: windows-latest
-            target: x86_64-pc-windows-msvc
-            suffix: ".exe"
-            os: windows
-
-          # ── macOS x86_64 (GitHub hosted macOS runner) ─────────────────────────
-          - name: macOS x86_64
-            runner: macos-latest
-            target: x86_64-apple-darwin
-            suffix: ""
-            os: macos
-
-          # ── macOS aarch64 / Apple Silicon (GitHub hosted macOS runner) ─────────
-          - name: macOS aarch64
-            runner: macos-latest
-            target: aarch64-apple-darwin
-            suffix: ""
-            os: macos
-
+          - { runner: ubuntu-22.04, target: x86_64-unknown-linux-gnu }
+          - { runner: ubuntu-22.04-arm, target: aarch64-unknown-linux-gnu }
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.validate.outputs.tag }}
-
-      - name: Install Linux GUI libraries + packaging tools
-        if: matrix.os == 'linux'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libxkbcommon-dev libx11-dev libxrandr-dev \
-            libxinerama-dev libxcursor-dev libxi-dev libwayland-dev \
-            libgl1-mesa-dev libfontconfig1-dev libssl-dev \
-            gcc-aarch64-linux-gnu libc6-dev-arm64-cross dpkg-dev rpm alien fakeroot
-
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.target }}
-
       - uses: Swatinem/rust-cache@v2
         with:
-          key: ${{ matrix.target }}
-
-      - name: Configure aarch64 cross-linker
-        if: matrix.target == 'aarch64-unknown-linux-gnu'
-        run: |
-          mkdir -p ~/.cargo
-          echo '[target.aarch64-unknown-linux-gnu]' >> ~/.cargo/config.toml
-          echo 'linker = "aarch64-linux-gnu-gcc"'   >> ~/.cargo/config.toml
-
-      - name: Build TUI/CLI
-        run: cargo build --release -p cleansys --target ${{ matrix.target }}
-
-      - name: Build GUI
-        run: cargo build --release -p cleansys-gui --target ${{ matrix.target }}
-
-      - name: Build web UI
-        run: cargo build --release -p cleansys-web --target ${{ matrix.target }}
-
-      # ── Linux: .deb, .rpm ────────────────────────────────────────────────────
-      - name: Install Nushell
-        if: matrix.os == 'linux'
-        run: |
-          V=0.116.1
-          curl -fsSL https://github.com/nushell/nushell/releases/download/$V/nu-$V-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /tmp
-          sudo install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu /usr/local/bin/nu || install -D -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu $HOME/.cargo/bin/nu
-          nu --version
-
-      - name: Build .deb and .rpm
-        if: matrix.os == 'linux'
-        run: nu scripts/ci/package_linux.nu ${{ needs.validate.outputs.version }} ${{ matrix.target }}
-
-      - name: Install appimagetool
-        if: matrix.os == 'linux' && matrix.target == 'x86_64-unknown-linux-gnu'
-        run: |
-          wget -q https://github.com/AppImage/AppImageKit/releases/download/continuous/appimagetool-x86_64.AppImage \
-            -O /tmp/appimagetool
-          chmod +x /tmp/appimagetool
-          sudo cp /tmp/appimagetool /usr/local/bin/appimagetool
-
-      - name: Build AppImage
-        if: matrix.os == 'linux' && matrix.target == 'x86_64-unknown-linux-gnu'
-        run: bash scripts/ci/package_appimage.sh ${{ needs.validate.outputs.version }} ${{ matrix.target }}
-
-      # ── Windows: NSIS installer ──────────────────────────────────────────────
-      - name: Build NSIS installer
-        if: matrix.os == 'windows'
-        shell: bash
-        run: |
-          choco install nsis -y --no-progress
-          bash scripts/ci/package_windows.sh ${{ needs.validate.outputs.version }}
-
-      # ── Stage raw binaries ───────────────────────────────────────────────────
-      - name: Stage binaries
-        shell: bash
-        run: |
-          mkdir -p dist
-          cp target/${{ matrix.target }}/release/cleansys-gui${{ matrix.suffix }} \
-             dist/cleansys-gui-${{ matrix.target }}${{ matrix.suffix }} || true
-          cp target/${{ matrix.target }}/release/cleansys${{ matrix.suffix }} \
-             dist/cleansys-tui-${{ matrix.target }}${{ matrix.suffix }} || true
-          cp target/${{ matrix.target }}/release/cleansys-web${{ matrix.suffix }} \
-             dist/cleansys-web-${{ matrix.target }}${{ matrix.suffix }} || true
-
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+          key: desktop-${{ matrix.target }}
+      - uses: hustcer/setup-nu@v3
         with:
-          name: artifacts-${{ matrix.target }}
-          path: dist/
-          retention-days: 1
+          version: "0.116.1"
+      - name: Install system packages
+        run: nu scripts/ci/apt.nu
+      - name: Install packaging tools
+        run: nu scripts/ci/package_desktop.nu tools linux
+      - name: Build
+        run: nu scripts/ci/build_release.nu ${{ matrix.target }}
+      - name: .deb, .rpm and AppImage
+        run: nu scripts/ci/package_desktop.nu linux ${{ needs.validate.outputs.version }} ${{ matrix.target }} --appimage
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-${{ matrix.target }}
+          path: |
+            dist/*.deb
+            dist/*.rpm
+            dist/*.AppImage
+          if-no-files-found: error
 
-  # ── 3. macOS Universal DMG ────────────────────────────────────────────────────
-  # Merges the arm64 + x86_64 macOS binaries into a single universal DMG.
   macos-dmg:
-    name: macOS Universal DMG
-    needs: [validate, build]
+    name: macOS universal DMG
+    needs: [validate, gate]
     runs-on: macos-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.validate.outputs.tag }}
-
-      - name: Download arm64 artifacts
-        uses: actions/download-artifact@v4
+      - uses: dtolnay/rust-toolchain@stable
         with:
-          name: artifacts-aarch64-apple-darwin
-          path: artifacts/arm64/
-
-      - name: Download x86_64 artifacts
-        uses: actions/download-artifact@v4
+          targets: aarch64-apple-darwin,x86_64-apple-darwin
+      - uses: Swatinem/rust-cache@v2
+      - uses: hustcer/setup-nu@v3
         with:
-          name: artifacts-x86_64-apple-darwin
-          path: artifacts/x86_64/
-
-      - name: Reconstruct target dirs
-        run: |
-          mkdir -p target/aarch64-apple-darwin/release
-          mkdir -p target/x86_64-apple-darwin/release
-          cp artifacts/arm64/cleansys-gui-aarch64-apple-darwin   target/aarch64-apple-darwin/release/cleansys-gui
-          cp artifacts/arm64/cleansys-tui-aarch64-apple-darwin   target/aarch64-apple-darwin/release/cleansys
-          cp artifacts/x86_64/cleansys-gui-x86_64-apple-darwin   target/x86_64-apple-darwin/release/cleansys-gui
-          cp artifacts/x86_64/cleansys-tui-x86_64-apple-darwin   target/x86_64-apple-darwin/release/cleansys
-          chmod +x target/*/release/cleansys-gui target/*/release/cleansys
-
-      - name: Create universal binaries
-        run: bash scripts/ci/build_universal_macos.sh
-
-      - name: Install create-dmg
-        run: brew install create-dmg
-
-      - name: Build DMG
-        run: bash packaging/macos/create_dmg.sh ${{ needs.validate.outputs.version }}
-
-      - name: Upload DMG
-        uses: actions/upload-artifact@v4
+          version: "0.116.1"
+      - name: Build arm64
+        run: nu scripts/ci/build_release.nu aarch64-apple-darwin
+      - name: Build x86_64
+        run: nu scripts/ci/build_release.nu x86_64-apple-darwin
+      - name: DMG
+        run: nu scripts/ci/package_desktop.nu macos ${{ needs.validate.outputs.version }}
+      - uses: actions/upload-artifact@v7
         with:
-          name: artifacts-macos-universal
+          name: desktop-macos
           path: dist/*.dmg
-          retention-days: 1
+          if-no-files-found: error
 
-  # ── 4. GitHub Release ─────────────────────────────────────────────────────────
-  release:
-    name: Create GitHub Release
-    needs: [validate, build, macos-dmg]
+  windows-installer:
+    name: Windows installer
+    needs: [validate, gate]
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ needs.validate.outputs.tag }}
+      - uses: dtolnay/rust-toolchain@stable
+      - uses: Swatinem/rust-cache@v2
+      - uses: hustcer/setup-nu@v3
+        with:
+          version: "0.116.1"
+      - name: Install NSIS
+        run: nu scripts/ci/package_desktop.nu tools windows
+      - name: Build
+        run: nu scripts/ci/build_release.nu x86_64-pc-windows-msvc
+      - name: Installer
+        run: nu scripts/ci/package_desktop.nu windows ${{ needs.validate.outputs.version }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: desktop-windows
+          path: dist/*-setup.exe
+          if-no-files-found: error
+
+  publish:
+    name: GitHub release
+    needs: [validate, build, linux-packages, macos-dmg, windows-installer]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.validate.outputs.tag }}
           fetch-depth: 0
-
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install git-cliff
-        run: cargo install git-cliff --locked
-      - name: Install Nushell
-        run: |
-          V=0.116.1
-          curl -fsSL https://github.com/nushell/nushell/releases/download/$V/nu-$V-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /tmp
-          sudo install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu /usr/local/bin/nu || install -D -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu $HOME/.cargo/bin/nu
-          nu --version
-      - name: Generate release notes
-        run: nu scripts/ci/release_notes.nu ${{ needs.validate.outputs.tag }}
-
-      - name: Download all artifacts
-        uses: actions/download-artifact@v4
+      - uses: hustcer/setup-nu@v3
         with:
-          path: artifacts/
+          version: "0.116.1"
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
+      - name: Release notes
+        run: nu scripts/ci/release_notes.nu ${{ needs.validate.outputs.tag }}
+      - uses: actions/download-artifact@v8
+        with:
+          path: dist
           merge-multiple: true
-
-      - name: Create GitHub Release
-        uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v2
         with:
           tag_name: ${{ needs.validate.outputs.tag }}
+          name: CleanSys ${{ needs.validate.outputs.version }}
           body_path: RELEASE_NOTES.md
-          files: |
-            artifacts/*
-            LICENSE
-            README.md
-            CHANGELOG.md
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          files: dist/*
 
-  # ── 4b. Keep only the latest release's uploads ───────────────────────────────
-  prune-old-assets:
-    name: Prune old release assets
-    needs: [validate, release]
+  crates-io:
+    name: crates.io
+    needs: [validate, publish]
     runs-on: ubuntu-latest
-    continue-on-error: true   # housekeeping must never fail a release
-    permissions:
-      contents: write
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - name: Install Nushell
-        run: |
-          V=0.116.1
-          curl -fsSL https://github.com/nushell/nushell/releases/download/$V/nu-$V-x86_64-unknown-linux-gnu.tar.gz | tar -xz -C /tmp
-          sudo install -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu /usr/local/bin/nu || install -D -m 0755 /tmp/nu-$V-x86_64-unknown-linux-gnu/nu $HOME/.cargo/bin/nu
-          nu --version
-      - name: Delete assets of every older release (notes and tags stay)
-        env:
-          TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: nu scripts/ci/prune_release_assets.nu github "${{ github.repository }}" "${{ needs.validate.outputs.tag }}"
-
-  # ── 5. Publish to crates.io ───────────────────────────────────────────────────
-  publish:
-    name: Publish to crates.io
-    needs: [validate, release]
-    runs-on: ubuntu-latest
-    env:
-      HAS_TOKEN: ${{ secrets.CRATES_IO_TOKEN != '' }}
-    steps:
-      - name: Skip (no token)
-        if: env.HAS_TOKEN != 'true'
-        run: echo "⏭️  CRATES_IO_TOKEN not set — skipping."
-
-      - uses: actions/checkout@v4
-        if: env.HAS_TOKEN == 'true'
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.validate.outputs.tag }}
-
-      - name: Install Linux GUI libraries
-        if: env.HAS_TOKEN == 'true'
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y --no-install-recommends \
-            pkg-config libxkbcommon-dev libx11-dev libxrandr-dev \
-            libxinerama-dev libxcursor-dev libxi-dev libwayland-dev \
-            libgl1-mesa-dev libfontconfig1-dev libssl-dev
-
       - uses: dtolnay/rust-toolchain@stable
-        if: env.HAS_TOKEN == 'true'
-      - uses: Swatinem/rust-cache@v2
-        if: env.HAS_TOKEN == 'true'
-
-      - name: Publish cleansys-core
-        if: env.HAS_TOKEN == 'true'
+      - uses: hustcer/setup-nu@v3
+        with:
+          version: "0.116.1"
+      - name: Install system packages
+        run: nu scripts/ci/apt.nu
+      # Every crate in scripts/project.nu, dependencies first.
+      - name: Publish crates (idempotent)
         env:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
-        run: |
-          V="${{ needs.validate.outputs.version }}"
-          cargo info cleansys-core@$V 2>/dev/null | grep -q "^cleansys-core" \
-            && echo "⏭️  Already published." || {
-              cp README.md crates/cleansys-core/README.md
-              cargo publish -p cleansys-core --allow-dirty && sleep 30
-            }
+        run: nu scripts/ci/publish_crate.nu
 
-      - name: Publish cleansys
-        if: env.HAS_TOKEN == 'true'
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
-        run: |
-          V="${{ needs.validate.outputs.version }}"
-          cargo info cleansys@$V 2>/dev/null | grep -q "^cleansys" \
-            && echo "⏭️  Already published." || {
-              cp README.md crates/cleansys-tui/README.md
-              cargo publish -p cleansys --allow-dirty && sleep 20
-            }
-
-      - name: Publish cleansys-gui
-        if: env.HAS_TOKEN == 'true'
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
-        run: |
-          V="${{ needs.validate.outputs.version }}"
-          cargo info cleansys-gui@$V 2>/dev/null | grep -q "^cleansys-gui" \
-            && echo "⏭️  Already published." || {
-              cp README.md crates/cleansys-gui/README.md
-              cargo publish -p cleansys-gui --allow-dirty && sleep 20
-            }
-
-      - name: Publish cleansys-web
-        if: env.HAS_TOKEN == 'true'
-        env:
-          CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
-        run: |
-          V="${{ needs.validate.outputs.version }}"
-          # Needs Rust 1.98+ (Topcoat): the `stable` toolchain installed above satisfies it.
-          cargo info cleansys-web@$V 2>/dev/null | grep -q "^cleansys-web" \
-            && echo "⏭️  Already published." || {
-              cargo publish -p cleansys-web --allow-dirty
-            }
-
-  # ── 6. Update AUR ─────────────────────────────────────────────────────────────
-  update-aur:
-    name: Update AUR
-    needs: [validate, release]
+  # Needs the AUR_USERNAME, AUR_EMAIL and AUR_SSH_PRIVATE_KEY secrets; without
+  # them the deploy fails without failing the release.
+  aur:
+    name: AUR
+    needs: [validate, publish]
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           ref: ${{ needs.validate.outputs.tag }}
-
-      - name: Update PKGBUILD checksums
-        run: bash scripts/ci/update_aur.sh ${{ needs.validate.outputs.version }}
-
-      - name: Check AUR secrets
-        id: aur
-        env:
-          AUR_USERNAME: ${{ secrets.AUR_USERNAME }}
-          AUR_EMAIL: ${{ secrets.AUR_EMAIL }}
-          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-        run: |
-          if [ -n "$AUR_USERNAME" ] && [ -n "$AUR_EMAIL" ] && [ -n "$AUR_SSH_PRIVATE_KEY" ]; then
-            echo "configured=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice::AUR deploy skipped: set the AUR_USERNAME, AUR_EMAIL and AUR_SSH_PRIVATE_KEY repo secrets to enable it."
-            echo "configured=false" >> "$GITHUB_OUTPUT"
-          fi
-
-      - name: Deploy to AUR
-        if: steps.aur.outputs.configured == 'true'
+      - uses: hustcer/setup-nu@v3
+        with:
+          version: "0.116.1"
+      - name: PKGBUILD for this version
+        run: nu scripts/ci/package_desktop.nu aur ${{ needs.validate.outputs.version }}
+      - name: Deploy to the AUR
         uses: KSXGitHub/github-actions-deploy-aur@v3
+        continue-on-error: true
         with:
           pkgname: cleansys
-          pkgbuild: packaging/aur/cleansys/PKGBUILD
+          pkgbuild: dist/aur/PKGBUILD
           commit_username: ${{ secrets.AUR_USERNAME }}
           commit_email: ${{ secrets.AUR_EMAIL }}
           ssh_private_key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-          commit_message: "Update to v${{ needs.validate.outputs.version }}"
+          commit_message: Update to v${{ needs.validate.outputs.version }}

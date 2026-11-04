@@ -1,9 +1,9 @@
-# CleanSys workspace — task runner
-# Install just:      cargo install just
-# Install nu:         cargo install nu   (https://www.nushell.sh)
-# Install git-cliff:  cargo install git-cliff
-# Install vhs:        brew install vhs  OR  go install github.com/charmbracelet/vhs@latest
-# Usage: just <task>
+# CleanSys — task runner
+# Recipes run in Nushell; anything longer than a line lives in scripts/*.nu (tested).
+# Install: cargo install just nu git-cliff   — then `just install-tools`
+# Usage:   just <task>
+
+set shell := ["nu", "-c"]
 
 # ── Default ───────────────────────────────────────────────────────────────────
 
@@ -13,58 +13,287 @@ default:
 # ── Tool checks ───────────────────────────────────────────────────────────────
 
 _check-git-cliff:
-    @command -v git-cliff >/dev/null 2>&1 || { \
-        echo "❌ git-cliff not found. Install with: cargo install git-cliff"; exit 1; \
-    }
+    @nu scripts/tools.nu check git-cliff
 
-# Check nu (nushell) is available
-_check-nu:
-    @command -v nu >/dev/null 2>&1 || { \
-        echo "❌ nu (nushell) not found. Install: https://www.nushell.sh"; exit 1; \
-    }
-
-_check-vhs:
-    @command -v vhs >/dev/null 2>&1 || { \
-        echo "❌ vhs not found."; \
-        echo "   macOS:      brew install vhs"; \
-        echo "   Any:        go install github.com/charmbracelet/vhs@latest"; \
-        exit 1; \
-    }
-
-# Install all recommended development tools
+# Install the development tools (git-cliff, cargo-audit/deny/fuzz/llvm-cov/outdated/machete)
 install-tools:
-    @echo "Installing development tools…"
-    @command -v git-cliff >/dev/null 2>&1 || cargo install git-cliff --locked
-    @command -v nu >/dev/null 2>&1 || cargo install nu --locked
-    @echo "Note: VHS must be installed separately: https://github.com/charmbracelet/vhs"
-    @echo "✅ All tools installed!"
+    nu scripts/tools.nu install
 
 # ── Build ─────────────────────────────────────────────────────────────────────
 
-# Build the entire workspace (dev)
+# Check without building
+check:
+    cargo check --workspace
+
+# Build (dev)
 build:
     cargo build --workspace
 
-# Build only the core library (dev)
-build-core:
-    cargo build -p cleansys-core
-
-# Build only the TUI/CLI crate (dev)
-build-tui:
-    cargo build -p cleansys
-
-# Build only the GUI crate (dev)
-build-gui:
-    cargo build -p cleansys-gui
-
-# Build release binaries for TUI and GUI
+# Release build of the shipped binaries (scripts/project.nu)
 build-release:
-    cargo build --release -p cleansys
-    cargo build --release -p cleansys-gui
+    nu scripts/ci/build_release.nu
+
+# Install the shipped binaries from this checkout into ~/.cargo/bin
+install:
+    nu scripts/ci/build_release.nu install
 
 # ── Run ───────────────────────────────────────────────────────────────────────
 
-# Launch the Ratatui terminal UI (default `cleansys` binary)
+# Run the main binary (e.g. just run --help)
+run *args:
+    cargo run -q -p cleansys -- {{ args }}
+
+# ── Test & quality ────────────────────────────────────────────────────────────
+
+# Rust tests
+test:
+    cargo test --workspace --all-features
+
+# Nushell script tests
+test-nu:
+    nu scripts/tests/run_all.nu
+
+fmt:
+    cargo fmt --all
+
+fmt-check:
+    cargo fmt --all -- --check
+
+# Clippy, warnings are errors
+clippy:
+    cargo clippy --workspace --all-targets --all-features -- -D warnings
+
+# Rust and Nu tests
+test-all-nu: test test-nu
+    @echo "✅ All Rust and Nu tests passed!"
+
+# Line coverage (needs cargo-llvm-cov); writes target/llvm-cov/html
+coverage:
+    cargo llvm-cov --workspace --html
+    @echo "→ target/llvm-cov/html/index.html"
+
+# Docs for the workspace, warnings are errors (what docs.rs would reject)
+doc:
+    $env.RUSTDOCFLAGS = "-D warnings"; cargo doc --no-deps --workspace
+
+# Secrets anywhere in the git history (brew install gitleaks); CI runs it on every push.
+# A false positive goes in .gitleaksignore, by the fingerprint gitleaks prints.
+secrets:
+    gitleaks git --redact --no-banner .
+
+# Everything CI runs (fmt check, clippy, tests, versions, nu tests)
+check-all: fmt
+    nu scripts/ci/quality_gate.nu
+
+# Security: known vulnerabilities (cargo install cargo-audit)
+audit:
+    cargo audit
+
+# Security: licenses, advisories, bans, sources (cargo install cargo-deny)
+deny:
+    cargo deny check
+
+# Dependencies nothing uses (cargo install cargo-machete; the gate runs it too)
+unused-deps:
+    cargo machete
+
+# Fuzz one target (e.g. just fuzz parse 60); needs nightly + cargo-fuzz
+fuzz target secs="60":
+    cargo +nightly fuzz run {{ target }} -- -max_total_time={{ secs }}
+
+# Every fuzz target for a short while
+fuzz-all secs="30":
+    nu scripts/ci/fuzz_all.nu --secs {{ secs }}
+
+# List the fuzz targets
+fuzz-list:
+    cargo +nightly fuzz list
+
+# Security + fuzz locally, like the nightly workflows
+nightly-local: audit deny fuzz-all
+
+# ── Dependencies ──────────────────────────────────────────────────────────────
+
+# Update Cargo.lock and fuzz/Cargo.lock (semver-compatible only)
+update:
+    nu scripts/ci/deps_update.nu update
+
+# Show outdated dependencies (needs cargo-outdated)
+outdated:
+    cargo outdated --workspace
+
+# What the nightly workflow does: update, full gate, commit and push if green
+update-deps: update check-all
+    nu scripts/ci/deps_update.nu commit (git config user.name) (git config user.email)
+
+# ── Nightly workflows on demand ───────────────────────────────────────────────
+
+# Run a GitHub workflow now (deps-update | security | fuzz | ci), needs gh
+gh-run workflow="deps-update":
+    gh workflow run {{ workflow }}.yml
+    @echo "✅ Dispatched {{ workflow }} — gh run watch"
+
+# Run a Gitea workflow now (deps-update | security | fuzz); needs GITEA_URL + GITEA_TOKEN
+gitea-run workflow="deps-update":
+    nu scripts/gitea_run.nu {{ workflow }}
+
+# The nightly dependency update, now, on both hosts
+deps-update-now: (gh-run "deps-update")
+    -just gitea-run deps-update
+
+# Security audit workflow, now, on both hosts
+security-now: (gh-run "security")
+    -just gitea-run security
+
+# Fuzz workflow, now, on both hosts
+fuzz-now: (gh-run "fuzz")
+    -just gitea-run fuzz
+
+# ── Changelog ─────────────────────────────────────────────────────────────────
+
+# Regenerate CHANGELOG.md from all tags
+changelog: _check-git-cliff
+    git-cliff --output CHANGELOG.md
+
+# Preview the next release's changelog
+changelog-preview: _check-git-cliff
+    @git-cliff --unreleased
+
+# Prepend only the unreleased commits to CHANGELOG.md
+changelog-unreleased: _check-git-cliff
+    git-cliff --unreleased --prepend CHANGELOG.md
+
+# Show the latest release's entry
+changelog-latest: _check-git-cliff
+    @git-cliff --latest
+
+# ── Version & release ─────────────────────────────────────────────────────────
+
+# Current version (Cargo.toml)
+version:
+    @nu scripts/version.nu
+
+# Check Cargo.toml and EXTRA_MANIFESTS agree (and a tag, if given)
+check-versions tag="":
+    nu scripts/ci/check_versions.nu {{ tag }}
+
+# Validate that a version gives a valid vX.Y.Z tag
+validate-tag version:
+    nu scripts/ci/validate_tag.nu "v{{ version }}"
+
+# What would be released, without changing anything
+release-preview: _check-git-cliff
+    @print $"Current version: (nu scripts/version.nu)\n"
+    @git-cliff --unreleased
+    @nu scripts/project.nu
+
+# Everything in check-all plus a release build and the docs
+check-release: check-all build-release doc
+    @echo "✅ Release gate passed"
+
+# Dry-run the crates.io publish of every crate in scripts/project.nu
+publish-dry:
+    nu scripts/ci/publish_crate.nu --dry-run
+
+# Bump Cargo.toml (+ EXTRA_MANIFESTS) + Cargo.lock, regenerate the changelog, commit and tag
+bump version: _check-git-cliff check-all
+    nu scripts/bump_version.nu --yes --skip-checks {{ version }}
+
+# Bump, tag and push to GitHub — starts the Release workflow
+release version: (bump version)
+    git push --follow-tags origin (git branch --show-current)
+    @print "✅ v{{ version }} pushed — the Release workflow builds the binaries."
+
+# First release of the version already in Cargo.toml (no bump), pushed to GitHub
+release-initial: _check-git-cliff check-all
+    nu scripts/release_initial.nu
+    git push --follow-tags origin (git branch --show-current)
+
+# Bump, tag and push to every remote — starts the Release workflows on both hosts
+release-all version: (bump version) push-all
+
+# Bump, tag and push to Gitea only
+release-gitea-starscream version: (bump version)
+    git push --follow-tags gitea-starscream (git branch --show-current)
+
+# First release, pushed to every remote
+release-initial-all: _check-git-cliff check-all
+    nu scripts/release_initial.nu
+    nu scripts/remotes.nu push
+
+# Re-run the GitHub Release workflow for an existing tag (e.g. just release-retrigger 0.1.0)
+release-retrigger version:
+    gh workflow run release.yml --field tag=v{{ version }}
+
+# Package the release binaries locally (e.g. just package aarch64-apple-darwin)
+package target:
+    nu scripts/ci/build_release.nu {{ target }}
+    nu scripts/ci/package.nu {{ target }} --out dist
+
+# ── Git remotes (GitHub = origin, Gitea = gitea-starscream; no mirroring) ─────
+
+# Push the current branch + tags to every configured remote (continues on failure)
+push-all:
+    nu scripts/remotes.nu push
+
+# Show all configured remotes
+remotes:
+    @git remote -v
+
+# Push the current branch to GitHub
+push:
+    git push origin (git branch --show-current)
+
+# Push the current branch to Gitea Starscream
+push-gitea-starscream:
+    git push gitea-starscream (git branch --show-current)
+
+# Push all tags to GitHub
+push-tags:
+    git push origin --tags
+
+# Push all tags to every remote (continues on failure)
+push-tags-all:
+    nu scripts/remotes.nu push-tags
+
+# Latest commit + tags to every remote, after the gate (no bump)
+push-release-all: check-all push-all
+
+# Force-push the current branch to every remote (no lease — be sure!)
+push-all-force:
+    nu scripts/remotes.nu push --force
+
+# Pull the current branch from GitHub
+pull:
+    git pull origin (git branch --show-current)
+
+# Pull the current branch from Gitea Starscream
+pull-gitea-starscream:
+    git pull gitea-starscream (git branch --show-current)
+
+# Pull the current branch from every remote (continues on failure)
+pull-all:
+    nu scripts/remotes.nu pull
+
+# Force-sync Gitea Starscream with this checkout (branch + tags) — the nightlies diverge
+sync-gitea-starscream:
+    git push gitea-starscream (git branch --show-current) --force
+    git push gitea-starscream --tags --force
+
+# Add the missing remotes
+setup-remotes:
+    nu scripts/remotes.nu setup
+
+# Remove build artifacts
+clean:
+    cargo clean
+    rm -rf dist
+
+# ── Project extras ─────────────────────────────────────────────────────────────
+
+# ── Apps ──────────────────────────────────────────────────────────────────────
+
+# Launch the terminal UI
 run-tui:
     cargo run -p cleansys
 
@@ -72,74 +301,19 @@ run-tui:
 run-gui:
     cargo run -p cleansys-gui
 
-# Alias for run-tui
-tui: run-tui
+# Launch the web UI (Topcoat; needs Rust 1.98+)
+run-web:
+    cargo run -p cleansys-web
 
-# Alias for run-gui
-gui: run-gui
+# Test one crate: just test-crate cleansys-gui
+test-crate crate:
+    cargo test -p {{ crate }} --all-features
 
-# Alias for run-web
-web: run-web
+# Regenerate the browser/app/game cleaner packs from scripts/gen_content_packs.nu.
+gen-packs:
+    nu scripts/gen_content_packs.nu
 
-# Alias: default run launches the TUI (matches historical `cleansys` behavior)
-run: run-tui
-
-# ── Test ──────────────────────────────────────────────────────────────────────
-
-# Run the full workspace test suite
-test:
-    cargo test --workspace --locked --all-features --all-targets
-
-# Test only the core library
-test-core:
-    cargo test -p cleansys-core --all-features
-
-# Test only the TUI crate
-test-tui:
-    cargo test -p cleansys --all-features
-
-# Test only the GUI crate
-test-gui:
-    cargo test -p cleansys-gui --all-features
-
-# Run Nu script tests
-test-nu: _check-nu
-    nu scripts/tests/run_all.nu
-
-# Run both Rust and Nu tests
-test-all-nu: test test-nu
-    @echo "✅ All Rust and Nu tests passed!"
-
-# ── Code quality ──────────────────────────────────────────────────────────────
-
-# Check without building
-check:
-    cargo check --workspace
-
-# Format all code
-fmt:
-    cargo fmt --all
-
-# Check formatting without modifying files
-fmt-check:
-    cargo fmt --all -- --check
-
-# Run clippy across the workspace
-clippy:
-    cargo clippy --workspace --all-targets --all-features -- -D warnings -A deprecated
-
-# Run all quality checks (format, clippy, test, nu) — must pass before a release.
-# Auto-formats first, then verifies no changes remain (catches unstaged format diffs).
-check-all: fmt clippy test test-nu
-    @echo "🔍 Verifying formatting is clean…"
-    cargo fmt --all -- --check
-    @echo "✅ All checks passed!"
-
-# Full pre-release quality gate — everything in check-all plus a release build.
-check-release: check-all build-release
-    @echo "✅ Release quality gate passed (fmt + clippy + test + nu + release build)!"
-
-# ── Demos (GIFs + screenshots) — all nushell ──────────────────────────────────
+# ── Demos (GIFs + screenshots) ────────────────────────────────────────────────
 # Everything runs against a synthetic HOME built by demo/fixture.nu (sparse files, no
 # real paths; nothing of yours is touched) and uses the release binaries.
 
@@ -150,498 +324,49 @@ _demo-build:
     cargo build --release -p cleansys -p cleansys-gui -p cleansys-web
 
 # Record one tape: `just vhs tui-overview`  (writes demo/previews/<name>.gif)
-vhs name: _check-vhs _check-nu _demo-build
-    @mkdir -p demo/previews demo/target
-    vhs demo/{{name}}.tape
-    @echo "✅ demo/previews/{{name}}.gif"
+vhs name: _demo-build
+    mkdir demo/previews demo/target
+    vhs demo/{{ name }}.tape
 
 # Record every terminal tape.
-vhs-all: _check-vhs _check-nu _demo-build
-    @mkdir -p demo/previews demo/target
-    @for t in {{TAPES}}; do echo "▶ $t"; vhs demo/$t.tape || exit 1; done
-    @echo "✅ All GIFs refreshed in demo/previews/"
+vhs-all: _demo-build
+    mkdir demo/previews demo/target
+    for t in ("{{ TAPES }}" | split row " ") { print $"▶ ($t)"; ^vhs $"demo/($t).tape" }
 
 # GUI screenshots (macOS only: osascript + screencapture).
-gui-screenshots: _check-nu _demo-build
+gui-screenshots: _demo-build
     nu scripts/gui-screenshots.nu
 
 # Web screenshots + GIFs (needs ffmpeg and a Chromium-based browser; BROWSER=/path overrides).
-web-screenshots: _check-nu _demo-build
+web-screenshots: _demo-build
     nu scripts/web-screenshots.nu
 
-# Regenerate everything shown in the README.
+# Regenerate everything shown in the README (GIFs/PNGs are tracked with git-lfs).
 vhs-refresh-previews: vhs-all gui-screenshots web-screenshots
-    @echo "✅ demo/previews updated — review with 'git status' and commit (GIFs/PNGs are tracked with git-lfs)."
 
+# Remove VHS scratch files.
 vhs-clean:
-    @echo "Cleaning VHS scratch files…"
-    @rm -f demo/target/*.png
-    @echo "✅ done"
+    rm -f ...(glob demo/target/*.png)
 
-# Regenerate the browser/app/game cleaner packs from scripts/gen_content_packs.nu.
-gen-packs: _check-nu
-    nu scripts/gen_content_packs.nu
+# ── Release housekeeping ──────────────────────────────────────────────────────
 
-# ── Web UI (Topcoat; needs Rust 1.98+) ─────────────────────────────────────────
-
-# Serve the web UI on http://127.0.0.1:3000
-run-web:
-    cargo run -p cleansys-web
-
-# Test only the web crate
-test-web:
-    cargo test -p cleansys-web
-
-# ── Release housekeeping ───────────────────────────────────────────────────────
-
-# Preview which old release uploads would be deleted (keeps only the latest version's files).
-prune-releases-preview *ARGS: _check-nu
-    nu scripts/ci/prune_release_assets.nu --dry-run {{ARGS}}
+# What prune-releases would delete.
+prune-releases-preview *ARGS:
+    nu scripts/ci/prune_release_assets.nu --dry-run {{ ARGS }}
 
 # Delete the uploads of every release except the latest (notes and tags stay).
-# Token: $TOKEN / $GITHUB_TOKEN / `gh auth login`. Gitea: --remote <name> --url <base-url>.
-prune-releases *ARGS: _check-nu
-    nu scripts/ci/prune_release_assets.nu {{ARGS}}
-
-# ── Packaging ────────────────────────────────────────────────────────
-
-# Build Linux .deb and .rpm packages (requires dpkg-deb + alien; run locally on Linux)
-package-linux version: build-release
-    nu scripts/ci/package_linux.nu {{ version }} $(rustc -vV | grep host | cut -d' ' -f2)
-
-# Build Linux AppImages (requires appimagetool in PATH)
-package-appimage version:
-    bash scripts/ci/package_appimage.sh {{ version }} $(rustc -vV | grep host | cut -d' ' -f2)
-
-# Cross-compile Windows .exe from Linux (requires mingw-w64)
-# Install: sudo pacman -S mingw-w64-gcc   OR   sudo apt install gcc-mingw-w64-x86-64
-package-windows version:
-    rustup target add x86_64-pc-windows-gnu
-    cargo build --release -p cleansys -p cleansys-gui --target x86_64-pc-windows-gnu
-    mkdir -p dist
-    cp target/x86_64-pc-windows-gnu/release/cleansys.exe     dist/cleansys-tui-x86_64-windows.exe
-    cp target/x86_64-pc-windows-gnu/release/cleansys-gui.exe dist/cleansys-gui-x86_64-windows.exe
-
-# Update AUR PKGBUILD to a new version
-update-aur version:
-    bash scripts/ci/update_aur.sh {{ version }}
-
-# Note: macOS universal DMG is built automatically by GitHub Actions (macos-latest runner)
-# Note: Windows NSIS installer is built by GitHub Actions (windows-latest runner)
-#       and cross-compiled via mingw-w64 by Gitea CI (no Windows machine needed)
-# Note: Linux aarch64 is cross-compiled by both GitHub Actions and Gitea CI
-
-# ── Documentation ─────────────────────────────────────────────────────────────
-
-# Generate and open docs for the TUI crate
-doc-tui:
-    cargo doc --no-deps -p cleansys --open
-
-# Generate and open docs for the GUI crate
-doc-gui:
-    cargo doc --no-deps -p cleansys-gui --open
-
-# Generate docs for the full workspace (no browser)
-doc:
-    cargo doc --no-deps --workspace
-
-# ── Changelog ─────────────────────────────────────────────────────────────────
-
-changelog: _check-git-cliff
-    @echo "Generating full changelog…"
-    git-cliff --output CHANGELOG.md
-    @echo "✅ CHANGELOG.md updated."
-
-changelog-unreleased: _check-git-cliff
-    git-cliff --unreleased --prepend CHANGELOG.md
-    @echo "✅ Unreleased changes prepended."
-
-changelog-preview: _check-git-cliff
-    @git-cliff --unreleased
-
-changelog-latest: _check-git-cliff
-    @git-cliff --latest
-
-# ── Version bump ─────────────────────────────────────────────────────────────
-
-# Validate that a version string will produce a valid vX.Y.Z tag.
-validate-tag version: _check-nu
-    @nu scripts/ci/validate_tag.nu "v{{version}}" 2>&1 >/dev/null
-
-_check-version-changed version: _check-nu
-    #!/usr/bin/env sh
-    current=$(nu scripts/version.nu)
-    if [ "$current" = "{{version}}" ]; then
-        echo "❌ Version {{version}} is already the current version. Nothing to bump."
-        exit 1
-    fi
-    echo "✅ Version will change: $current → {{version}}"
-
-# Bump the workspace version, regenerate Cargo.lock + CHANGELOG.md, commit and tag.
-# Validation runs first (cheap), quality gate runs second (expensive).
-bump version: (validate-tag version) (_check-version-changed version) check-release _check-git-cliff
-    nu scripts/bump_version.nu --yes {{ version }}
-
-# ── Publish (crates.io) ───────────────────────────────────────────────────────
-
-# Run the full pre-publish readiness check (fmt, clippy, tests, docs, dry-run)
-check-publish: _check-nu
-    nu scripts/check_publish.nu
-
-# Dry-run publish for all three crates (in dependency order)
-publish-dry: check-all
-    @echo "Dry-run: cleansys-core"
-    cargo publish --dry-run -p cleansys-core
-    @echo "Dry-run: cleansys (TUI)"
-    cargo publish --dry-run -p cleansys
-    @echo "Dry-run: cleansys-gui"
-    cargo publish --dry-run -p cleansys-gui
-
-# Publish all three in dependency order: core → tui → gui.
-publish: check-all publish-core publish-tui publish-gui
-    @echo "✅ cleansys-core, cleansys, and cleansys-gui published to crates.io!"
-
-publish-core:
-    @echo "📦 Publishing cleansys-core…"
-    cargo publish -p cleansys-core
-    @echo "⏳ Waiting 30 s for the index to propagate…"
-    sleep 30
-
-publish-tui:
-    @echo "📦 Publishing cleansys (TUI)…"
-    cargo publish -p cleansys
-
-publish-gui:
-    @echo "📦 Publishing cleansys-gui…"
-    cargo publish -p cleansys-gui
-
-# Show what would be released without making any changes
-release-preview: _check-git-cliff
-    @echo "Current version: $(just version)"
-    @echo ""
-    @echo "Unreleased commits:"
-    @git-cliff --unreleased
-    @echo ""
-    @echo "Published crates:  cleansys (TUI)  •  cleansys-gui"
-    @echo "Internal crate:    cleansys-core (publish = false-able)"
-
-# ── Housekeeping ──────────────────────────────────────────────────────────────
-
-clean:
-    cargo clean
-
-update:
-    cargo update
-
-update-deps:
-    @echo "⬆️  Updating dependencies…"
-    cargo update
-    @echo "🔍 Running quality gate…"
-    cargo fmt --all -- --check
-    cargo clippy --workspace --all-targets --all-features -- -D warnings -A deprecated
-    cargo test --workspace --locked --all-features --all-targets
-    @echo "✅ All checks passed — committing dependency updates…"
-    git add Cargo.lock
-    git diff --cached --quiet || git commit -m "chore: update dependencies"
-    git push origin "$(git branch --show-current)"
-    @echo "✅ Dependency updates pushed to GitHub."
-
-# Upgrade workspace dependency *pins* (Cargo.toml constraints) via cargo-edit,
-# then cross-check (fmt/clippy/test/doc). Install cargo-edit first: cargo install cargo-edit
-upgrade-deps: _check-nu
-    nu scripts/upgrade_deps.nu
-
-# Dry-run: list outdated dependencies without changing anything
-upgrade-deps-check: _check-nu
-    nu scripts/upgrade_deps.nu --check
-
-# Manually run the same "upgrade deps -> cut a patch release" flow the nightly
-# CI job runs automatically. Requires cargo-edit + git-cliff installed and a
-# clean working tree; pushes a commit + tag to origin on success.
-auto-patch-release: _check-nu _check-git-cliff
-    cp Cargo.lock Cargo.lock.before
-    cargo install cargo-edit --locked
-    cargo update && cargo fetch
-    cargo upgrade --incompatible allow
-    cargo update
-    just check-no-downgrade
-    @if git diff --quiet Cargo.toml Cargo.lock; then \
-        echo "ℹ️  No dependency changes — nothing to release."; \
-        rm -f Cargo.lock.before; \
-    else \
-        just check-all && \
-        rm -f Cargo.lock.before && \
-        git add Cargo.toml Cargo.lock && \
-        git commit -m "chore(deps): dependency upgrade $(date -u '+%Y-%m-%d')" && \
-        git push origin "$(git branch --show-current)" && \
-        nu scripts/ci/auto_patch_release.nu; \
-    fi
-
-outdated:
-    cargo outdated
-
-# Guard: fail if any dependency version decreased vs a saved Cargo.lock.before snapshot
-check-no-downgrade before="Cargo.lock.before" after="Cargo.lock": _check-nu
-    nu scripts/ci/check_no_downgrade.nu --before {{ before }} --after {{ after }}
-
-# Show the current workspace version
-version: _check-nu
-    @nu scripts/version.nu
-
-# Show project info
-info:
-    @echo "Project: CleanSys"
-    @echo "Version: $(just version)"
-    @echo "Author: Sorin Albu-Irimies"
-    @echo "License: MIT"
-
-view-changelog:
-    @cat CHANGELOG.md
-
-# Show all configured remotes
-remotes:
-    @git remote -v
-
-# ── Git remotes & pushing ────────────────────────────────────────────────────
-
-push:
-    git push origin "$(git branch --show-current)"
-
-push-gitea:
-    git push gitea "$(git branch --show-current)"
-
-# Push the current branch to Gitea (nexus-lab instance)
-push-gitea-nexus-lab:
-    git push gitea-nexus-lab "$(git branch --show-current)"
-
-# Push the current branch to Gitea Starscream
-push-gitea-starscream:
-    git push gitea-starscream "$(git branch --show-current)"
-
-push-all:
-    #!/usr/bin/env sh
-    export GIT_SSH_COMMAND="ssh -o ConnectTimeout=10 -o BatchMode=yes"
-    ok=""; failed=""; skipped=""
-    for r in origin gitea gitea-nexus-lab gitea-starscream; do
-        if ! url=$(git remote get-url "$r" 2>/dev/null); then
-            skipped="$skipped $r"; continue
-        fi
-        if git push "$r" "$(git branch --show-current)"; then
-            ok="$ok\n  ✅ $r → $url"
-        else
-            failed="$failed\n  ❌ $r → $url"
-        fi
-    done
-    echo ""
-    echo "── push summary ──"
-    [ -n "$ok" ]      && printf "Sent to:$ok\n"
-    [ -n "$failed" ]  && printf "Failed:$failed\n"
-    [ -n "$skipped" ] && echo "Skipped (remote not configured):$skipped"
-    [ -z "$failed" ]
-
-# Force-push to all remotes
-push-all-force:
-    #!/usr/bin/env sh
-    export GIT_SSH_COMMAND="ssh -o ConnectTimeout=10 -o BatchMode=yes"
-    ok=""; failed=""; skipped=""
-    for r in origin gitea gitea-nexus-lab gitea-starscream; do
-        if ! url=$(git remote get-url "$r" 2>/dev/null); then
-            skipped="$skipped $r"; continue
-        fi
-        if git push --force "$r" "$(git branch --show-current)"; then
-            ok="$ok\n  ✅ $r → $url"
-        else
-            failed="$failed\n  ❌ $r → $url"
-        fi
-    done
-    echo ""
-    echo "── force-push summary ──"
-    [ -n "$ok" ]      && printf "Sent to:$ok\n"
-    [ -n "$failed" ]  && printf "Failed:$failed\n"
-    [ -n "$skipped" ] && echo "Skipped (remote not configured):$skipped"
-    [ -z "$failed" ]
-
-push-tags:
-    git push origin --tags
-
-push-tags-all:
-    #!/usr/bin/env sh
-    failed=""; ok_=""; skipped=""
-    for r in origin gitea gitea-nexus-lab gitea-starscream; do
-        if ! git remote get-url "$r" >/dev/null 2>&1; then
-            echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"
-            skipped="$skipped $r"; continue
-        fi
-        echo "→ pushing tags to $r"
-        if git push "$r" --tags; then ok_="$ok_ $r"; else failed="$failed $r"; fi
-    done
-    echo ""
-    [ -n "$ok_" ] && echo "✅ Tags pushed to:$ok_"
-    [ -n "$skipped" ] && echo "ℹ️  Skipped (not configured):$skipped"
-    if [ -n "$failed" ]; then echo "⚠️  Failed:$failed"; exit 1; fi
-
-pull:
-    git pull origin "$(git branch --show-current)"
-
-pull-gitea:
-    git pull gitea "$(git branch --show-current)"
-
-# Pull the current branch from Gitea (nexus-lab instance)
-pull-gitea-nexus-lab:
-    git pull gitea-nexus-lab "$(git branch --show-current)"
-
-# Pull the current branch from Gitea Starscream
-pull-gitea-starscream:
-    git pull gitea-starscream "$(git branch --show-current)"
-
-# Pull from all remotes (continues on failure)
-pull-all:
-    #!/usr/bin/env sh
-    git_try() {
-        r=$1; shift
-        if git remote get-url "$r" >/dev/null 2>&1; then "$@"; else echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; fi
-    }
-    skipped=""
-    failed=""
-    git_try origin git pull origin "$(git branch --show-current)"             || failed="$failed origin"
-    git_try gitea git pull gitea "$(git branch --show-current)"              || failed="$failed gitea"
-    git_try gitea-nexus-lab git pull gitea-nexus-lab "$(git branch --show-current)"     || failed="$failed gitea-nexus-lab"
-    git_try gitea-starscream git pull gitea-starscream "$(git branch --show-current)"    || failed="$failed gitea-starscream"
-    if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
-    if [ -n "$failed" ]; then
-        echo "⚠️  Failed to pull from:$failed"
-    else
-        echo "✅ Pulled from GitHub, Gitea, Gitea (nexus-lab), and Gitea Starscream!"
-    fi
-
-# Push the latest commit and all tags to every remote (no bump).
-push-release-all: check-all
-    #!/usr/bin/env sh
-    git_try() {
-        r=$1; shift
-        if git remote get-url "$r" >/dev/null 2>&1; then "$@"; else echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; fi
-    }
-    skipped=""
-    failed=""
-    git_try origin git push --follow-tags origin "$(git branch --show-current)"             || failed="$failed origin"
-    git_try gitea git push --follow-tags gitea "$(git branch --show-current)"              || failed="$failed gitea"
-    git_try gitea-nexus-lab git push --follow-tags gitea-nexus-lab "$(git branch --show-current)"     || failed="$failed gitea-nexus-lab"
-    git_try gitea-starscream git push --follow-tags gitea-starscream "$(git branch --show-current)"    || failed="$failed gitea-starscream"
-    if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
-    if [ -n "$failed" ]; then
-        echo "⚠️  Failed to push to:$failed"
-    else
-        echo "✅ Latest commit + tags pushed to all remotes."
-    fi
-
-# Force-sync Gitea with GitHub
-sync-gitea:
-    git push gitea "$(git branch --show-current)" --force
-    git push gitea --tags --force
-    @echo "✅ Gitea synced with GitHub."
-
-# Force-sync Gitea (nexus-lab instance) with GitHub
-sync-gitea-nexus-lab:
-    git push gitea-nexus-lab "$(git branch --show-current)" --force
-    git push gitea-nexus-lab --tags --force
-    @echo "✅ Gitea (nexus-lab) force-synced with GitHub."
-
-# Force-sync Gitea Starscream with GitHub
-sync-gitea-starscream:
-    git push gitea-starscream "$(git branch --show-current)" --force
-    git push gitea-starscream --tags --force
-    @echo "✅ Gitea Starscream force-synced with GitHub."
-
-# Force-sync all Gitea instances with GitHub (continues on failure)
-sync-all-gitea:
-    #!/usr/bin/env sh
-    git_try() {
-        r=$1; shift
-        if git remote get-url "$r" >/dev/null 2>&1; then "$@"; else echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; fi
-    }
-    skipped=""
-    failed=""
-    git_try gitea git push gitea "$(git branch --show-current)" --force                  || failed="$failed gitea"
-    git_try gitea git push gitea --tags --force                || failed="$failed gitea-tags"
-    git_try gitea-nexus-lab git push gitea-nexus-lab "$(git branch --show-current)" --force        || failed="$failed gitea-nexus-lab"
-    git_try gitea-nexus-lab git push gitea-nexus-lab --tags --force      || failed="$failed gitea-nexus-lab-tags"
-    git_try gitea-starscream git push gitea-starscream "$(git branch --show-current)" --force       || failed="$failed gitea-starscream"
-    git_try gitea-starscream git push gitea-starscream --tags --force     || failed="$failed gitea-starscream-tags"
-    if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
-    if [ -n "$failed" ]; then
-        echo "⚠️  Failed to sync:$failed"
-    else
-        echo "✅ All Gitea instances force-synced with GitHub."
-    fi
-
-# Add a Gitea remote and optionally push — interactive (nu script)
-setup-gitea url: _check-nu
-    nu scripts/setup_gitea.nu {{ url }}
-
-# Migrate this project to dual GitHub + Gitea hosting (interactive)
-migrate-gitea: _check-nu
-    nu scripts/migrate_to_gitea.nu
-
-# ── Release workflows ─────────────────────────────────────────────────────────
-
-# Bump, commit, tag, then push to GitHub — triggers the Release workflow.
-release version: (bump version)
-    @echo "Pushing release v{{version}} to GitHub…"
-    git push --follow-tags origin "$(git branch --show-current)"
-    @echo "✅ Release v{{version}} pushed — Release workflow will trigger automatically."
-
-# Bump, commit, tag, then push to Gitea only.
-release-gitea version: (bump version)
-    @echo "Pushing release v{{version}} to Gitea…"
-    git push --follow-tags gitea "$(git branch --show-current)"
-    @echo "✅ Release v{{version}} live on Gitea."
-
-# Bump, commit, tag, then push to Gitea (nexus-lab instance) only.
-release-gitea-nexus-lab version: (bump version)
-    @echo "Pushing release v{{version}} to Gitea (nexus-lab)…"
-    git push --follow-tags gitea-nexus-lab "$(git branch --show-current)"
-    @echo "✅ Release v{{version}} live on Gitea (nexus-lab)."
-
-# Bump, commit, tag, then push to Gitea Starscream only.
-release-gitea-starscream version: (bump version)
-    @echo "Pushing release v{{version}} to Gitea Starscream…"
-    git push --follow-tags gitea-starscream "$(git branch --show-current)"
-    @echo "✅ Release v{{version}} live on Gitea Starscream."
-
-# Bump, commit, tag, then push to all remotes.
-release-all version: (bump version)
-    #!/usr/bin/env sh
-    git_try() {
-        r=$1; shift
-        if git remote get-url "$r" >/dev/null 2>&1; then "$@"; else echo "↷ skipping $r (not configured here; add with: git remote add $r <url>)"; skipped="$skipped $r"; fi
-    }
-    skipped=""
-    echo "Pushing release v{{version}} to all remotes…"
-    failed=""
-    git_try origin git push --follow-tags origin "$(git branch --show-current)"             || failed="$failed origin"
-    git_try gitea git push --follow-tags gitea "$(git branch --show-current)"              || failed="$failed gitea"
-    git_try gitea-nexus-lab git push --follow-tags gitea-nexus-lab "$(git branch --show-current)"     || failed="$failed gitea-nexus-lab"
-    git_try gitea-starscream git push --follow-tags gitea-starscream "$(git branch --show-current)"    || failed="$failed gitea-starscream"
-    if [ -n "$skipped" ]; then echo "ℹ️  Skipped (not configured):$skipped"; fi
-    if [ -n "$failed" ]; then
-        echo "⚠️  Release v{{version}} failed to push to:$failed"
-    else
-        echo "✅ Release v{{version}} pushed to GitHub, Gitea, Gitea (nexus-lab), and Gitea Starscream!"
-    fi
-
-# Manually re-trigger the Release workflow for an existing tag via the gh CLI.
-release-retrigger version:
-    @command -v gh >/dev/null 2>&1 || { \
-        echo "❌ GitHub CLI (gh) not found. Install from https://cli.github.com"; exit 1; \
-    }
-    @echo "Manually dispatching Release workflow for tag v{{version}}…"
-    gh workflow run release.yml --field tag=v{{version}}
-    @echo "✅ Dispatched — check progress at: https://github.com/$(gh repo view --json nameWithOwner -q .nameWithOwner)/actions"
-
-# Security: dependency vulnerability scan (needs `cargo install cargo-audit`)
-audit:
-    cargo audit
-
-# Security: licenses, advisories, bans, sources (needs `cargo install cargo-deny`)
-deny:
-    cargo deny check
+prune-releases *ARGS:
+    nu scripts/ci/prune_release_assets.nu {{ ARGS }}
+
+# ── Packaging ─────────────────────────────────────────────────────────────────
+
+# Linux .deb, .rpm and AppImages (needs dpkg-deb, alien, fakeroot)
+package-linux version:
+    nu scripts/ci/build_release.nu x86_64-unknown-linux-gnu
+    nu scripts/ci/package_desktop.nu linux {{ version }} x86_64-unknown-linux-gnu --appimage
+
+# Universal macOS DMG (needs both Mac targets: rustup target add x86_64-apple-darwin)
+package-macos version:
+    nu scripts/ci/build_release.nu aarch64-apple-darwin
+    nu scripts/ci/build_release.nu x86_64-apple-darwin
+    nu scripts/ci/package_desktop.nu macos {{ version }}

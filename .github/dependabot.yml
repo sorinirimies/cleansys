@@ -1,6 +1,6 @@
 # Dependabot — keep GitHub Actions up to date
 # Cargo dependency upgrades are handled by the Nightly Dependency Upgrade
-# workflow (`.gitea/workflows/deps-update.yml`), so only the github-actions
+# workflow (`.gitea/workflows/nightly-deps.yml`), so only the github-actions
 # ecosystem is configured here.
 
 version: 2
