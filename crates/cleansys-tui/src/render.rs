@@ -1,15 +1,15 @@
 use ratatui::{
+    Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, BorderType, Borders, Clear, List, ListItem, Paragraph, Wrap},
-    Frame,
 };
 // Using tui-checkbox library for consistent checkbox symbols across the application
 use tui_checkbox::symbols as checkbox_symbols;
 
 use crate::app::{App, InfoTab, InputKind, SettingsRow};
-use cleansys_core::{format_size, Status};
+use cleansys_core::{Status, format_size};
 
 pub fn ui(f: &mut Frame, app: &mut App) {
     // Start every frame from a clean slate so nothing from the previous view
@@ -1173,17 +1173,17 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
 
     // Interleave the expanded cleaner's per-path rows right under it.
     let mut display_sel = app.item_list_state.selected();
-    if let Some((ec, ei)) = app.expanded {
-        if let Some(p) = visible.iter().position(|&v| v == (ec, ei)) {
-            let rows = entry_rows(app, ec, ei, inner_w);
-            let n = rows.len();
-            items.splice(p + 1..p + 1, rows);
-            display_sel = match (app.entry_cursor, display_sel) {
-                (Some(k), _) => Some(p + 1 + k.min(n.saturating_sub(1))),
-                (None, Some(s)) if s > p => Some(s + n),
-                (None, s) => s,
-            };
-        }
+    if let Some((ec, ei)) = app.expanded
+        && let Some(p) = visible.iter().position(|&v| v == (ec, ei))
+    {
+        let rows = entry_rows(app, ec, ei, inner_w);
+        let n = rows.len();
+        items.splice(p + 1..p + 1, rows);
+        display_sel = match (app.entry_cursor, display_sel) {
+            (Some(k), _) => Some(p + 1 + k.min(n.saturating_sub(1))),
+            (None, Some(s)) if s > p => Some(s + n),
+            (None, s) => s,
+        };
     }
     app.list_view_state.select(display_sel);
 

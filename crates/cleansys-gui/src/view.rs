@@ -1,9 +1,9 @@
 //! View (rendering) logic for the CleanSys Iced GUI.
 
-use cleansys_core::{format_size, EntryState, Status};
+use cleansys_core::{EntryState, Status, format_size};
 use iced::widget::{
-    button, canvas, checkbox, column, container, mouse_area, pick_list, responsive, row, rule,
-    scrollable, text, text_input, tooltip, Space,
+    Space, button, canvas, checkbox, column, container, mouse_area, pick_list, responsive, row,
+    rule, scrollable, text, text_input, tooltip,
 };
 use iced::{Alignment, Color, Element, Length};
 
@@ -53,7 +53,7 @@ pub fn view(state: &CleanSysGui) -> Element<'_, Message> {
 /// Width breakpoints (logical pixels) for the responsive layout.
 const WIDE: f32 = 980.0; // sidebar + list
 const MEDIUM: f32 = 700.0; // narrower sidebar
-                           // below MEDIUM: no sidebar — a category drop-down above the list
+// below MEDIUM: no sidebar — a category drop-down above the list
 
 /// How the main screen is laid out at a given window width.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -1494,19 +1494,21 @@ fn schedule_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, M
     ];
     let scope_sel = scope_opts.iter().find(|o| o.value == d.scope).cloned();
 
-    let mut form = column![row![
-        text("Repeat")
-            .size(13)
-            .color(c.text_secondary)
-            .width(Length::Fixed(110.0)),
-        pick_list(freq_opts, freq_sel, |o: Choice<Frequency>| {
-            Message::ScheduleFrequency(o.value)
-        })
-        .text_size(13.0)
-        .width(Length::Fixed(160.0)),
+    let mut form = column![
+        row![
+            text("Repeat")
+                .size(13)
+                .color(c.text_secondary)
+                .width(Length::Fixed(110.0)),
+            pick_list(freq_opts, freq_sel, |o: Choice<Frequency>| {
+                Message::ScheduleFrequency(o.value)
+            })
+            .text_size(13.0)
+            .width(Length::Fixed(160.0)),
+        ]
+        .spacing(10)
+        .align_y(Alignment::Center),
     ]
-    .spacing(10)
-    .align_y(Alignment::Center),]
     .spacing(10);
 
     match d.frequency {
@@ -1756,10 +1758,12 @@ fn preview_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, Me
         .color(c.text_secondary),
         rule::horizontal(1),
         scrollable(column(rows).spacing(4)).height(Length::Fixed(280.0)),
-        row![button(text("Close"))
-            .padding([8, 16])
-            .style(action_button_style(c))
-            .on_press(Message::ClosePreview),],
+        row![
+            button(text("Close"))
+                .padding([8, 16])
+                .style(action_button_style(c))
+                .on_press(Message::ClosePreview),
+        ],
     ]
     .spacing(12)
     .padding(28)

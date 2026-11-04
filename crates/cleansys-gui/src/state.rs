@@ -31,6 +31,7 @@ pub fn clamp_log_height(height: f32, window_height: f32) -> f32 {
 }
 
 /// Top-level state for the CleanSys GUI application.
+#[derive(Debug)]
 pub struct CleanSysGui {
     /// Cleaner categories and items (shared domain model from `cleansys-core`).
     pub categories: Vec<CleanerCategory>,
@@ -245,13 +246,12 @@ impl CleanSysGui {
 
     /// If the active tab got hidden, move to the first visible category.
     pub fn ensure_active_visible(&mut self) {
-        if !self.category_visible(self.active_tab) {
-            if let Some(first) = self
+        if !self.category_visible(self.active_tab)
+            && let Some(first) = self
                 .board
                 .first_visible_category(&self.categories, self.hide_empty)
-            {
-                self.active_tab = first;
-            }
+        {
+            self.active_tab = first;
         }
     }
 

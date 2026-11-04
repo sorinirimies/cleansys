@@ -6,10 +6,10 @@ use std::path::PathBuf;
 /// the XDG / Windows well-known directories. Empty values count as unset.
 pub fn lookup_env(name: &str) -> Option<String> {
     for candidate in [name.to_string(), name.to_ascii_uppercase()] {
-        if let Ok(v) = std::env::var(&candidate) {
-            if !v.is_empty() {
-                return Some(v);
-            }
+        if let Ok(v) = std::env::var(&candidate)
+            && !v.is_empty()
+        {
+            return Some(v);
         }
     }
     let home = crate::cleaners::platform::home_dir;
@@ -74,18 +74,18 @@ pub fn expand(input: &str, env: &dyn Fn(&str) -> Option<String>) -> String {
             out.push_str(&env(&name).unwrap_or_default());
             i = j;
             continue;
-        } else if c == '%' {
-            if let Some(end) = chars[i + 1..].iter().position(|&c| c == '%') {
-                let name: String = chars[i + 1..i + 1 + end].iter().collect();
-                if !name.is_empty()
-                    && name
-                        .chars()
-                        .all(|c| is_name_char(c) || c == '(' || c == ')')
-                {
-                    out.push_str(&env(&name).unwrap_or_default());
-                    i += end + 2;
-                    continue;
-                }
+        } else if c == '%'
+            && let Some(end) = chars[i + 1..].iter().position(|&c| c == '%')
+        {
+            let name: String = chars[i + 1..i + 1 + end].iter().collect();
+            if !name.is_empty()
+                && name
+                    .chars()
+                    .all(|c| is_name_char(c) || c == '(' || c == ')')
+            {
+                out.push_str(&env(&name).unwrap_or_default());
+                i += end + 2;
+                continue;
             }
         }
         out.push(c);

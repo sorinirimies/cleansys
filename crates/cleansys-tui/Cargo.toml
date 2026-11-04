@@ -2,6 +2,7 @@
 name = "cleansys"
 version.workspace = true
 edition.workspace = true
+rust-version.workspace = true
 authors.workspace = true
 license.workspace = true
 repository.workspace = true
@@ -37,3 +38,6 @@ notify-rust   = { workspace = true }
 assert_cmd = { workspace = true }
 predicates = { workspace = true }
 tempfile   = { workspace = true }
+
+[lints]
+workspace = true

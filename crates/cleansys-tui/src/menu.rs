@@ -5,10 +5,11 @@ use std::io::{self, Write};
 
 use cleansys_core::utils::{print_success, print_warning};
 use cleansys_core::{
-    check_root, confirm, format_size, print_error, print_header, system_cleaners, user_cleaners,
-    CleanerFn,
+    CleanerFn, check_root, confirm, format_size, print_error, print_header, system_cleaners,
+    user_cleaners,
 };
 
+#[derive(Debug)]
 pub struct MenuItem {
     id: usize,
     name: String,
@@ -17,6 +18,7 @@ pub struct MenuItem {
     function: CleanerFn,
 }
 
+#[derive(Debug)]
 pub struct Menu {
     items: Vec<MenuItem>,
     is_root: bool,

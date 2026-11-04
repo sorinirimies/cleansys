@@ -16,6 +16,10 @@ struct Sandbox {
     project: PathBuf,
 }
 
+#[allow(
+    unsafe_code,
+    reason = "set_var once, before any server thread reads the environment"
+)]
 fn sandbox() -> &'static Sandbox {
     static BOX: OnceLock<Sandbox> = OnceLock::new();
     BOX.get_or_init(|| {
@@ -23,10 +27,12 @@ fn sandbox() -> &'static Sandbox {
         let _ = std::fs::remove_dir_all(&root);
         let projects = root.join("Projects");
         let project = projects.join("demo-rust");
-        std::fs::create_dir_all(project.join("target/debug")).unwrap();
-        std::fs::write(project.join("Cargo.toml"), "[package]\nname=\"demo\"\n").unwrap();
-        std::fs::write(project.join("target/debug/big.bin"), vec![b'x'; 200_000]).unwrap();
-        std::fs::create_dir_all(root.join("tmp")).unwrap();
+        std::fs::create_dir_all(project.join("target/debug")).expect("sandbox project dir");
+        std::fs::write(project.join("Cargo.toml"), "[package]\nname=\"demo\"\n")
+            .expect("sandbox Cargo.toml");
+        std::fs::write(project.join("target/debug/big.bin"), vec![b'x'; 200_000])
+            .expect("sandbox build output");
+        std::fs::create_dir_all(root.join("tmp")).expect("sandbox tmp");
         // SAFETY: runs once, inside `get_or_init`, before any server thread reads the
         // environment (every test calls `sandbox()` first).
         unsafe {
@@ -45,7 +51,7 @@ fn sandbox() -> &'static Sandbox {
             min_age_days: 0,
             ..Default::default()
         };
-        cfg.save().unwrap();
+        cfg.save().expect("sandbox config");
         Sandbox { project }
     })
 }
@@ -115,8 +121,10 @@ async fn start_with(categories: Vec<cleansys_core::CleanerCategory>) -> SocketAd
     let state = Shared::new(categories);
     state.set_root(false);
     state.start_scan();
-    let listener = TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let addr = listener.local_addr().unwrap();
+    let listener = TcpListener::bind("127.0.0.1:0")
+        .await
+        .expect("a free local port");
+    let addr = listener.local_addr().expect("bound address");
     tokio::spawn(async move {
         let _ = topcoat::serve(listener, router(state, AllowedHosts::for_bind("127.0.0.1"))).await;
     });
@@ -145,7 +153,9 @@ async fn send(
     host: &str,
     body: Option<&str>,
 ) -> Response {
-    let mut stream = TcpStream::connect(addr).await.unwrap();
+    let mut stream = TcpStream::connect(addr)
+        .await
+        .expect("connect to the test server");
     let body_part = body.unwrap_or("");
     let req = format!(
         "{method} {path} HTTP/1.1\r\nHost: {host}\r\nConnection: close\r\nAccept: */*\r\n{}Content-Length: {}\r\n\r\n{body_part}",
@@ -156,9 +166,15 @@ async fn send(
         },
         body_part.len()
     );
-    stream.write_all(req.as_bytes()).await.unwrap();
+    stream
+        .write_all(req.as_bytes())
+        .await
+        .expect("send the request");
     let mut raw = Vec::new();
-    stream.read_to_end(&mut raw).await.unwrap();
+    stream
+        .read_to_end(&mut raw)
+        .await
+        .expect("read the response");
     let text = String::from_utf8_lossy(&raw).into_owned();
     let (head, body) = text.split_once("\r\n\r\n").unwrap_or((&text, ""));
     let status = head

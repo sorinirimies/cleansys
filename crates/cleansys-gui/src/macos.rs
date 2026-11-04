@@ -12,10 +12,11 @@
 
 use objc2::sel;
 use objc2_app_kit::{NSApplication, NSMenu, NSMenuItem};
-use objc2_foundation::{ns_string, MainThreadMarker};
+use objc2_foundation::{MainThreadMarker, ns_string};
 
 /// Add the Window menu to the menu bar. Returns `false` when it could not (not on the
 /// main thread, or no menu bar yet); `true` when the menu is there (also if it already was).
+#[allow(unsafe_code, reason = "AppKit calls from the main thread")]
 pub fn install_window_menu() -> bool {
     let Some(mtm) = MainThreadMarker::new() else {
         return false;

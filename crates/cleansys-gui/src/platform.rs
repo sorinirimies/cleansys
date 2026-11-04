@@ -60,9 +60,9 @@ pub fn relaunch_as_admin() {
 mod windows_impl {
     use anyhow::{Context, Result};
     use std::os::windows::ffi::OsStrExt;
-    use windows::core::PCWSTR;
     use windows::Win32::UI::Shell::ShellExecuteW;
     use windows::Win32::UI::WindowsAndMessaging::SW_SHOWNORMAL;
+    use windows::core::PCWSTR;
 
     /// Null-terminated UTF-16 encoding of an OS string, for use with the
     /// `*W` (wide-character) Win32 APIs.
@@ -70,7 +70,8 @@ mod windows_impl {
         s.encode_wide().chain(std::iter::once(0)).collect()
     }
 
-    pub fn relaunch_elevated() -> Result<()> {
+    #[allow(unsafe_code, reason = "ShellExecuteW is a Windows FFI call")]
+    pub(crate) fn relaunch_elevated() -> Result<()> {
         let exe = std::env::current_exe().context("failed to determine current executable")?;
         let exe_wide = to_wide(exe.as_os_str());
         let verb_wide = to_wide(std::ffi::OsStr::new("runas"));

@@ -28,16 +28,20 @@ fn password_cell() -> &'static Mutex<Option<String>> {
 
 /// Cache a validated sudo password for later privileged commands to reuse.
 pub fn cache_sudo_password(password: String) {
-    if let Ok(mut guard) = password_cell().lock() {
-        if let Some(old) = guard.replace(password) {
-            wipe(old);
-        }
+    if let Ok(mut guard) = password_cell().lock()
+        && let Some(old) = guard.replace(password)
+    {
+        wipe(old);
     }
 }
 
 /// Best-effort overwrite of a password buffer before it is freed, so it
 /// doesn't linger in freed heap memory. Volatile writes stop the compiler
 /// from eliding the (otherwise dead) stores.
+#[allow(
+    unsafe_code,
+    reason = "zeroes the password bytes in place before the String is dropped"
+)]
 fn wipe(mut s: String) {
     // SAFETY: all-zero bytes are valid UTF-8, so the String stays valid.
     unsafe {
@@ -50,10 +54,10 @@ fn wipe(mut s: String) {
 /// Clear any cached sudo password (call once a run finishes, the dialog is
 /// cancelled, or the app is closing).
 pub fn clear_cached_sudo_password() {
-    if let Ok(mut guard) = password_cell().lock() {
-        if let Some(old) = guard.take() {
-            wipe(old);
-        }
+    if let Ok(mut guard) = password_cell().lock()
+        && let Some(old) = guard.take()
+    {
+        wipe(old);
     }
 }
 

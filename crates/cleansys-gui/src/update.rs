@@ -1,6 +1,6 @@
 //! Update logic (Elm-style) for the CleanSys Iced GUI.
 
-use cleansys_core::{format_size, RunOptions, Status};
+use cleansys_core::{RunOptions, Status, format_size};
 use iced::Task;
 
 use crate::message::Message;
@@ -947,7 +947,7 @@ mod tests {
 
     #[test]
     fn window_presets_scale_and_reset_update_the_tracked_size() {
-        use crate::window::{WindowPreset, DEFAULT_SIZE, GROW_FACTOR, MIN_SIZE};
+        use crate::window::{DEFAULT_SIZE, GROW_FACTOR, MIN_SIZE, WindowPreset};
         let mut state = CleanSysGui::new();
         let _ = update(&mut state, Message::WindowPreset(WindowPreset::Compact));
         assert_eq!(state.window_size, WindowPreset::Compact.size());
@@ -1185,10 +1185,12 @@ mod tests {
         }
 
         let _ = update(&mut state, Message::DeselectAllEverywhere);
-        assert!(state
-            .categories
-            .iter()
-            .all(|c| c.items.iter().all(|i| !i.selected)));
+        assert!(
+            state
+                .categories
+                .iter()
+                .all(|c| c.items.iter().all(|i| !i.selected))
+        );
     }
 
     #[test]
@@ -1535,12 +1537,14 @@ mod tests {
         state.is_root = false;
         let _ = update(&mut state, Message::SelectRecommended);
         assert!(state.selected_count() > 0);
-        assert!(state
-            .categories
-            .iter()
-            .flat_map(|c| &c.items)
-            .filter(|i| i.selected)
-            .all(|i| i.risk == cleansys_core::Risk::Safe && !i.requires_root));
+        assert!(
+            state
+                .categories
+                .iter()
+                .flat_map(|c| &c.items)
+                .filter(|i| i.selected)
+                .all(|i| i.risk == cleansys_core::Risk::Safe && !i.requires_root)
+        );
     }
 
     #[test]

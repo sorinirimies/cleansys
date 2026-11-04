@@ -17,7 +17,7 @@ fn sample_item(name: &str, requires_root: bool) -> CleanerItem {
         description: format!("{name} description"),
         requires_root,
         selected: false,
-        function: std::sync::Arc::new(noop),
+        function: cleansys_core::cleaner_fn(noop),
         bytes_cleaned: 0,
         last_result: None,
         status: None,
@@ -133,10 +133,11 @@ fn request_run_with_nothing_selected_shows_a_notice() {
     let mut app = app_with_categories();
     app.request_run().unwrap();
     assert!(!app.awaiting_run_confirmation);
-    assert!(app
-        .notice
-        .as_deref()
-        .is_some_and(|m| m.contains("Nothing selected")));
+    assert!(
+        app.notice
+            .as_deref()
+            .is_some_and(|m| m.contains("Nothing selected"))
+    );
 }
 
 #[test]
@@ -217,10 +218,11 @@ fn run_preview_with_nothing_selected_shows_a_notice() {
     let mut app = app_with_categories();
     app.run_preview();
     assert!(!app.preview_open);
-    assert!(app
-        .notice
-        .as_deref()
-        .is_some_and(|m| m.contains("Nothing selected")));
+    assert!(
+        app.notice
+            .as_deref()
+            .is_some_and(|m| m.contains("Nothing selected"))
+    );
 }
 
 #[test]
@@ -253,10 +255,11 @@ fn close_preview_clears_state() {
 fn select_all_everywhere_selects_every_category() {
     let mut app = app_with_categories();
     app.select_all_everywhere();
-    assert!(app
-        .categories
-        .iter()
-        .all(|c| c.items.iter().all(|i| i.selected)));
+    assert!(
+        app.categories
+            .iter()
+            .all(|c| c.items.iter().all(|i| i.selected))
+    );
 }
 
 #[test]
@@ -264,10 +267,11 @@ fn deselect_all_everywhere_deselects_every_category() {
     let mut app = app_with_categories();
     app.select_all_everywhere();
     app.deselect_all_everywhere();
-    assert!(app
-        .categories
-        .iter()
-        .all(|c| c.items.iter().all(|i| !i.selected)));
+    assert!(
+        app.categories
+            .iter()
+            .all(|c| c.items.iter().all(|i| !i.selected))
+    );
 }
 
 #[test]
@@ -367,9 +371,10 @@ fn schedule_overlay_fields_adjust_and_wrap() {
     app.schedule_field = 0;
     app.schedule_adjust(-1);
     assert_eq!(app.schedule_draft.frequency, Frequency::Daily);
-    assert!(!app
-        .schedule_fields()
-        .contains(&cleansys_tui::app::ScheduleField::Day));
+    assert!(
+        !app.schedule_fields()
+            .contains(&cleansys_tui::app::ScheduleField::Day)
+    );
 
     // Hour wraps 23 -> 0.
     app.schedule_field = 1;
@@ -392,12 +397,13 @@ fn recommended_selects_only_safe_user_land() {
     app.categories = cleansys_core::load_categories();
     let n = app.select_recommended();
     assert!(n > 0);
-    assert!(app
-        .categories
-        .iter()
-        .flat_map(|c| &c.items)
-        .filter(|i| i.selected)
-        .all(|i| i.risk == cleansys_core::Risk::Safe && !i.requires_root));
+    assert!(
+        app.categories
+            .iter()
+            .flat_map(|c| &c.items)
+            .filter(|i| i.selected)
+            .all(|i| i.risk == cleansys_core::Risk::Safe && !i.requires_root)
+    );
 }
 
 fn app_with_two_categories() -> App {
@@ -470,7 +476,7 @@ fn hide_empty_hides_scanned_empty_cleaners_but_never_selected_ones() {
     board.record(1, 0, ScanInfo::default());
     app.board = board;
     assert_eq!(app.view_items(), vec![(0, 0)]); // Trash hidden
-                                                // System category fully empty -> skipped by Tab navigation.
+    // System category fully empty -> skipped by Tab navigation.
     app.next_category();
     assert_eq!(app.category_index, 0);
 
@@ -487,7 +493,7 @@ use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 
 fn key(app: &mut App, code: KeyCode) {
     app.handle_key(KeyEvent::new(code, KeyModifiers::NONE))
-        .unwrap();
+        .expect("handle the key");
 }
 
 fn wait_for_run(app: &mut App) {
@@ -503,7 +509,8 @@ fn wait_for_run(app: &mut App) {
 
 fn failing_item(name: &str) -> CleanerItem {
     let mut it = sample_item(name, false);
-    it.function = std::sync::Arc::new(|_o: RunOptions| Err(anyhow::anyhow!("x: disk on fire")));
+    it.function =
+        cleansys_core::cleaner_fn(|_o: RunOptions| Err(anyhow::anyhow!("x: disk on fire")));
     it
 }
 
@@ -533,10 +540,11 @@ fn run_marks_success_and_failure_and_builds_a_summary() {
     let sum = app.run_summary.clone().expect("summary");
     assert_eq!((sum.ok, sum.failed, sum.cancelled), (1, 1, false));
     assert!(app.run.is_none());
-    assert!(app
-        .operation_logs
-        .iter()
-        .any(|l| l.contains("disk on fire")));
+    assert!(
+        app.operation_logs
+            .iter()
+            .any(|l| l.contains("disk on fire"))
+    );
     assert!(
         app.board.total > 0 || app.board.is_scanning() || !app.categories.is_empty(),
         "a re-scan is started after the run"

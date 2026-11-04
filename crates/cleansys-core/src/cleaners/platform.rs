@@ -16,6 +16,7 @@ pub fn home_dir() -> Option<PathBuf> {
 /// `(label, path)` pairs for every browser cache we know how to clean on the
 /// current platform.
 pub fn browser_cache_paths() -> Vec<(String, PathBuf)> {
+    #[cfg(any(target_os = "linux", target_os = "macos"))]
     let Some(home) = home_dir() else {
         return Vec::new();
     };

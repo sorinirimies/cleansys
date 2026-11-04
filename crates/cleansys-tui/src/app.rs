@@ -5,7 +5,7 @@ use ratatui::widgets::ListState;
 use std::time::Instant;
 
 use crate::components::password_prompt::PasswordPrompt;
-use cleansys_core::{check_root, format_size, CleanerCategory, CleanerFn, Status};
+use cleansys_core::{CleanerCategory, CleanerFn, Status, check_root, format_size};
 
 /// One editable row of the schedule overlay.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -91,6 +91,7 @@ pub enum Focus {
     Activity,
 }
 
+#[derive(Debug)]
 pub struct App {
     pub categories: Vec<CleanerCategory>,
     pub category_index: usize,

@@ -185,9 +185,27 @@ impl RunOptions {
 /// mode, that *would be* removed), with real per-item sizes.
 ///
 /// Reference-counted trait object (not a bare `fn` pointer) so declarative
-/// cleaners from [`crate::engine`] can capture their spec. Cloning is cheap.
-pub type CleanerFn =
-    std::sync::Arc<dyn Fn(RunOptions) -> anyhow::Result<CleaningResult> + Send + Sync>;
+/// cleaners from [`crate::engine`] can capture their spec. Cloning is cheap; call
+/// it like a function: `(item.function)(opts)`.
+#[derive(Clone)]
+pub struct CleanerFn(std::sync::Arc<CleanerDyn>);
+
+/// The function behind a [`CleanerFn`].
+pub type CleanerDyn = dyn Fn(RunOptions) -> anyhow::Result<CleaningResult> + Send + Sync;
+
+impl std::ops::Deref for CleanerFn {
+    type Target = CleanerDyn;
+
+    fn deref(&self) -> &CleanerDyn {
+        &*self.0
+    }
+}
+
+impl std::fmt::Debug for CleanerFn {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("CleanerFn(..)")
+    }
+}
 
 /// Plain function-pointer form of a cleaner, used by the hard-coded
 /// built-in cleaners (convert with [`cleaner_fn`]).
@@ -198,7 +216,7 @@ pub fn cleaner_fn<F>(f: F) -> CleanerFn
 where
     F: Fn(RunOptions) -> anyhow::Result<CleaningResult> + Send + Sync + 'static,
 {
-    std::sync::Arc::new(f)
+    CleanerFn(std::sync::Arc::new(f))
 }
 
 #[cfg(test)]

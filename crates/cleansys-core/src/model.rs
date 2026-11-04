@@ -3,7 +3,7 @@
 //! Nothing in this module depends on `ratatui`, `crossterm`, or `iced` — it is
 //! pure application state that both front-ends render in their own way.
 
-use crate::cleaners::cleaned_item::{cleaner_fn, CleanerFn, CleaningResult};
+use crate::cleaners::cleaned_item::{CleanerFn, CleaningResult, cleaner_fn};
 use crate::cleaners::{system_cleaners, user_cleaners};
 use crate::engine;
 pub use crate::engine::Risk;
@@ -68,7 +68,19 @@ pub struct CleanerItem {
     pub status: Option<Status>,
 }
 
+impl std::fmt::Debug for CleanerItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("CleanerItem")
+            .field("id", &self.id)
+            .field("risk", &self.risk)
+            .field("selected", &self.selected)
+            .field("bytes_cleaned", &self.bytes_cleaned)
+            .finish_non_exhaustive()
+    }
+}
+
 /// A named group of related [`CleanerItem`]s (e.g. "User Land Cleaners").
+#[derive(Debug)]
 pub struct CleanerCategory {
     /// Category display name.
     pub name: String,
@@ -302,11 +314,12 @@ mod tests {
         }
         let n = select_recommended(&mut cats, false);
         assert!(n > 0);
-        assert!(cats
-            .iter()
-            .flat_map(|c| &c.items)
-            .filter(|i| i.selected)
-            .all(|i| i.risk == Risk::Safe && !i.requires_root));
+        assert!(
+            cats.iter()
+                .flat_map(|c| &c.items)
+                .filter(|i| i.selected)
+                .all(|i| i.risk == Risk::Safe && !i.requires_root)
+        );
     }
 
     #[test]

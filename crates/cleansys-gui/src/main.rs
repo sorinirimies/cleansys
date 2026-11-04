@@ -1,4 +1,4 @@
-use cleansys_gui::{update, view, CleanSysGui, Message};
+use cleansys_gui::{CleanSysGui, Message, update, view};
 
 /// One-time, platform-specific setup that needs the window to exist.
 ///

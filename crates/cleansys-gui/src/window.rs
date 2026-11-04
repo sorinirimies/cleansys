@@ -4,7 +4,7 @@
 //! its own: presets, grow/shrink, maximise, full screen — as shortcuts and in
 //! Settings → Window.
 
-use iced::keyboard::{key::Named, Key, Modifiers};
+use iced::keyboard::{Key, Modifiers, key::Named};
 
 use crate::message::Message;
 

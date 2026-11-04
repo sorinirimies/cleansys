@@ -63,22 +63,22 @@ pub fn load_all_unfiltered(user_dir: Option<&Path>) -> Vec<CleanerSpec> {
             Err(e) => warn!("built-in cleaner file {file}: {e:#}"),
         }
     }
-    if let Some(dir) = user_dir {
-        if let Ok(rd) = std::fs::read_dir(dir) {
-            let mut files: Vec<PathBuf> = rd
-                .flatten()
-                .map(|e| e.path())
-                .filter(|p| p.extension().is_some_and(|x| x == "toml"))
-                .collect();
-            files.sort();
-            for f in files {
-                match std::fs::read_to_string(&f)
-                    .map_err(anyhow::Error::from)
-                    .and_then(|s| parse_spec_file(&s))
-                {
-                    Ok(v) => merge(&mut specs, v),
-                    Err(e) => warn!("user cleaner file {f:?}: {e:#}"),
-                }
+    if let Some(dir) = user_dir
+        && let Ok(rd) = std::fs::read_dir(dir)
+    {
+        let mut files: Vec<PathBuf> = rd
+            .flatten()
+            .map(|e| e.path())
+            .filter(|p| p.extension().is_some_and(|x| x == "toml"))
+            .collect();
+        files.sort();
+        for f in files {
+            match std::fs::read_to_string(&f)
+                .map_err(anyhow::Error::from)
+                .and_then(|s| parse_spec_file(&s))
+            {
+                Ok(v) => merge(&mut specs, v),
+                Err(e) => warn!("user cleaner file {f:?}: {e:#}"),
             }
         }
     }

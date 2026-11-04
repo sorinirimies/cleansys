@@ -3,16 +3,16 @@
 //! Everything works on the same [`CleanerCategory`] list the TUI and GUI show
 //! (so ids, risk levels and the user-land / root split are identical).
 
-use anyhow::{bail, Result};
+use anyhow::{Result, bail};
 use serde::Serialize;
 use std::sync::Mutex;
 
 use super::running::AppRunning;
 use super::schedule::{LastRun, Schedule, Scope};
-use crate::cleaners::cleaned_item::{CleanerFn, RunOptions};
-use crate::model::{load_categories, CleanerCategory, ROOT_SUFFIX};
-use crate::utils::{check_root, confirm, format_size, print_error, print_success, print_warning};
 use crate::Risk;
+use crate::cleaners::cleaned_item::{CleanerFn, RunOptions};
+use crate::model::{CleanerCategory, ROOT_SUFFIX, load_categories};
+use crate::utils::{check_root, confirm, format_size, print_error, print_success, print_warning};
 
 /// Which cleaners a headless run targets.
 #[derive(Debug, Default, Clone)]
@@ -45,6 +45,16 @@ pub struct Job {
     pub risk: Risk,
     pub requires_root: bool,
     pub function: CleanerFn,
+}
+
+impl std::fmt::Debug for Job {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.debug_struct("Job")
+            .field("id", &self.id)
+            .field("risk", &self.risk)
+            .field("requires_root", &self.requires_root)
+            .finish_non_exhaustive()
+    }
 }
 
 #[derive(Debug, Clone, Serialize)]
@@ -505,9 +515,11 @@ mod tests {
         assert_eq!(jobs.len(), 1);
         assert_eq!(jobs[0].id, item.id);
         let off = Selection::default();
-        assert!(select_with(load_categories(), &off, &settings)
-            .unwrap()
-            .is_empty());
+        assert!(
+            select_with(load_categories(), &off, &settings)
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]
@@ -521,9 +533,10 @@ mod tests {
         )
         .unwrap();
         assert!(!jobs.is_empty());
-        assert!(jobs
-            .iter()
-            .all(|j| j.risk == Risk::Safe && !j.requires_root));
+        assert!(
+            jobs.iter()
+                .all(|j| j.risk == Risk::Safe && !j.requires_root)
+        );
     }
 
     #[test]
@@ -567,9 +580,10 @@ mod tests {
             },
         )
         .unwrap();
-        assert!(u
-            .iter()
-            .all(|j| !j.requires_root && j.category != "System Cleaners"));
+        assert!(
+            u.iter()
+                .all(|j| !j.requires_root && j.category != "System Cleaners")
+        );
         let r = select(
             load_categories(),
             &Selection {
@@ -579,29 +593,34 @@ mod tests {
         )
         .unwrap();
         assert!(!r.is_empty());
-        assert!(r
-            .iter()
-            .all(|j| j.category == "System Cleaners" || j.category.ends_with(ROOT_SUFFIX)));
+        assert!(
+            r.iter()
+                .all(|j| j.category == "System Cleaners" || j.category.ends_with(ROOT_SUFFIX))
+        );
     }
 
     #[test]
     fn unknown_id_and_category_error() {
-        assert!(select(
-            load_categories(),
-            &Selection {
-                ids: vec!["nope".into()],
-                ..Default::default()
-            }
-        )
-        .is_err());
-        assert!(select(
-            load_categories(),
-            &Selection {
-                categories: vec!["nope".into()],
-                ..Default::default()
-            }
-        )
-        .is_err());
+        assert!(
+            select(
+                load_categories(),
+                &Selection {
+                    ids: vec!["nope".into()],
+                    ..Default::default()
+                }
+            )
+            .is_err()
+        );
+        assert!(
+            select(
+                load_categories(),
+                &Selection {
+                    categories: vec!["nope".into()],
+                    ..Default::default()
+                }
+            )
+            .is_err()
+        );
     }
 
     #[test]

@@ -13,7 +13,7 @@ use crate::util::{fmt, nav_href, size_class};
 /// HTML shell shared by every page. `refresh` (seconds, 0 = off) re-loads the page —
 /// used while a scan or a clean is in progress.
 #[component]
-pub async fn document(
+pub(crate) async fn document(
     refresh: u32,
     theme: usize,
     title: String,
@@ -48,7 +48,7 @@ pub async fn document(
 
 /// Tab bar shared by the Settings and About pages.
 #[component]
-pub async fn info_tabs(active: String) -> Result<impl View> {
+pub(crate) async fn info_tabs(active: String) -> Result<impl View> {
     Ok(view! {
         <nav class="tabs" aria-label="Settings and About">
             <a class=(if active == "settings" { "tab active" } else { "tab" }) href="/settings">"⚙ Settings"</a>
@@ -59,7 +59,7 @@ pub async fn info_tabs(active: String) -> Result<impl View> {
 
 /// Logo, user/root badge, search box, schedule link and theme picker.
 #[component]
-pub async fn top_bar(
+pub(crate) async fn top_bar(
     is_root: bool,
     q: String,
     cat: usize,
@@ -108,13 +108,13 @@ fn cat_size(c: &CatView) -> (String, &'static str) {
 
 /// A small CSS-animated spinner shown instead of numbers that are not ready yet.
 #[component]
-pub async fn spinner() -> Result<impl View> {
+pub(crate) async fn spinner() -> Result<impl View> {
     Ok(view! { <span class="spin" role="status" aria-label="measuring"></span> })
 }
 
 /// Sidebar of categories: USER LAND above SYSTEM · ROOT.
 #[component]
-pub async fn side_nav(
+pub(crate) async fn side_nav(
     categories: &[CatView],
     active: usize,
     q: String,
@@ -156,7 +156,11 @@ pub async fn side_nav(
 
 /// Drop-down navigation shown instead of the sidebar on narrow screens.
 #[component]
-pub async fn cat_pick(categories: &[CatView], active: usize, hide: bool) -> Result<impl View> {
+pub(crate) async fn cat_pick(
+    categories: &[CatView],
+    active: usize,
+    hide: bool,
+) -> Result<impl View> {
     Ok(view! {
         <form class="catpick" method="get" action="/">
             if !hide { <input type="hidden" name="hide" value="0"> }
@@ -173,7 +177,7 @@ pub async fn cat_pick(categories: &[CatView], active: usize, hide: bool) -> Resu
 
 /// One cleaner: the whole row is a label, ticking it posts the change.
 #[component]
-pub async fn item_row(
+pub(crate) async fn item_row(
     item: &ItemView,
     back: String,
     show_category: Option<String>,
@@ -275,7 +279,7 @@ pub async fn item_row(
 
 /// Sticky bar: selection summary / progress and the action buttons.
 #[component]
-pub async fn action_bar(
+pub(crate) async fn action_bar(
     snap: &Snapshot,
     back: String,
     cat: usize,

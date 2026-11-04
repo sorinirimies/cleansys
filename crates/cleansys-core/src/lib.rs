@@ -49,17 +49,17 @@ pub use auth::{
     authenticate_sudo, cache_sudo_password, cached_sudo_password, clear_cached_sudo_password,
 };
 pub use cleaners::cleaned_item::{
-    cleaner_fn, CleanedItem, CleanedItemType, CleanerFn, CleaningResult, RunOptions,
+    CleanedItem, CleanedItemType, CleanerFn, CleaningResult, RunOptions, cleaner_fn,
 };
 pub use cleaners::{system_cleaners, user_cleaners};
-pub use model::{load_categories, select_recommended, CleanerCategory, CleanerItem, Risk, Status};
-pub use scan::{spawn_scan, spawn_scan_with, EntryState, ScanBoard, ScanEntry, ScanInfo};
-pub use settings::{load_settings, save_settings, update_settings, Settings};
+pub use model::{CleanerCategory, CleanerItem, Risk, Status, load_categories, select_recommended};
+pub use scan::{EntryState, ScanBoard, ScanEntry, ScanInfo, spawn_scan, spawn_scan_with};
+pub use settings::{Settings, load_settings, save_settings, update_settings};
 pub use theme::system::{
-    current_system_theme_index, detect_system_dark, is_system_name, system_theme_index,
-    SYSTEM_THEME_NAME,
+    SYSTEM_THEME_NAME, current_system_theme_index, detect_system_dark, is_system_name,
+    system_theme_index,
 };
-pub use theme::{theme_by_index, theme_index_by_name, AppTheme, Rgb, THEME_COUNT, THEME_NAMES};
+pub use theme::{AppTheme, Rgb, THEME_COUNT, THEME_NAMES, theme_by_index, theme_index_by_name};
 pub use utils::{
     check_root, confirm, format_size, get_size, print_error, print_header, remove_dir_all_parallel,
 };

@@ -45,7 +45,7 @@ pub use view::view;
 
 /// Keyboard shortcuts, window resize events and the progress animation tick.
 pub fn subscription(state: &CleanSysGui) -> iced::Subscription<Message> {
-    use iced::{event, keyboard, window as win, Event};
+    use iced::{Event, event, keyboard, window as win};
     let events = event::listen_with(|event, _status, _id| match event {
         Event::Keyboard(keyboard::Event::KeyPressed { key, modifiers, .. }) => {
             window::shortcut(&key, modifiers)

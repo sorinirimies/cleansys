@@ -115,6 +115,7 @@ const MAX_AUTH_FAILS: u32 = 3;
 /// How long further attempts are refused after [`MAX_AUTH_FAILS`] failures.
 const AUTH_COOLDOWN: std::time::Duration = std::time::Duration::from_secs(30);
 
+#[derive(Debug)]
 pub struct Inner {
     categories: Vec<CleanerCategory>,
     board: ScanBoard,
@@ -128,7 +129,7 @@ pub struct Inner {
 }
 
 /// Cheaply clonable handle to the shared state.
-#[derive(Clone)]
+#[derive(Debug, Clone)]
 pub struct Shared(Arc<Mutex<Inner>>);
 
 /// The root side of the UI: the built-in "System Cleaners" and every root engine category.

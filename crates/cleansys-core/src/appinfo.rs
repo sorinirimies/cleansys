@@ -1,6 +1,6 @@
 //! "About" information shared by every front-end: version, author, links, paths.
 //!
-//! The TUI, GUI and web UI all render [`about_rows`], so they can never drift apart.
+//! The TUI, GUI and web UI all render [`about_rows`](crate::appinfo::about_rows), so they can never drift apart.
 
 /// Product name.
 pub const NAME: &str = "CleanSys";

@@ -9,6 +9,7 @@ use crate::cleaners::cleaned_item::{CleanedItem, CleanerFnPtr, CleaningResult, R
 use crate::cleaners::platform;
 use crate::utils::{confirm, format_size, get_size, print_success};
 
+#[derive(Debug)]
 pub struct CleanerInfo {
     pub name: &'static str,
     pub description: &'static str,
@@ -21,7 +22,7 @@ pub struct CleanerInfo {
 /// line per cleaner, so the list reads like a table of contents instead of
 /// ~30 lines of boilerplate.
 macro_rules! cleaner {
-    ($name:literal, $description:literal, $function:expr) => {
+    ($name:literal, $description:literal, $function:expr_2021) => {
         CleanerInfo {
             name: $name,
             description: $description,
@@ -203,23 +204,23 @@ fn clean_app_caches(opts: RunOptions) -> Result<CleaningResult> {
 
     debug!("Cache directory: {:?}", cache_dir);
 
-    if cache_dir.exists() {
-        if let Ok(entries) = fs::read_dir(&cache_dir) {
-            let protected = platform::protected_cache_names();
-            for entry in entries.flatten() {
-                let path = entry.path();
-                let name = path
-                    .file_name()
-                    .unwrap_or_default()
-                    .to_string_lossy()
-                    .to_string();
-                if protected.contains(&name.as_str()) {
-                    debug!("Skipping critical cache directory: {:?}", path);
-                    continue;
-                }
-                if path.is_dir() {
-                    clean_path(&mut result, &path, &format!("'{name}' cache"), opts, false)?;
-                }
+    if cache_dir.exists()
+        && let Ok(entries) = fs::read_dir(&cache_dir)
+    {
+        let protected = platform::protected_cache_names();
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let name = path
+                .file_name()
+                .unwrap_or_default()
+                .to_string_lossy()
+                .to_string();
+            if protected.contains(&name.as_str()) {
+                debug!("Skipping critical cache directory: {:?}", path);
+                continue;
+            }
+            if path.is_dir() {
+                clean_path(&mut result, &path, &format!("'{name}' cache"), opts, false)?;
             }
         }
     }
@@ -249,21 +250,22 @@ fn clean_thumbnail_caches(opts: RunOptions) -> Result<CleaningResult> {
 }
 
 #[cfg(target_os = "linux")]
+#[allow(unsafe_code, reason = "libc::getuid has no safe std equivalent")]
 fn clean_temp_files(opts: RunOptions) -> Result<CleaningResult> {
     let mut result = CleaningResult::new();
     let tmp_dir = platform::temp_dir();
 
-    if tmp_dir.exists() {
-        if let Ok(entries) = fs::read_dir(&tmp_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
+    if tmp_dir.exists()
+        && let Ok(entries) = fs::read_dir(&tmp_dir)
+    {
+        for entry in entries.flatten() {
+            let path = entry.path();
 
-                // On shared Linux /tmp, only touch files owned by the current user.
-                if let Ok(metadata) = fs::metadata(&path) {
-                    if metadata.uid() == unsafe { libc::getuid() } {
-                        clean_path(&mut result, &path, "temporary file", opts, false)?;
-                    }
-                }
+            // On shared Linux /tmp, only touch files owned by the current user.
+            if let Ok(metadata) = fs::metadata(&path)
+                && metadata.uid() == unsafe { libc::getuid() }
+            {
+                clean_path(&mut result, &path, "temporary file", opts, false)?;
             }
         }
     }
@@ -278,12 +280,12 @@ fn clean_temp_files(opts: RunOptions) -> Result<CleaningResult> {
 
     // macOS/Windows temp directories are already per-user, so every entry
     // can be considered for cleanup without an extra ownership check.
-    if tmp_dir.exists() {
-        if let Ok(entries) = fs::read_dir(&tmp_dir) {
-            for entry in entries.flatten() {
-                let path = entry.path();
-                clean_path(&mut result, &path, "temporary file", opts, false)?;
-            }
+    if tmp_dir.exists()
+        && let Ok(entries) = fs::read_dir(&tmp_dir)
+    {
+        for entry in entries.flatten() {
+            let path = entry.path();
+            clean_path(&mut result, &path, "temporary file", opts, false)?;
         }
     }
 
@@ -303,44 +305,37 @@ fn clean_package_caches(opts: RunOptions) -> Result<CleaningResult> {
     if let Ok(dir_output) = std::process::Command::new("yarn")
         .args(["cache", "dir"])
         .output()
+        && dir_output.status.success()
     {
-        if dir_output.status.success() {
-            let yarn_dir = String::from_utf8_lossy(&dir_output.stdout)
-                .trim()
-                .to_string();
-            let yarn_path = Path::new(&yarn_dir);
-            if yarn_path.exists() {
-                let size = get_size(&yarn_dir).unwrap_or(0);
-                if size > 0 {
-                    if opts.dry_run {
-                        result.add_item(CleanedItem::directory(
-                            yarn_path.to_path_buf(),
-                            size,
-                            "yarn cache",
-                        ));
-                    } else if opts.skip_confirmation
-                        || confirm(
-                            &format!("Clean yarn cache ({} to be freed)?", format_size(size)),
-                            true,
-                        )?
-                    {
-                        if let Ok(output) = std::process::Command::new("yarn")
-                            .args(["cache", "clean"])
-                            .output()
-                        {
-                            if output.status.success() {
-                                print_success(&format!(
-                                    "Cleaned yarn cache ({})",
-                                    format_size(size)
-                                ));
-                                result.add_item(CleanedItem::directory(
-                                    yarn_path.to_path_buf(),
-                                    size,
-                                    "yarn cache",
-                                ));
-                            }
-                        }
-                    }
+        let yarn_dir = String::from_utf8_lossy(&dir_output.stdout)
+            .trim()
+            .to_string();
+        let yarn_path = Path::new(&yarn_dir);
+        if yarn_path.exists() {
+            let size = get_size(&yarn_dir).unwrap_or(0);
+            if size > 0 {
+                if opts.dry_run {
+                    result.add_item(CleanedItem::directory(
+                        yarn_path.to_path_buf(),
+                        size,
+                        "yarn cache",
+                    ));
+                } else if (opts.skip_confirmation
+                    || confirm(
+                        &format!("Clean yarn cache ({} to be freed)?", format_size(size)),
+                        true,
+                    )?)
+                    && let Ok(output) = std::process::Command::new("yarn")
+                        .args(["cache", "clean"])
+                        .output()
+                    && output.status.success()
+                {
+                    print_success(&format!("Cleaned yarn cache ({})", format_size(size)));
+                    result.add_item(CleanedItem::directory(
+                        yarn_path.to_path_buf(),
+                        size,
+                        "yarn cache",
+                    ));
                 }
             }
         }

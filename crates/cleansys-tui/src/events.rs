@@ -5,6 +5,7 @@ use std::time::{Duration, Instant};
 use anyhow::Result;
 use crossterm::event::{self, Event as CrosstermEvent, KeyEvent};
 
+#[derive(Debug)]
 pub enum Event {
     Input(KeyEvent),
     Tick,
@@ -12,6 +13,7 @@ pub enum Event {
 }
 
 /// A small event handler that wrap crossterm input and tick events
+#[derive(Debug)]
 pub struct Events {
     /// The event receiver channel
     rx: mpsc::Receiver<Event>,
@@ -77,6 +79,7 @@ impl Events {
     }
 }
 
+#[derive(Debug)]
 pub struct Config {
     pub tick_rate: Duration,
 }

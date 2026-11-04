@@ -39,6 +39,7 @@ fn theme_for(requested: Option<&str>) -> usize {
 }
 
 #[query_params(error = redirect("?"))]
+#[derive(Debug)]
 pub struct HomeParams {
     /// Active category index.
     pub cat: Option<usize>,
@@ -395,6 +396,7 @@ async fn run_clean(cx: &Cx) -> Result<SeeOther> {
 // ── sudo password ────────────────────────────────────────────────────
 
 #[query_params(error = redirect("/auth"))]
+#[derive(Debug)]
 pub struct AuthParams {
     pub msg: Option<String>,
 }
@@ -512,6 +514,7 @@ async fn dismiss(cx: &Cx) -> Result<SeeOther> {
 // ── settings & about ─────────────────────────────────────────────────
 
 #[query_params(error = redirect("/settings"))]
+#[derive(Debug)]
 pub struct SettingsParams {
     pub msg: Option<String>,
 }
@@ -741,6 +744,7 @@ async fn about_page(cx: &Cx) -> Result<impl View> {
 // ── schedule ─────────────────────────────────────────────────────────
 
 #[query_params(error = redirect("/schedule"))]
+#[derive(Debug)]
 pub struct ScheduleParams {
     pub msg: Option<String>,
 }

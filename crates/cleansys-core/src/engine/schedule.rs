@@ -15,7 +15,7 @@
 //! you). Unattended runs only ever touch user-land cleaners and never
 //! `caution`-risk ones unless you explicitly picked them.
 
-use anyhow::{bail, Context, Result};
+use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -116,10 +116,10 @@ pub fn parse_time(s: &str) -> Result<(u8, u8)> {
 /// Parse a weekday name/abbreviation (`sun`, `Monday`) or number 0–6.
 pub fn parse_weekday(s: &str) -> Result<u8> {
     let l = s.trim().to_lowercase();
-    if let Ok(n) = l.parse::<u8>() {
-        if n <= 6 {
-            return Ok(n);
-        }
+    if let Ok(n) = l.parse::<u8>()
+        && n <= 6
+    {
+        return Ok(n);
     }
     WEEKDAYS
         .iter()
@@ -443,6 +443,7 @@ fn run_ok(cmd: &str, args: &[&str]) -> Result<()> {
     Ok(())
 }
 
+#[cfg(unix)]
 fn home() -> Result<PathBuf> {
     crate::cleaners::platform::home_dir().context("no home directory")
 }
@@ -804,11 +805,13 @@ mod tests {
             .ago(),
             "just now"
         );
-        assert!(LastRun {
-            at: now - 7200,
-            ..Default::default()
-        }
-        .ago()
-        .contains('h'));
+        assert!(
+            LastRun {
+                at: now - 7200,
+                ..Default::default()
+            }
+            .ago()
+            .contains('h')
+        );
     }
 }

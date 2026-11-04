@@ -27,10 +27,10 @@ pub fn run_spec_with(
     opts: RunOptions,
     cfg: &EngineConfig,
 ) -> Result<CleaningResult> {
-    if !opts.dry_run {
-        if let Some(app) = super::running::running_app(spec) {
-            return Err(super::running::AppRunning(app).into());
-        }
+    if !opts.dry_run
+        && let Some(app) = super::running::running_app(spec)
+    {
+        return Err(super::running::AppRunning(app).into());
     }
     let mut result = CleaningResult::new();
     if !opts.dry_run {
@@ -191,10 +191,10 @@ fn files_below(root: &Path, filter: &PathFilter) -> Vec<PathBuf> {
             if filter.accepts(&p) {
                 out.push(p);
             }
-        } else if meta.is_dir() {
-            if let Ok(rd) = fs::read_dir(&p) {
-                stack.extend(rd.flatten().map(|e| e.path()));
-            }
+        } else if meta.is_dir()
+            && let Ok(rd) = fs::read_dir(&p)
+        {
+            stack.extend(rd.flatten().map(|e| e.path()));
         }
     }
     out.sort();
@@ -588,10 +588,10 @@ fn is_stale(project: &DirFiles, artifact: &Path, min_age: Duration) -> bool {
     }
     let mut newest = SystemTime::UNIX_EPOCH;
     let mut bump = |t: std::io::Result<SystemTime>| {
-        if let Ok(t) = t {
-            if t > newest {
-                newest = t;
-            }
+        if let Ok(t) = t
+            && t > newest
+        {
+            newest = t;
         }
     };
     for f in &project.files {

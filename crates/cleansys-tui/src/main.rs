@@ -12,9 +12,9 @@ use cleansys_tui::render::ui;
 use crossterm::{
     event::{DisableMouseCapture, EnableMouseCapture},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
-use ratatui::{prelude::CrosstermBackend, Terminal};
+use ratatui::{Terminal, prelude::CrosstermBackend};
 
 #[derive(Parser)]
 #[command(
@@ -309,7 +309,9 @@ fn run_schedule_cmd(action: ScheduleCmd) -> Result<()> {
                     println!("  Cleans:   {}", s.scope_label());
                     match job {
                         Some(j) => println!("  Active:   yes ({})", j.backend),
-                        None => println!("  Active:   NO — saved but not installed; run `cleansys schedule install`"),
+                        None => println!(
+                            "  Active:   NO — saved but not installed; run `cleansys schedule install`"
+                        ),
                     }
                     println!("  Log:      {}", sch::log_path().display());
                 }

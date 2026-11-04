@@ -1,18 +1,25 @@
 use anyhow::Result;
+#[cfg(unix)]
+use log::debug;
 #[cfg(target_os = "linux")]
 use log::info;
-use log::{debug, warn};
+use log::warn;
+#[cfg(unix)]
 use std::path::Path;
+#[cfg(unix)]
 use std::process::Command;
 
 use crate::cleaners::cleaned_item::{CleanedItem, CleanerFnPtr, CleaningResult, RunOptions};
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(target_os = "macos")]
 use crate::cleaners::platform;
+#[cfg(unix)]
+use crate::utils::execute_with_sudo;
 #[cfg(target_os = "linux")]
 use crate::utils::print_warning;
-use crate::utils::{confirm, execute_with_sudo, format_size, get_size, print_error, print_success};
+use crate::utils::{confirm, format_size, get_size, print_error, print_success};
 
 /// Information about a system cleaner.
+#[derive(Debug)]
 pub struct CleanerInfo {
     /// The name of the cleaner.
     pub name: &'static str,
@@ -35,7 +42,7 @@ pub struct CleanerInfo {
 /// Linux/macOS/Windows cleaner lists below) down to a single line per
 /// cleaner.
 macro_rules! cleaner {
-    ($name:literal, $description:literal, $function:expr, requires_root: $root:literal) => {
+    ($name:literal, $description:literal, $function:expr_2021, requires_root: $root:literal) => {
         CleanerInfo {
             name: $name,
             description: $description,
@@ -125,6 +132,7 @@ pub fn run_all(skip_confirmation: bool) -> Result<()> {
 /// from "nothing needed cleaning" — both silently produced a 0-byte,
 /// no-error result. Bailing here makes real failures visible as an actual
 /// ❌ error in the TUI/GUI instead.
+#[cfg(unix)]
 fn run_sudo_step(label: &str, command: &str, args: &[&str]) -> Result<bool> {
     let output = execute_with_sudo(command, args)?;
     if !output.status.success() {
@@ -144,6 +152,7 @@ fn run_sudo_step(label: &str, command: &str, args: &[&str]) -> Result<bool> {
 /// mutating command like `apt-get clean`) is never invoked; instead the
 /// entire pre-existing size of `path` is reported as the projected amount
 /// that a real run would free.
+#[cfg(unix)]
 fn measure_around<F>(
     result: &mut CleaningResult,
     path: &Path,
@@ -181,6 +190,7 @@ where
 /// Measure, and if not in preview mode remove, the contents of a single
 /// path (file or whole directory tree) — the common pattern shared by most
 /// "rm -rf $path/*" style system cleaners.
+#[cfg(unix)]
 fn measure_and_remove(
     result: &mut CleaningResult,
     path: &Path,
@@ -1086,12 +1096,13 @@ mod windows_shell {
     use anyhow::Result;
     use windows::Win32::Foundation::HWND;
     use windows::Win32::UI::Shell::{
-        SHEmptyRecycleBinW, SHERB_NOCONFIRMATION, SHERB_NOPROGRESSUI, SHERB_NOSOUND,
+        SHERB_NOCONFIRMATION, SHERB_NOPROGRESSUI, SHERB_NOSOUND, SHEmptyRecycleBinW,
     };
 
     /// Empty the Recycle Bin for every drive, silently (no confirmation
     /// dialog, no progress UI, no sound — CleanSys already asked the user).
-    pub fn empty_recycle_bin() -> Result<()> {
+    #[allow(unsafe_code, reason = "SHEmptyRecycleBinW is a Windows FFI call")]
+    pub(crate) fn empty_recycle_bin() -> Result<()> {
         // SAFETY: `SHEmptyRecycleBinW(None, None, flags)` empties the
         // Recycle Bin for *all* drives when both the window handle and root
         // path are null, which is exactly the documented, supported usage.

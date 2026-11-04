@@ -1,13 +1,14 @@
 use anyhow::Result;
 use ratatui::{
+    Frame,
     layout::Rect,
     style::{Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Wrap},
-    Frame,
 };
 
 /// Password prompt component for sudo authentication
+#[derive(Debug)]
 pub struct PasswordPrompt {
     /// The password input (stored temporarily during entry)
     password_input: String,

@@ -7,7 +7,7 @@
 //! cleaners to list, what is hidden because it is empty, ...).
 
 use std::collections::{HashSet, VecDeque};
-use std::sync::mpsc::{channel, Receiver};
+use std::sync::mpsc::{Receiver, channel};
 use std::sync::{Arc, Mutex};
 
 use crate::cleaners::cleaned_item::{CleaningResult, RunOptions};
@@ -527,17 +527,18 @@ where
         });
     }
     if total > 0 {
-        std::thread::spawn(move || loop {
-            std::thread::sleep(std::time::Duration::from_millis(500));
-            if remaining.load(std::sync::atomic::Ordering::SeqCst) == 0
-                || cancelled.load(std::sync::atomic::Ordering::Relaxed)
-            {
-                return;
-            }
-            for (n, slot) in slots.iter().enumerate() {
-                let started = *slot.started.lock().unwrap_or_else(|e| e.into_inner());
-                if let Some(t0) = started {
-                    if t0.elapsed() >= timeout
+        std::thread::spawn(move || {
+            loop {
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                if remaining.load(std::sync::atomic::Ordering::SeqCst) == 0
+                    || cancelled.load(std::sync::atomic::Ordering::Relaxed)
+                {
+                    return;
+                }
+                for (n, slot) in slots.iter().enumerate() {
+                    let started = *slot.started.lock().unwrap_or_else(|e| e.into_inner());
+                    if let Some(t0) = started
+                        && t0.elapsed() >= timeout
                         && !slot.reported.load(std::sync::atomic::Ordering::SeqCst)
                     {
                         let (ci, ii) = targets[n];
@@ -599,9 +600,9 @@ pub(crate) fn save_scan_times(times: &std::collections::HashMap<String, u64>) {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::cleaners::cleaned_item::{cleaner_fn, CleanedItem};
-    use crate::model::CleanerItem;
     use crate::Risk;
+    use crate::cleaners::cleaned_item::{CleanedItem, cleaner_fn};
+    use crate::model::CleanerItem;
     use std::path::PathBuf;
 
     fn item(id: &str, bytes: u64) -> CleanerItem {
@@ -693,12 +694,14 @@ mod tests {
             got.push(rx.recv_timeout(std::time::Duration::from_secs(5)).unwrap());
         }
         let timed_out = got.iter().find(|g| g.1 == 0).unwrap();
-        assert!(timed_out
-            .2
-            .error
-            .as_deref()
-            .unwrap_or("")
-            .contains("timed out"));
+        assert!(
+            timed_out
+                .2
+                .error
+                .as_deref()
+                .unwrap_or("")
+                .contains("timed out")
+        );
         // the hung cleaner finishing later must not be delivered a second time
         assert!(rx.recv_timeout(std::time::Duration::from_secs(2)).is_err());
     }

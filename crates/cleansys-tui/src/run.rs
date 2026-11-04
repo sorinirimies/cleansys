@@ -5,9 +5,9 @@
 //! drains messages ([`crate::app::App::poll_run`]) and keeps drawing.
 
 use std::path::PathBuf;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{channel, Receiver, RecvTimeoutError};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{Receiver, RecvTimeoutError, channel};
 use std::time::{Duration, Instant};
 
 use cleansys_core::{CleanerFn, CleaningResult, RunOptions};
@@ -16,6 +16,7 @@ use cleansys_core::{CleanerFn, CleaningResult, RunOptions};
 pub type Job = (usize, usize, String, CleanerFn, bool);
 
 /// Progress reported by the worker.
+#[derive(Debug)]
 pub enum RunMsg {
     /// A cleaner started.
     Started(usize, usize),
@@ -28,6 +29,7 @@ pub enum RunMsg {
 }
 
 /// Handle to a running clean.
+#[derive(Debug)]
 pub struct RunHandle {
     pub rx: Receiver<RunMsg>,
     cancel: Arc<AtomicBool>,
@@ -247,9 +249,10 @@ mod tests {
         h.cancel();
         release_tx.send(()).unwrap();
         let msgs = drain(&h);
-        assert!(msgs
-            .iter()
-            .any(|m| matches!(m, RunMsg::Finished(0, 0, Ok(_)))));
+        assert!(
+            msgs.iter()
+                .any(|m| matches!(m, RunMsg::Finished(0, 0, Ok(_))))
+        );
         assert!(msgs.iter().any(|m| matches!(m, RunMsg::Cancelled(0, 1))));
         assert!(!msgs.iter().any(|m| matches!(m, RunMsg::Started(0, 1))));
     }
@@ -306,12 +309,14 @@ mod tests {
         let bad: Job = (0, 0, "boom".into(), cleaner_fn(|_| panic!("kaboom")), false);
         let h = spawn(vec![bad, ok_job(0, 1, false)], vec![], false);
         let msgs = drain(&h);
-        assert!(msgs
-            .iter()
-            .any(|m| matches!(m, RunMsg::Finished(0, 0, Err(e)) if e.contains("crashed"))));
-        assert!(msgs
-            .iter()
-            .any(|m| matches!(m, RunMsg::Finished(0, 1, Ok(_)))));
+        assert!(
+            msgs.iter()
+                .any(|m| matches!(m, RunMsg::Finished(0, 0, Err(e)) if e.contains("crashed")))
+        );
+        assert!(
+            msgs.iter()
+                .any(|m| matches!(m, RunMsg::Finished(0, 1, Ok(_))))
+        );
     }
 
     #[test]
@@ -325,12 +330,14 @@ mod tests {
             Duration::from_secs(10),
         );
         let msgs = drain(&h);
-        assert!(msgs
-            .iter()
-            .any(|m| matches!(m, RunMsg::Finished(0, 0, Err(e)) if e.contains("Timed out"))));
-        assert!(msgs
-            .iter()
-            .any(|m| matches!(m, RunMsg::Finished(0, 1, Ok(_)))));
+        assert!(
+            msgs.iter()
+                .any(|m| matches!(m, RunMsg::Finished(0, 0, Err(e)) if e.contains("Timed out")))
+        );
+        assert!(
+            msgs.iter()
+                .any(|m| matches!(m, RunMsg::Finished(0, 1, Ok(_))))
+        );
     }
 
     #[test]
@@ -346,9 +353,10 @@ mod tests {
         std::thread::sleep(Duration::from_millis(100));
         h.cancel();
         let msgs = drain(&h);
-        assert!(msgs
-            .iter()
-            .any(|m| matches!(m, RunMsg::Finished(0, 0, Err(e)) if e.contains("Cancelled"))));
+        assert!(
+            msgs.iter()
+                .any(|m| matches!(m, RunMsg::Finished(0, 0, Err(e)) if e.contains("Cancelled")))
+        );
         assert!(msgs.iter().any(|m| matches!(m, RunMsg::Cancelled(0, 1))));
     }
 }

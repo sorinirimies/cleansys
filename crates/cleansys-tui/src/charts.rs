@@ -7,14 +7,14 @@
 //! Data is derived from [`App`] on the fly (the pure `*_data` functions are unit-tested);
 //! the `render_*` functions only draw it.
 
-use cleansys_core::{format_size, Risk, Status};
+use cleansys_core::{Risk, Status, format_size};
 use ratatui::{
+    Frame,
     buffer::Buffer,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
     widgets::{Block, Borders, Clear, Paragraph, Widget},
-    Frame,
 };
 use tui_chart::{
     Bullet, BulletItem, RadialBar, RadialRing, RadialSweep, Sankey, SankeyLink, Sparkline,

@@ -10,8 +10,8 @@ use anyhow::Result;
 use cleansys_core::{CleanerCategory, CleanerItem, CleaningResult, RunOptions};
 use cleansys_tui::app::App;
 use cleansys_tui::render::ui;
-use ratatui::backend::TestBackend;
 use ratatui::Terminal;
+use ratatui::backend::TestBackend;
 
 fn noop(_opts: RunOptions) -> Result<CleaningResult> {
     Ok(CleaningResult::new())
@@ -25,7 +25,7 @@ fn sample_item(name: &str, requires_root: bool) -> CleanerItem {
         description: format!("{name} description"),
         requires_root,
         selected: false,
-        function: std::sync::Arc::new(noop),
+        function: cleansys_core::cleaner_fn(noop),
         bytes_cleaned: 0,
         last_result: None,
         status: None,

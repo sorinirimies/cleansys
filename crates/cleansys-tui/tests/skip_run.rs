@@ -5,8 +5,8 @@
 
 use cleansys_core::{CleanerCategory, CleanerItem, CleaningResult, RunOptions};
 use cleansys_tui::app::App;
-use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
+use std::sync::atomic::{AtomicBool, Ordering};
 
 #[test]
 fn unticked_paths_are_not_cleaned_by_a_run() {
@@ -19,7 +19,7 @@ fn unticked_paths_are_not_cleaned_by_a_run() {
         description: "d".into(),
         requires_root: false,
         selected: true,
-        function: Arc::new(move |opts: RunOptions| {
+        function: cleansys_core::cleaner_fn(move |opts: RunOptions| {
             assert!(opts.honor_skips);
             probe.store(
                 cleansys_core::engine::skip::is_skipped(std::path::Path::new(

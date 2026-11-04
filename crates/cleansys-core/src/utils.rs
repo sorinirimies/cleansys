@@ -6,6 +6,7 @@ use std::process::Command;
 /// Check if the program is running with root privileges (Unix) or an
 /// elevated/Administrator token (Windows).
 #[cfg(unix)]
+#[allow(unsafe_code, reason = "libc::geteuid has no safe std equivalent")]
 pub fn check_root() -> bool {
     (unsafe { libc::geteuid() }) == 0
 }
@@ -261,6 +262,7 @@ impl DiskUsage {
 
 /// Total / free space of the volume holding the home directory (the one cleaning frees
 /// space on). `None` when it cannot be determined (and always on non-Unix targets).
+#[allow(unsafe_code, reason = "libc::statvfs has no safe std equivalent")]
 pub fn disk_usage() -> Option<DiskUsage> {
     #[cfg(unix)]
     {
@@ -340,12 +342,11 @@ pub fn clear_size_cache() {
 /// Like [`get_size`] but remembers the result, so cleaners whose targets overlap
 /// (or that are measured twice in one scan) walk each tree only once.
 pub fn get_size_cached(path: &std::path::Path) -> u64 {
-    if let Ok(c) = size_cache().lock() {
-        if let Some((at, n)) = c.get(path) {
-            if at.elapsed() < SIZE_CACHE_TTL {
-                return *n;
-            }
-        }
+    if let Ok(c) = size_cache().lock()
+        && let Some((at, n)) = c.get(path)
+        && at.elapsed() < SIZE_CACHE_TTL
+    {
+        return *n;
     }
     let n = dir_size(path, 0, 512);
     if let Ok(mut c) = size_cache().lock() {
@@ -426,7 +427,7 @@ where
 /// splitting tiny directories would only cost time.
 const PARALLEL_DEPTH: u32 = 4;
 
-/// Recursively delete a directory tree, spreading the first [`PARALLEL_DEPTH`] levels
+/// Recursively delete a directory tree, spreading the first `PARALLEL_DEPTH` levels
 /// over the rayon pool. Same semantics as [`std::fs::remove_dir_all`] (symlinks are
 /// removed, never followed; the first error aborts), but several times faster on
 /// big trees such as `target/`, `node_modules/` or Gradle caches.

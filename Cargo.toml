@@ -9,7 +9,8 @@ resolver = "2"
 
 [workspace.package]
 version    = "0.9.1"
-edition    = "2021"
+edition    = "2024"
+rust-version = "1.90"
 authors    = ["Sorin Albu-Irimies <sorinirimies@gmail.com>"]
 license    = "MIT"
 repository = "https://github.com/sorinirimies/cleansys"
@@ -59,6 +60,18 @@ tempfile   = "3.27"
 
 # Internal crates
 cleansys-core = { path = "crates/cleansys-core", version = "0.9.1" }
+
+[workspace.lints.rust]
+# FFI (libc, the Windows shell, AppKit) needs unsafe: each use allows it with a reason.
+unsafe_code = "deny"
+missing_debug_implementations = "warn"
+# `pub` only for what another crate uses; then dead_code finds the rest.
+unreachable_pub = "warn"
+
+[workspace.lints.clippy]
+dbg_macro = "warn"
+todo = "warn"
+unwrap_used = "warn"
 
 [profile.dev]
 opt-level = 0
