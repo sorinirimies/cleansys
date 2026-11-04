@@ -150,8 +150,6 @@ def "test workflows: private repos test macOS and Windows on demand" [] {
     assert equal ($ci.on.workflow_dispatch.inputs.full_matrix.type) "boolean"
 }
 
-def main [] { run-tests }
-
 def "test workflows: the msrv job pins the toolchain from Cargo.toml without a version ref" [] {
     let cargo = open (root | path join Cargo.toml)
     let msrv = $cargo | get -o workspace.package.rust-version | default ($cargo | get -o package.rust-version)
@@ -167,3 +165,5 @@ def "test workflows: rust toolchain refs are channels Dependabot leaves alone" [
         | str join "\n" | parse --regex 'dtolnay/rust-toolchain@(?<ref>\S+)' | get ref | uniq
     assert equal ($refs | where $it not-in [stable beta nightly master]) []
 }
+
+def main [] { run-tests }

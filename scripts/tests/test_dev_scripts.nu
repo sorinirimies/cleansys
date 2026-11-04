@@ -57,8 +57,8 @@ def "test fuzz_all: latest nightly first then dated fallbacks" [] {
     assert equal ($tcs | length) (($FALLBACK_DAYS | length) + 1)
 }
 
-def main [] { run-tests }
-
 def "test tools: targets are rustup target triples" [] {
     for t in $TARGETS { assert ($t =~ '^[a-z0-9_]+(-[a-z0-9_]+){1,3}$') $"($t) is a target triple" }
 }
+
+def main [] { run-tests }
