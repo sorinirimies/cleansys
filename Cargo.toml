@@ -8,7 +8,7 @@ members = [
 resolver = "2"
 
 [workspace.package]
-version    = "0.9.1"
+version    = "0.9.2"
 edition    = "2024"
 rust-version = "1.90"
 authors    = ["Sorin Albu-Irimies <sorinirimies@gmail.com>"]
@@ -59,7 +59,7 @@ predicates = "3.1"
 tempfile   = "3.27"
 
 # Internal crates
-cleansys-core = { path = "crates/cleansys-core", version = "0.9.1" }
+cleansys-core = { path = "crates/cleansys-core", version = "0.9.2" }
 
 [workspace.lints.rust]
 # FFI (libc, the Windows shell, AppKit) needs unsafe: each use allows it with a reason.
