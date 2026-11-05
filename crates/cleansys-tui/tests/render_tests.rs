@@ -477,6 +477,25 @@ fn progress_bar_shows_percent_and_a_highlight_that_sweeps() {
     assert!(text.contains("running Trash"));
 }
 
+// Drawing a frame never advances the animation (the event loop does, on its
+// tick): a slow CI runner, more than 100 ms between frames, saw the next glyph.
+#[test]
+fn drawing_does_not_advance_the_spinner() {
+    let mut app = app_with_categories();
+    app.is_running = true;
+    app.run_total = 2;
+    app.anim_tick = 4;
+    app.last_frame_time = std::time::Instant::now()
+        .checked_sub(std::time::Duration::from_secs(1))
+        .expect("the clock is past one second");
+    let text = screen_text(&mut app, 120, 40);
+    assert_eq!(app.anim_tick, 4);
+    assert!(
+        text.contains(cleansys_core::anim::spinner(4)),
+        "spinner moved:\n{text}"
+    );
+}
+
 #[test]
 fn spinner_glyph_turns_with_the_tick() {
     let mut app = app_with_categories();

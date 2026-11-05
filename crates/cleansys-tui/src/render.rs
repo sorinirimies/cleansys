@@ -26,9 +26,6 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         f.area(),
     );
 
-    // Update animation frame if needed
-    app.update_animation();
-
     // Adjust title and footer heights based on terminal size
     let (title_height, footer_height, min_content_height) = if app.terminal_height < 20 {
         // Very small terminals: minimal UI
