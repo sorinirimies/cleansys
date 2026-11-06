@@ -58,10 +58,14 @@ fn test_list_shows_system_cleaners() {
     let mut cmd = Command::cargo_bin("cleansys").unwrap();
     cmd.arg("list");
 
-    cmd.assert()
-        .success()
-        .stdout(predicate::str::contains("Package Manager Caches"))
-        .stdout(predicate::str::contains("System Logs"));
+    // Each platform has its own system cleaners (Windows has no "System Logs"),
+    // so the expected names come from the core rather than a fixed list.
+    let cleaners = cleansys_core::cleaners::system_cleaners::get_cleaners();
+    assert!(!cleaners.is_empty(), "this platform lists system cleaners");
+    let mut assert = cmd.assert().success();
+    for cleaner in cleaners {
+        assert = assert.stdout(predicate::str::contains(cleaner.name));
+    }
 }
 
 #[test]
