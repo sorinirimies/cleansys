@@ -314,7 +314,9 @@ async fn confirm_preview_run_and_progress_clean_the_sandbox_project() {
     let r = get(addr, "/preview").await;
     assert_eq!(r.status, 200);
     assert!(r.body.contains("Nothing has been deleted"));
-    assert!(r.body.contains("demo-rust/target"));
+    // The page shows the path with the platform's separator (`\` on Windows).
+    let shown = format!("demo-rust{}target", std::path::MAIN_SEPARATOR);
+    assert!(r.body.contains(&shown), "preview lists {shown}");
     assert!(project.join("target").exists(), "preview must not delete");
 
     let r = get(addr, "/confirm").await;
