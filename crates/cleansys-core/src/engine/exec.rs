@@ -654,16 +654,17 @@ mod tests {
             &["build".into(), ".gradle".into()],
             &cfg,
         );
-        let names: Vec<String> = gradle
+        // Paths, not strings: Windows joins components with `\`.
+        let names: Vec<&std::path::Path> = gradle
             .iter()
-            .map(|(_, a)| a.strip_prefix(r).unwrap().to_string_lossy().into_owned())
+            .map(|(_, a)| a.strip_prefix(r).unwrap())
             .collect();
-        assert!(names.contains(&"android/.gradle".to_string()), "{names:?}");
-        assert!(names.contains(&"android/build".to_string()), "{names:?}");
-        assert!(
-            names.contains(&"android/app/build".to_string()),
-            "{names:?}"
-        );
+        for want in ["android/.gradle", "android/build", "android/app/build"] {
+            assert!(
+                names.contains(&std::path::Path::new(want)),
+                "{want}: {names:?}"
+            );
+        }
         assert_eq!(names.len(), 3);
     }
 
