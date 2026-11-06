@@ -133,6 +133,9 @@ fn renders_at_small_terminal_size() {
 
 /// Render and return the whole screen as one string.
 fn screen_text(app: &mut App, width: u16, height: u16) -> String {
+    // App::new() reads the real terminal size, and the layout follows it: size the
+    // app to the test screen so a test renders the same everywhere.
+    app.handle_resize(width, height);
     let backend = TestBackend::new(width, height);
     let mut terminal = Terminal::new(backend).expect("create terminal");
     terminal.draw(|f| ui(f, app)).expect("draw");
@@ -342,7 +345,8 @@ fn renders_running_state_at_small_terminal_size() {
 #[test]
 fn wide_footer_keeps_every_key_hint_visible() {
     let mut app = app_with_categories();
-    let text = screen_text(&mut app, 160, 40);
+    // Below 30 rows the footer is the single key line.
+    let text = screen_text(&mut app, 160, 24);
     for hint in [
         "Space: Select",
         "Enter: Run",
@@ -351,6 +355,17 @@ fn wide_footer_keeps_every_key_hint_visible() {
         "q: Quit",
     ] {
         assert!(text.contains(hint), "footer lost `{hint}`:\n{text}");
+    }
+}
+
+// A tall terminal swaps the key line for the action bar (Windows CI reported its
+// real console size, so the test above rendered this one and failed).
+#[test]
+fn action_bar_keeps_every_key_hint_visible() {
+    let mut app = app_with_categories();
+    let text = screen_text(&mut app, 160, 40);
+    for hint in ["Space select", "Enter run", "L log", "? help", "q quit"] {
+        assert!(text.contains(hint), "action bar lost `{hint}`:\n{text}");
     }
 }
 
