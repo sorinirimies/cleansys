@@ -45,20 +45,11 @@ fn test_format_size_edge_cases() {
     assert_eq!(format_size(u64::MAX), "17179869184.00 GB");
 }
 
-#[cfg(unix)]
+// Whether we run elevated depends on the machine (GitHub's Windows runner is an
+// Administrator), so the test only pins that the check is stable and side-effect free.
 #[test]
-fn test_check_root() {
-    // This test will pass differently based on whether it's run as root
-    // We're just testing that the function doesn't panic
-    let _is_root = check_root();
-    // Function completed without panicking
-}
-
-#[cfg(not(unix))]
-#[test]
-fn test_check_root_non_unix() {
-    // On non-Unix systems, should always return false
-    assert!(!check_root());
+fn test_check_root_is_stable() {
+    assert_eq!(check_root(), check_root());
 }
 
 #[test]
