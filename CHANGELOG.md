@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.10.0](https://github.com/sorinirimies/cleansys/compare/v0.9.3...v0.10.0) — 2026-11-07
+
+### ✨ Features
+
+- New app icon for macOS, Windows and Linux ([`b478583`](https://github.com/sorinirimies/cleansys/commit/b4785836fff317dc935d8d8603c23923a086dcbe))
+
 ## [0.9.3](https://github.com/sorinirimies/cleansys/compare/v0.9.2...v0.9.3) — 2026-11-07
 
 ### 🐛 Bug fixes
