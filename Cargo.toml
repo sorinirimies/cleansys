@@ -20,6 +20,7 @@ repository = "https://github.com/sorinirimies/cleansys"
 # `{ workspace = true }` so there is a single source of truth.
 
 [workspace.dependencies]
+winresource = { version = "0.1", default-features = false }  # the .exe icon (cleansys-gui build script)
 # Core / shared
 anyhow      = "1.0"
 colored     = "3.1"

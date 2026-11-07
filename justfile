@@ -360,6 +360,10 @@ prune-releases *ARGS:
 
 # ── Packaging ─────────────────────────────────────────────────────────────────
 
+# Regenerate every app icon (PNGs, .icns, .ico, window icon) from the master SVG in assets/icons (needs resvg, magick; iconutil for the .icns)
+icons:
+    nu scripts/icons.nu
+
 # Linux .deb, .rpm and AppImages (needs dpkg-deb, alien, fakeroot)
 package-linux version:
     nu scripts/ci/build_release.nu x86_64-unknown-linux-gnu

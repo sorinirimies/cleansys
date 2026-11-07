@@ -17,6 +17,24 @@ pub const MAX_SIZE: (f32, f32) = (8000.0, 6000.0);
 /// First-run size.
 pub const DEFAULT_SIZE: (f32, f32) = (1180.0, 780.0);
 
+/// Side of the embedded window icon, in pixels.
+pub const ICON_SIZE: u32 = 128;
+
+/// The window icon: the title bar and taskbar on Windows, X11 window managers. Raw
+/// RGBA, written by `just icons` (scripts/icons.nu) from assets/icons/cleansys.svg, so
+/// no image decoder is linked for it. macOS takes the Dock icon from the `.app` bundle
+/// (or [`crate::macos::set_dock_icon`]), Wayland from the `.desktop` entry.
+static ICON_RGBA: &[u8] = include_bytes!("../assets/cleansys-128.rgba");
+
+/// The Dock icon a bare `cleansys-gui` binary sets on macOS: the art on Apple's grid.
+pub static DOCK_ICON_PNG: &[u8] = include_bytes!("../assets/cleansys-macos-512.png");
+
+/// The window icon, or `None` when the embedded bytes are not [`ICON_SIZE`]² RGBA.
+#[must_use]
+pub fn icon() -> Option<iced::window::Icon> {
+    iced::window::icon::from_rgba(ICON_RGBA.to_vec(), ICON_SIZE, ICON_SIZE).ok()
+}
+
 /// Step of the grow / shrink shortcuts.
 pub const GROW_FACTOR: f32 = 1.12;
 
@@ -157,6 +175,26 @@ pub fn shortcut_hint() -> String {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn the_window_icon_is_the_embedded_rgba() {
+        use super::{ICON_RGBA, ICON_SIZE, icon};
+        assert_eq!(ICON_RGBA.len(), (ICON_SIZE * ICON_SIZE * 4) as usize);
+        let (rgba, size) = icon().expect("the embedded icon decodes").into_raw();
+        assert_eq!((size.width, size.height), (ICON_SIZE, ICON_SIZE));
+        let alpha = |x: u32, y: u32| rgba[((y * ICON_SIZE + x) * 4 + 3) as usize];
+        assert_eq!(
+            alpha(ICON_SIZE / 2, ICON_SIZE / 2),
+            255,
+            "the tile is opaque"
+        );
+        assert_eq!(alpha(0, 0), 0, "outside the rounded corner is transparent");
+    }
+
+    #[test]
+    fn the_dock_icon_is_a_png() {
+        assert!(super::DOCK_ICON_PNG.starts_with(b"\x89PNG\r\n\x1a\n"));
+    }
+
     use super::*;
 
     fn ch(s: &str) -> Key {

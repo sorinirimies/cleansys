@@ -4,13 +4,15 @@ use cleansys_gui::{CleanSysGui, Message, update, view};
 ///
 /// macOS: add the standard Window menu (Minimize, Zoom, Move & Resize / tiling), which winit's
 /// default menu bar lacks — without it the system's tiling shortcuts (⌃⌘←, Window → Move &
-/// Resize, …) do nothing for this window. See [`cleansys_gui::macos`].
+/// Resize, …) do nothing for this window. See [`cleansys_gui::macos`]. Also sets the Dock
+/// icon, which a bare binary (`cargo install`) has none of; a `.app` shows its `.icns`.
 #[cfg(target_os = "macos")]
 fn platform_setup() -> iced::Task<Message> {
     iced::window::oldest()
         .and_then(|id| {
             iced::window::run(id, |_window| {
                 cleansys_gui::macos::install_window_menu();
+                cleansys_gui::macos::set_dock_icon(cleansys_gui::window::DOCK_ICON_PNG);
             })
         })
         .discard()
@@ -55,6 +57,7 @@ fn main() -> iced::Result {
         })
         .window(iced::window::Settings {
             size: initial_size(),
+            icon: cleansys_gui::window::icon(),
             // `CLEANSYS_GUI_TOP=1` keeps the window above others (documentation screenshots).
             level: if std::env::var_os("CLEANSYS_GUI_TOP").is_some() {
                 iced::window::Level::AlwaysOnTop
