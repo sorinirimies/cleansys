@@ -745,7 +745,7 @@ checksum = "1c133bc6a41be0d194c306b5506d15e6feeea7b1d6604bd3f8310dfb2ca96486"
 
 [[package]]
 name = "cleansys"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "anyhow",
  "assert_cmd",
@@ -767,7 +767,7 @@ dependencies = [
 
 [[package]]
 name = "cleansys-core"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "anyhow",
  "colored",
@@ -787,7 +787,7 @@ dependencies = [
 
 [[package]]
 name = "cleansys-gui"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "anyhow",
  "cleansys-core",
@@ -805,7 +805,7 @@ dependencies = [
 
 [[package]]
 name = "cleansys-web"
-version = "0.9.2"
+version = "0.9.3"
 dependencies = [
  "clap",
  "cleansys-core",
