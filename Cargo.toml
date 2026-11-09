@@ -48,7 +48,7 @@ clap          = { version = "4.6", features = ["derive", "env"] }
 # GUI (Iced)
 iced       = { version = "0.14", features = ["advanced", "canvas"] }
 iced_fonts = { version = "0.3", features = ["bootstrap"] }
-notify-rust = "4.18"
+notify-rust = "4.19"
 
 # Web (Topcoat) — needs Rust 1.98+
 topcoat      = "0.10"
