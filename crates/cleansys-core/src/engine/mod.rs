@@ -13,7 +13,7 @@
 //!   marker file (`Cargo.toml` → `target/`, `build.gradle.kts` → `build/`,
 //!   `package.json` → `node_modules/`, ...).
 //! * `large_files` — the opt-in *deep clean*: big or long-untouched files inside the
-//!   configured deep roots (see [`deep`]).
+//!   configured deep roots (see `deep`).
 
 pub mod config;
 pub mod deep;

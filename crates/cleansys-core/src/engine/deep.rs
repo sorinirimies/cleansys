@@ -2,8 +2,8 @@
 //!
 //! Strictly bounded: only the given roots are searched, symlinks are never followed, a
 //! drive mounted below a root is skipped, hidden folders and build/dependency trees are
-//! not entered (other cleaners own those), and the walk stops after [`MAX_VISITED_DIRS`]
-//! directories. Only the biggest [`MAX_MATCHES`] hits are kept.
+//! not entered (other cleaners own those), and the walk stops after `MAX_VISITED_DIRS`
+//! directories. Only the biggest `MAX_MATCHES` hits are kept.
 
 use log::warn;
 use std::fs;

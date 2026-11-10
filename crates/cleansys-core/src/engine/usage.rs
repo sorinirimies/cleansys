@@ -1,7 +1,7 @@
 //! "Where did my disk go?" — a size tree of one folder, biggest entries first.
 //!
 //! Read-only and bounded like the other walks: symlinks are not followed, a drive mounted
-//! below the start folder is not entered, and the walk stops after [`MAX_VISITED_DIRS`].
+//! below the start folder is not entered, and the walk stops after `MAX_VISITED_DIRS`.
 
 use std::fs;
 use std::path::{Path, PathBuf};
