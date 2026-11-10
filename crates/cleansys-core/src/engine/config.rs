@@ -32,6 +32,17 @@ const DEFAULT_ROOT_NAMES: &[&str] = &[
     "GolandProjects",
     "PycharmProjects",
     "WebstormProjects",
+    "Development",
+    "development",
+    "Sources",
+    "sources",
+    "GitHub",
+    "github",
+    "GitLab",
+    "gitlab",
+    "Documents",
+    "Desktop",
+    "go/src",
 ];
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -47,6 +58,10 @@ pub struct EngineConfig {
     pub min_age_days: u64,
     /// Glob patterns (`~`, `$VAR` allowed) never to delete.
     pub exclude: Vec<String>,
+    /// Folders the *deep clean* cleaners (large / old files) search. Empty = your home
+    /// folder only. Add another drive here (e.g. `/mnt/data`) to include it — nothing
+    /// outside these folders is ever searched, and a drive mounted below one is skipped.
+    pub deep_roots: Vec<String>,
 }
 
 impl Default for EngineConfig {
@@ -56,6 +71,7 @@ impl Default for EngineConfig {
             max_depth: 6,
             min_age_days: 14,
             exclude: Vec::new(),
+            deep_roots: Vec::new(),
         }
     }
 }
@@ -128,6 +144,53 @@ impl EngineConfig {
         } else {
             self.scan_roots.clone()
         }
+    }
+
+    /// The deep-clean folders as the settings screens list and edit them.
+    pub fn deep_roots_for_editing(&self) -> Vec<String> {
+        if self.deep_roots.is_empty() {
+            self.effective_deep_roots()
+                .iter()
+                .map(|p| p.to_string_lossy().into_owned())
+                .collect()
+        } else {
+            self.deep_roots.clone()
+        }
+    }
+
+    /// Add a deep-clean folder (another drive, say). Accepts `~`/`$VAR`; must exist.
+    pub fn add_deep_root(&mut self, input: &str) -> std::result::Result<(), String> {
+        let input = input.trim();
+        if input.is_empty() {
+            return Err("enter a folder".into());
+        }
+        let expanded = super::paths::expand(input, &super::paths::lookup_env);
+        let path = std::path::Path::new(&expanded);
+        if !path.is_absolute() {
+            return Err("use an absolute path (or start with ~)".into());
+        }
+        if !path.is_dir() {
+            return Err(format!("{expanded} is not a folder"));
+        }
+        let mut roots = self.deep_roots_for_editing();
+        if roots.iter().any(|r| r == input) {
+            return Err("already listed".into());
+        }
+        roots.push(input.to_string());
+        self.deep_roots = roots;
+        Ok(())
+    }
+
+    /// Remove the deep-clean folder at `index` (as listed by [`Self::deep_roots_for_editing`]).
+    /// Removing the last one falls back to your home folder.
+    pub fn remove_deep_root(&mut self, index: usize) -> std::result::Result<(), String> {
+        let mut roots = self.deep_roots_for_editing();
+        if index >= roots.len() {
+            return Err("no such folder".into());
+        }
+        roots.remove(index);
+        self.deep_roots = roots;
+        Ok(())
     }
 
     /// Add a project scan root. Accepts `~`/`$VAR`; the directory must exist.
@@ -207,6 +270,12 @@ impl EngineConfig {
             .and_then(|p| std::fs::read_to_string(p).ok())
             .and_then(|s| serde_json::from_str::<Self>(&s).ok())
             .unwrap_or_default();
+        if let Ok(v) = std::env::var("CLEANSYS_DEEP_ROOTS") {
+            cfg.deep_roots = std::env::split_paths(&v)
+                .map(|p| p.to_string_lossy().into_owned())
+                .filter(|s| !s.is_empty())
+                .collect();
+        }
         if let Ok(v) = std::env::var("CLEANSYS_SCAN_ROOTS") {
             cfg.scan_roots = std::env::split_paths(&v)
                 .map(|p| p.to_string_lossy().into_owned())
@@ -235,7 +304,7 @@ impl EngineConfig {
 
     /// Effective, existing, de-duplicated scan roots.
     pub fn effective_roots(&self) -> Vec<PathBuf> {
-        let mut roots: Vec<PathBuf> = if self.scan_roots.is_empty() {
+        let roots: Vec<PathBuf> = if self.scan_roots.is_empty() {
             crate::cleaners::platform::home_dir()
                 .map(|h| DEFAULT_ROOT_NAMES.iter().map(|n| h.join(n)).collect())
                 .unwrap_or_default()
@@ -245,18 +314,36 @@ impl EngineConfig {
                 .map(|r| PathBuf::from(super::paths::expand(r, &super::paths::lookup_env)))
                 .collect()
         };
-        roots.retain(|r| r.is_absolute() && r.is_dir());
-        roots.sort();
-        roots.dedup();
-        // Case-insensitive filesystems (macOS/Windows) can list the same
-        // directory under two spellings ("Projects" vs "projects").
-        let mut seen = std::collections::HashSet::new();
-        roots.retain(|r| seen.insert(dir_identity(r)));
-        // Drop roots nested inside another root (avoid double scanning).
-        let all = roots.clone();
-        roots.retain(|r| !all.iter().any(|o| o != r && r.starts_with(o)));
-        roots
+        normalize_roots(roots)
     }
+
+    /// Folders the deep clean searches: the configured ones, or your home folder.
+    pub fn effective_deep_roots(&self) -> Vec<PathBuf> {
+        let roots: Vec<PathBuf> = if self.deep_roots.is_empty() {
+            crate::cleaners::platform::home_dir().into_iter().collect()
+        } else {
+            self.deep_roots
+                .iter()
+                .map(|r| PathBuf::from(super::paths::expand(r, &super::paths::lookup_env)))
+                .collect()
+        };
+        normalize_roots(roots)
+    }
+}
+
+/// Existing absolute directories, sorted, without duplicates or roots nested in another root.
+pub(super) fn normalize_roots(mut roots: Vec<PathBuf>) -> Vec<PathBuf> {
+    roots.retain(|r| r.is_absolute() && r.is_dir());
+    roots.sort();
+    roots.dedup();
+    // Case-insensitive filesystems (macOS/Windows) can list the same
+    // directory under two spellings ("Projects" vs "projects").
+    let mut seen = std::collections::HashSet::new();
+    roots.retain(|r| seen.insert(dir_identity(r)));
+    // Drop roots nested inside another root (avoid double scanning).
+    let all = roots.clone();
+    roots.retain(|r| !all.iter().any(|o| o != r && r.starts_with(o)));
+    roots
 }
 
 #[cfg(unix)]
@@ -333,5 +420,38 @@ mod edit_tests {
         cfg.remove_exclude(0).unwrap();
         assert!(cfg.exclude.is_empty());
         assert!(cfg.remove_exclude(0).is_err());
+    }
+}
+
+#[cfg(test)]
+mod default_roots_tests {
+    use super::*;
+
+    #[test]
+    fn default_names_cover_common_checkout_folders() {
+        for n in ["Projects", "Documents", "Development", "GitHub", "go/src"] {
+            assert!(DEFAULT_ROOT_NAMES.contains(&n), "{n}");
+        }
+    }
+}
+
+#[cfg(test)]
+mod deep_root_tests {
+    use super::*;
+
+    #[test]
+    fn add_and_remove_deep_roots() {
+        let d = std::env::temp_dir();
+        let p = d.to_string_lossy().into_owned();
+        let mut c = EngineConfig::default();
+        assert!(c.add_deep_root("relative").is_err());
+        assert!(c.add_deep_root("/definitely/not/here").is_err());
+        c.add_deep_root(&p).unwrap();
+        assert!(c.deep_roots.contains(&p));
+        assert_eq!(c.add_deep_root(&p), Err("already listed".into()));
+        let n = c.deep_roots.len();
+        c.remove_deep_root(n - 1).unwrap();
+        assert_eq!(c.deep_roots.len(), n - 1);
+        assert!(c.remove_deep_root(99).is_err());
     }
 }

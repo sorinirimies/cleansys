@@ -14,7 +14,7 @@ use crate::cleaners::cleaned_item::{CleanedItem, CleaningResult, RunOptions};
 use crate::utils::{confirm, format_size, get_size, print_success};
 
 /// Hard cap on directories visited per project scan (runaway protection).
-const MAX_VISITED_DIRS: usize = 300_000;
+const MAX_VISITED_DIRS: usize = 200_000;
 
 /// Run every action of `spec` using the on-disk [`EngineConfig`].
 pub fn run_spec(spec: &CleanerSpec, opts: RunOptions) -> Result<CleaningResult> {
@@ -130,9 +130,57 @@ pub fn run_spec_with(
                     remove_path(&mut result, &artifact, &item_label, opts, false, false, cfg)?;
                 }
             }
+            Action::LargeFiles {
+                roots,
+                min_mb,
+                min_age_days,
+                extensions,
+                label,
+            } => {
+                let label = label.as_deref().unwrap_or(&spec.name);
+                let query = super::deep::Query {
+                    roots: deep_roots_for(roots, cfg),
+                    min_bytes: min_mb.saturating_mul(1 << 20),
+                    min_age: Duration::from_secs(min_age_days.saturating_mul(86_400)),
+                    extensions: extensions.iter().map(|e| e.to_ascii_lowercase()).collect(),
+                };
+                for (path, _) in super::deep::find_files(&query, cfg) {
+                    remove_path(&mut result, &path, label, opts, false, false, cfg)?;
+                }
+            }
+            Action::Duplicates {
+                roots,
+                min_mb,
+                label,
+            } => {
+                let label = label.as_deref().unwrap_or(&spec.name);
+                let query = super::deep::Query {
+                    roots: deep_roots_for(roots, cfg),
+                    min_bytes: min_mb.saturating_mul(1 << 20),
+                    min_age: Duration::ZERO,
+                    extensions: Vec::new(),
+                };
+                for (path, _) in super::deep::find_duplicates(&query, cfg) {
+                    remove_path(&mut result, &path, label, opts, false, false, cfg)?;
+                }
+            }
         }
     }
     Ok(result)
+}
+
+/// The folders a deep action searches: its own `roots`, else the configured deep roots.
+fn deep_roots_for(roots: &[String], cfg: &EngineConfig) -> Vec<PathBuf> {
+    if roots.is_empty() {
+        cfg.effective_deep_roots()
+    } else {
+        super::config::normalize_roots(
+            roots
+                .iter()
+                .flat_map(|r| paths::resolve(r, &paths::lookup_env))
+                .collect(),
+        )
+    }
 }
 
 /// Optional regex filters for `delete` actions.
@@ -206,7 +254,9 @@ fn files_below(root: &Path, filter: &PathFilter) -> Vec<PathBuf> {
 /// considered present.
 pub fn spec_has_targets(spec: &CleanerSpec) -> bool {
     spec.actions.iter().any(|a| match a {
-        Action::ProjectArtifacts { .. } => true,
+        Action::ProjectArtifacts { .. } | Action::LargeFiles { .. } | Action::Duplicates { .. } => {
+            true
+        }
         Action::Command { program, .. } => paths::find_program(program).is_some(),
         Action::Delete { .. } => a
             .delete_templates()
@@ -309,9 +359,38 @@ pub(crate) fn remove_path(
     Ok(())
 }
 
+/// Device id of a directory (`None` where unsupported or unreadable).
+#[cfg(unix)]
+pub(super) fn device_of_path(p: &Path) -> Option<u64> {
+    use std::os::unix::fs::MetadataExt;
+    fs::metadata(p).ok().map(|m| m.dev())
+}
+
+#[cfg(not(unix))]
+pub(super) fn device_of_path(_: &Path) -> Option<u64> {
+    None
+}
+
+/// The entry lives on the same filesystem as its parent. Another drive, a network
+/// share or a pseudo filesystem mounted below a scan root is never walked: the
+/// project scan stays on the drive the root itself is on.
+#[cfg(unix)]
+pub(super) fn same_device(parent: Option<u64>, e: &fs::DirEntry) -> bool {
+    use std::os::unix::fs::MetadataExt;
+    match (parent, e.metadata()) {
+        (Some(p), Ok(m)) => m.dev() == p,
+        _ => true,
+    }
+}
+
+#[cfg(not(unix))]
+pub(super) fn same_device(_: Option<u64>, _: &fs::DirEntry) -> bool {
+    true
+}
+
 /// Directories whose contents are never searched for nested projects
 /// (build output / dependency trees are huge and contain no projects).
-const SKIP_DESCENT: &[&str] = &[
+pub(super) const SKIP_DESCENT: &[&str] = &[
     "node_modules",
     "target",
     "build",
@@ -367,6 +446,7 @@ fn scan_one_dir(
     };
     let mut files = Vec::new();
     let mut children = Vec::new();
+    let here = device_of_path(dir);
     for e in rd.flatten() {
         let Ok(ft) = e.file_type() else { continue };
         let name = e.file_name();
@@ -380,6 +460,7 @@ fn scan_one_dir(
             && depth < cfg.max_depth
             && !name.starts_with('.')
             && !SKIP_DESCENT.contains(&name)
+            && same_device(here, &e)
         {
             children.push(e.path());
         }
@@ -735,6 +816,19 @@ mod tests {
         cfg.min_age_days = 30;
         let found = find_project_artifacts(&["Cargo.toml".into()], &["target".into()], &cfg);
         assert!(found.is_empty());
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn same_device_accepts_children_on_one_filesystem() {
+        let d = tempfile::tempdir().unwrap();
+        fs::create_dir_all(d.path().join("sub")).unwrap();
+        let here = device_of_path(d.path());
+        assert!(here.is_some());
+        let e = fs::read_dir(d.path()).unwrap().flatten().next().unwrap();
+        assert!(same_device(here, &e));
+        // a different device id (a mount point below the root) is refused
+        assert!(!same_device(here.map(|x| x.wrapping_add(1)), &e));
     }
 
     #[test]

@@ -1,0 +1,102 @@
+# Deep clean: opt-in, PC-wide search for big or long-forgotten files.
+#
+# Nothing here is ticked by default and everything is `caution`: each file is listed
+# and can be unticked in the details view (→ / v). Only the *deep roots* are searched —
+# your home folder unless `deep_roots` (engine.json) / CLEANSYS_DEEP_ROOTS lists others,
+# e.g. a second drive. Hidden folders, build trees and other drives are never entered.
+
+[[cleaner]]
+id = "deep-large-files"
+name = "Large Files (500 MB+)"
+description = "Every file of 500 MB or more in the deep-clean folders — review before ticking"
+category = "Deep Clean"
+risk = "caution"
+[[cleaner.action]]
+type = "large_files"
+min_mb = 500
+label = "Large file"
+
+[[cleaner]]
+id = "deep-old-large-files"
+name = "Large Files Untouched for a Year"
+description = "Files of 100 MB or more that have not been modified for 365 days"
+category = "Deep Clean"
+risk = "caution"
+[[cleaner.action]]
+type = "large_files"
+min_mb = 100
+min_age_days = 365
+label = "Old large file"
+
+[[cleaner]]
+id = "deep-old-downloads"
+name = "Old Downloads (90+ days)"
+description = "Files in ~/Downloads not modified for 90 days"
+category = "Deep Clean"
+risk = "moderate"
+[[cleaner.action]]
+type = "large_files"
+roots = ["~/Downloads"]
+min_mb = 1
+min_age_days = 90
+label = "Old download"
+
+[[cleaner]]
+id = "deep-disk-images"
+name = "Disk Images & VM Disks"
+description = "ISO, IMG, VDI, VMDK, QCOW2, OVA and similar of 100 MB or more"
+category = "Deep Clean"
+risk = "caution"
+[[cleaner.action]]
+type = "large_files"
+min_mb = 100
+extensions = ["iso", "img", "vdi", "vmdk", "qcow2", "vhd", "vhdx", "ova", "dmg"]
+label = "Disk image"
+
+[[cleaner]]
+id = "deep-archives"
+name = "Large Archives"
+description = "ZIP, TAR, 7z, RAR and similar archives of 100 MB or more"
+category = "Deep Clean"
+risk = "caution"
+[[cleaner.action]]
+type = "large_files"
+min_mb = 100
+extensions = ["zip", "tar", "gz", "tgz", "xz", "bz2", "zst", "7z", "rar"]
+label = "Archive"
+
+[[cleaner]]
+id = "deep-installers"
+name = "Leftover Installers"
+description = "deb, rpm, AppImage, pkg, exe and msi installers of 20 MB or more, untouched for 30 days"
+category = "Deep Clean"
+risk = "moderate"
+[[cleaner.action]]
+type = "large_files"
+min_mb = 20
+min_age_days = 30
+extensions = ["deb", "rpm", "appimage", "pkg", "exe", "msi", "apk"]
+label = "Installer"
+
+[[cleaner]]
+id = "deep-dumps"
+name = "Memory & Crash Dumps"
+description = "hprof, dmp, core and similar dumps of 20 MB or more"
+category = "Deep Clean"
+risk = "moderate"
+[[cleaner.action]]
+type = "large_files"
+min_mb = 20
+extensions = ["hprof", "dmp", "core", "mdmp"]
+label = "Dump"
+
+[[cleaner]]
+id = "deep-duplicates"
+name = "Duplicate Files (1 MB+)"
+description = "Identical copies of the same file — the oldest copy of each is kept, the rest are listed"
+category = "Deep Clean"
+risk = "caution"
+[[cleaner.action]]
+type = "duplicates"
+min_mb = 1
+label = "Duplicate"

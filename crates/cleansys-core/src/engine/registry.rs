@@ -14,6 +14,8 @@ const BUILTIN: &[(&str, &str)] = &[
         "build_artifacts.toml",
         include_str!("builtin/build_artifacts.toml"),
     ),
+    ("deep.toml", include_str!("builtin/deep.toml")),
+    ("dev_tools.toml", include_str!("builtin/dev_tools.toml")),
     ("ai_llm.toml", include_str!("builtin/ai_llm.toml")),
     (
         "developer_more.toml",

@@ -1,0 +1,58 @@
+# Extra developer / CLI tool caches not covered elsewhere.
+
+[[cleaner]]
+id = "dev-version-managers"
+name = "Version Manager Downloads"
+description = "Downloaded archives and caches of mise, asdf, nvm, sdkman, fnm and pyenv (installed versions stay)"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/mise", "~/.asdf/downloads", "~/.nvm/.cache", "~/.sdkman/archives", "~/.sdkman/tmp", "$XDG_CACHE_HOME/fnm", "~/.pyenv/cache"]
+macos = ["~/Library/Caches/mise", "~/.asdf/downloads", "~/.nvm/.cache", "~/.sdkman/archives", "~/.sdkman/tmp", "~/.pyenv/cache"]
+contents_only = true
+label = "Version manager cache"
+
+[[cleaner]]
+id = "dev-cloud-cli-caches"
+name = "Cloud CLI Caches"
+description = "Logs and caches of gcloud, aws, az and kubectl (credentials and config stay)"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+linux = ["~/.config/gcloud/logs", "~/.aws/cli/cache", "~/.azure/logs", "~/.azure/commands", "~/.kube/cache", "~/.kube/http-cache"]
+macos = ["~/.config/gcloud/logs", "~/.aws/cli/cache", "~/.azure/logs", "~/.azure/commands", "~/.kube/cache", "~/.kube/http-cache"]
+windows = ["$APPDATA/gcloud/logs", "~/.aws/cli/cache", "~/.azure/logs", "~/.kube/cache"]
+label = "Cloud CLI cache"
+
+[[cleaner]]
+id = "dev-language-servers"
+name = "Language Server Indexes"
+description = "clangd, rust-analyzer and similar index caches (rebuilt on next open)"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/clangd", "$XDG_CACHE_HOME/rust-analyzer", "$XDG_CACHE_HOME/jdtls", "$XDG_CACHE_HOME/typescript"]
+macos = ["~/Library/Caches/clangd", "~/Library/Caches/typescript"]
+label = "Language server index"
+
+[[cleaner]]
+id = "dev-tldr-wasm"
+name = "tldr & Wasm Runtime Caches"
+description = "tldr pages, wasmtime and wasmer caches"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/tldr", "~/.tldr", "~/.wasmer/cache", "$XDG_CACHE_HOME/wasmtime"]
+macos = ["~/Library/Caches/tldr", "~/.wasmer/cache"]
+label = "Tool cache"
+
+[[cleaner]]
+id = "app-bottles-obs"
+name = "Bottles & OBS Logs/Caches"
+description = "Bottles runner downloads cache and OBS Studio logs and crash reports"
+category = "Applications"
+os = ["linux"]
+[[cleaner.action]]
+type = "delete"
+linux = ["~/.local/share/bottles/temp", "$XDG_CACHE_HOME/bottles", "~/.config/obs-studio/logs", "~/.config/obs-studio/crashes", "~/.var/app/com.usebottles.bottles/cache"]
+label = "Bottles / OBS"
