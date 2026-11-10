@@ -68,6 +68,17 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
+    /// Where did my disk go? Size tree of a folder (default: your home), biggest first
+    Usage {
+        /// Folder to measure (default: your home folder)
+        path: Option<String>,
+        /// How many folder levels to show
+        #[arg(short, long, default_value_t = 2)]
+        depth: usize,
+        /// Entries shown per folder
+        #[arg(short = 'n', long, default_value_t = 12)]
+        top: usize,
+    },
     /// One command: scan the recommended (safe) cleaners, show the result, ask once, clean
     Auto {
         #[command(flatten)]
@@ -160,6 +171,10 @@ enum ConfigCmd {
     AddRoot { path: String },
     /// Stop scanning a directory
     RemoveRoot { path: String },
+    /// Also search this folder (e.g. another drive) in the deep clean (large / duplicate files)
+    AddDeepRoot { path: String },
+    /// Stop searching this folder in the deep clean
+    RemoveDeepRoot { path: String },
     /// Never delete anything matching this glob (e.g. '~/work/keep-me/**')
     Exclude { pattern: String },
     /// Only clean project build output untouched for N days (0 = always)
@@ -394,6 +409,57 @@ fn run_schedule_cmd(action: ScheduleCmd) -> Result<()> {
     Ok(())
 }
 
+/// `cleansys usage`: a size tree with bars, biggest first.
+fn run_usage_cmd(path: Option<String>, depth: usize, top: usize) -> Result<()> {
+    use cleansys_core::utils::format_size;
+    let root = match path {
+        Some(p) => std::path::PathBuf::from(cleansys_core::engine::paths::expand(
+            &p,
+            &cleansys_core::engine::paths::lookup_env,
+        )),
+        None => cleansys_core::cleaners::platform::home_dir()
+            .ok_or_else(|| anyhow::anyhow!("no home folder; pass a path"))?,
+    };
+    anyhow::ensure!(root.is_dir(), "{} is not a folder", root.display());
+    print_header("DISK USAGE");
+    println!("Measuring {} …", root.display());
+    let tree = cleansys_core::engine::usage::disk_usage(&root, depth, top);
+    println!("{:>10}  {}", format_size(tree.bytes), root.display());
+    fn show(node: &cleansys_core::engine::usage::Node, total: u64, indent: usize) {
+        for c in &node.children {
+            let frac = if total == 0 {
+                0.0
+            } else {
+                c.bytes as f64 / total as f64
+            };
+            let bar = "█".repeat((frac * 20.0).round() as usize);
+            let name = c
+                .path
+                .file_name()
+                .map(|n| n.to_string_lossy().into_owned())
+                .unwrap_or_default();
+            println!(
+                "{:>10}  {}{:<20} {}{}",
+                format_size(c.bytes),
+                "  ".repeat(indent),
+                bar,
+                name,
+                if c.is_dir { "/" } else { "" }
+            );
+            show(c, total, indent + 1);
+        }
+        if node.hidden > 0 {
+            println!(
+                "{:>10}  {}… the rest",
+                format_size(node.hidden),
+                "  ".repeat(indent)
+            );
+        }
+    }
+    show(&tree, tree.bytes, 1);
+    Ok(())
+}
+
 fn run_config_cmd(action: ConfigCmd) -> Result<()> {
     use cleansys_core::engine::EngineConfig;
     let mut cfg = EngineConfig::load();
@@ -413,6 +479,17 @@ fn run_config_cmd(action: ConfigCmd) -> Result<()> {
                 println!("  (none found — add one: cleansys config add-root ~/code)");
             }
             for r in roots {
+                println!("  • {}", r.display());
+            }
+            println!(
+                "Deep clean searches ({}):",
+                if cfg.deep_roots.is_empty() {
+                    "home folder"
+                } else {
+                    "configured"
+                }
+            );
+            for r in cfg.effective_deep_roots() {
                 println!("  • {}", r.display());
             }
             println!("Max depth:     {}", cfg.max_depth);
@@ -450,6 +527,13 @@ fn run_config_cmd(action: ConfigCmd) -> Result<()> {
                     .collect();
             }
             cfg.scan_roots.retain(|r| r != &path);
+        }
+        ConfigCmd::AddDeepRoot { path } => {
+            cfg.add_deep_root(&path).map_err(anyhow::Error::msg)?;
+        }
+        ConfigCmd::RemoveDeepRoot { path } => {
+            cfg.deep_roots = cfg.deep_roots_for_editing();
+            cfg.deep_roots.retain(|r| r != &path);
         }
         ConfigCmd::Exclude { pattern } => {
             if !cfg.exclude.contains(&pattern) {
@@ -544,6 +628,7 @@ fn main() -> Result<()> {
                 json,
             )?;
         }
+        Some(Commands::Usage { path, depth, top }) => run_usage_cmd(path, depth, top)?,
         Some(Commands::Clean {
             select,
             yes,

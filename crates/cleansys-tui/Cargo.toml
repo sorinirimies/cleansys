@@ -32,6 +32,7 @@ tui-checkbox  = { workspace = true }
 tui-chart     = { workspace = true }
 tui-piechart  = { workspace = true }
 tui-nuances   = { workspace = true }
+unicode-width = { workspace = true }
 notify-rust   = { workspace = true }
 
 [dev-dependencies]

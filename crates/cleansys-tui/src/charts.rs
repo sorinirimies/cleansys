@@ -607,7 +607,14 @@ fn two_panes(area: Rect) -> (Rect, Option<Rect>) {
     }
 }
 
-fn popup(f: &mut Frame, area: Rect, w_pct: u16, h_pct: u16, title: &str, hint: &str) -> Rect {
+pub(crate) fn popup(
+    f: &mut Frame,
+    area: Rect,
+    w_pct: u16,
+    h_pct: u16,
+    title: &str,
+    hint: &str,
+) -> Rect {
     // Small terminals: use the whole screen instead of a cramped popup.
     let (w_pct, h_pct) = if area.width < 100 || area.height < 32 {
         (100, 100)

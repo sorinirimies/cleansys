@@ -36,6 +36,8 @@ pub enum SettingsRow {
     Confirm,
     Root(usize),
     AddRoot,
+    DeepRoot(usize),
+    AddDeepRoot,
     Exclude(usize),
     AddExclude,
 }
@@ -44,6 +46,7 @@ pub enum SettingsRow {
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum InputKind {
     Root,
+    DeepRoot,
     Exclude,
 }
 
@@ -132,6 +135,8 @@ pub struct App {
     /// Bytes freed so far by the current / last run.
     pub total_bytes_cleaned: u64,
     pub show_help: bool,
+    /// First visible line of the help screen.
+    pub help_scroll: u16,
     /// Index of the active preset in [`cleansys_core::THEME_NAMES`] (derived while following the system).
     pub theme_index: usize,
     /// Follow the OS light/dark setting instead of a fixed preset.
@@ -199,6 +204,8 @@ pub struct App {
     pub filter_active: bool,
     /// Graphical system dashboard overlay (`D`).
     pub dashboard_open: bool,
+    /// The disk-usage browser (`U`), when open.
+    pub usage: Option<crate::usage_view::UsageView>,
     /// Graphical per-cleaner detail overlay (`v`).
     pub detail_open: bool,
     /// Graphical clean report overlay (opens when a run finishes, `P` reopens).
@@ -256,6 +263,7 @@ impl App {
             operation_end_time: None,
             total_bytes_cleaned: 0,
             show_help: false,
+            help_scroll: 0,
             theme_index: 0,
             follow_system: false,
             theme: crate::theme::by_index(0),
@@ -292,6 +300,7 @@ impl App {
             filter: String::new(),
             filter_active: false,
             dashboard_open: false,
+            usage: None,
             detail_open: false,
             report_open: false,
             run_planned: 0,
@@ -329,6 +338,9 @@ impl App {
     pub fn poll_scan(&mut self) -> bool {
         let mut changed = false;
         let mut finished = false;
+        if let Some(u) = self.usage.as_mut() {
+            changed |= u.poll();
+        }
         if let Some(rx) = &self.scan_rx {
             while let Ok((ci, ii, info)) = rx.try_recv() {
                 finished |= self.board.record_synced(&self.categories, ci, ii, info);
@@ -441,6 +453,7 @@ impl App {
             c.max_depth = mine.max_depth;
             c.min_age_days = mine.min_age_days;
             c.exclude = mine.exclude;
+            c.deep_roots = mine.deep_roots;
         }) {
             Ok(()) => true,
             Err(e) => {
@@ -579,6 +592,8 @@ impl App {
         ];
         rows.extend((0..self.engine_cfg.roots_for_editing().len()).map(SettingsRow::Root));
         rows.push(SettingsRow::AddRoot);
+        rows.extend((0..self.engine_cfg.deep_roots_for_editing().len()).map(SettingsRow::DeepRoot));
+        rows.push(SettingsRow::AddDeepRoot);
         rows.extend((0..self.engine_cfg.exclude.len()).map(SettingsRow::Exclude));
         rows.push(SettingsRow::AddExclude);
         rows
@@ -641,6 +656,13 @@ impl App {
                     text: String::new(),
                 });
             }
+            Some(SettingsRow::AddDeepRoot) => {
+                self.settings_message.clear();
+                self.settings_input = Some(SettingsInput {
+                    kind: InputKind::DeepRoot,
+                    text: String::new(),
+                });
+            }
             Some(SettingsRow::AddExclude) => {
                 self.settings_message.clear();
                 self.settings_input = Some(SettingsInput {
@@ -657,6 +679,7 @@ impl App {
         let row = self.current_settings_row();
         let result = match row {
             Some(SettingsRow::Root(i)) => self.engine_cfg.remove_scan_root(i),
+            Some(SettingsRow::DeepRoot(i)) => self.engine_cfg.remove_deep_root(i),
             Some(SettingsRow::Exclude(i)) => self.engine_cfg.remove_exclude(i),
             _ => return,
         };
@@ -664,7 +687,9 @@ impl App {
             Ok(()) => {
                 self.settings_message = "Removed.".into();
                 self.settings_cursor = self.settings_cursor.min(self.settings_rows().len() - 1);
-                if self.save_engine() && matches!(row, Some(SettingsRow::Root(_))) {
+                if self.save_engine()
+                    && matches!(row, Some(SettingsRow::Root(_) | SettingsRow::DeepRoot(_)))
+                {
                     self.start_scan();
                 }
             }
@@ -687,13 +712,14 @@ impl App {
                 let (kind, text) = (input.kind, input.text.clone());
                 let result = match kind {
                     InputKind::Root => self.engine_cfg.add_scan_root(&text),
+                    InputKind::DeepRoot => self.engine_cfg.add_deep_root(&text),
                     InputKind::Exclude => self.engine_cfg.add_exclude(&text),
                 };
                 match result {
                     Ok(()) => {
                         self.settings_input = None;
                         self.settings_message = "Added.".into();
-                        if self.save_engine() && kind == InputKind::Root {
+                        if self.save_engine() && kind != InputKind::Exclude {
                             self.start_scan();
                         }
                     }
@@ -888,6 +914,7 @@ impl App {
 
     pub fn toggle_help(&mut self) {
         self.show_help = !self.show_help;
+        self.help_scroll = 0;
     }
 
     /// Tick every cleaner currently listed (the category, or the filter hits).
@@ -1543,6 +1570,26 @@ impl App {
             }
             return Ok(false);
         }
+        if let Some(u) = self.usage.as_mut() {
+            if u.pending.is_some() {
+                u.confirm_key(key.code, &self.engine_cfg);
+                return Ok(false);
+            }
+            match key.code {
+                KeyCode::Esc | KeyCode::Char('q' | 'U') => self.usage = None,
+                KeyCode::Char('d') | KeyCode::Delete => u.request_delete(),
+                KeyCode::Down | KeyCode::Char('j') => u.move_cursor(1),
+                KeyCode::Up | KeyCode::Char('k') => u.move_cursor(-1),
+                KeyCode::PageDown => u.move_cursor(10),
+                KeyCode::PageUp => u.move_cursor(-10),
+                KeyCode::Home => u.move_cursor(i32::MIN / 2),
+                KeyCode::End => u.move_cursor(i32::MAX / 2),
+                KeyCode::Enter | KeyCode::Right | KeyCode::Char('l') => u.descend(),
+                KeyCode::Left | KeyCode::Backspace | KeyCode::Char('h') => u.ascend(),
+                _ => {}
+            }
+            return Ok(false);
+        }
         if self.dashboard_open {
             match key.code {
                 KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q' | 'D') => {
@@ -1643,14 +1690,24 @@ impl App {
 
             // Navigation (stays usable while a clean is running): ↑/↓ act on the focused pane.
             (KeyCode::Down | KeyCode::Char('j'), _) => {
-                if !self.show_help {
+                if self.show_help {
+                    self.help_scroll = self.help_scroll.saturating_add(1);
+                } else {
                     self.move_focused(1);
                 }
             }
             (KeyCode::Up | KeyCode::Char('k'), _) => {
-                if !self.show_help {
+                if self.show_help {
+                    self.help_scroll = self.help_scroll.saturating_sub(1);
+                } else {
                     self.move_focused(-1);
                 }
+            }
+            (KeyCode::PageDown, _) if self.show_help => {
+                self.help_scroll = self.help_scroll.saturating_add(8);
+            }
+            (KeyCode::PageUp, _) if self.show_help => {
+                self.help_scroll = self.help_scroll.saturating_sub(8);
             }
             (KeyCode::Tab, _) => {
                 if !self.show_help {
@@ -1771,6 +1828,11 @@ impl App {
             }
             // Graphical views
             (KeyCode::Char('D'), _) if !self.show_help => self.dashboard_open = true,
+            (KeyCode::Char('U'), _) if !self.show_help => {
+                if let Some(home) = cleansys_core::cleaners::platform::home_dir() {
+                    self.usage = Some(crate::usage_view::UsageView::open(home));
+                }
+            }
             (KeyCode::Char('v'), _)
                 if !self.show_help && !self.is_running && self.current_item().is_some() =>
             {

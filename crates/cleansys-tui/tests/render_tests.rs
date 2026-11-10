@@ -752,3 +752,71 @@ fn options_panel_and_focus_hint_are_drawn() {
         assert!(text.contains(needle), "missing {needle}");
     }
 }
+
+/// Every view must survive any terminal size (down to absurdly small) without panicking,
+/// and nothing may be drawn outside the frame.
+#[test]
+fn renders_every_view_at_every_size_without_panic() {
+    type Setup = fn(&mut App);
+    let views: &[(&str, Setup)] = &[
+        ("main", |_| {}),
+        ("help", |a| a.show_help = true),
+        ("options", |a| a.options_open = true),
+        ("info", |a| a.info_open = true),
+        ("schedule", |a| a.schedule_open = true),
+        ("themes", |a| a.theme_picker_open = true),
+        ("preview", |a| a.preview_open = true),
+        ("report", |a| a.report_open = true),
+        ("dashboard", |a| a.dashboard_open = true),
+        ("detail", |a| a.detail_open = true),
+        ("usage", |a| {
+            a.usage = Some(cleansys_tui::usage_view::UsageView::open(
+                std::env::temp_dir(),
+            ));
+            std::thread::sleep(std::time::Duration::from_millis(300));
+            if let Some(u) = a.usage.as_mut() {
+                u.poll();
+            }
+        }),
+        ("confirm", |a| a.awaiting_run_confirmation = true),
+        ("admin", |a| a.needs_admin_notice = true),
+        ("filter", |a| {
+            a.filter_active = true;
+            a.filter = "a very long search text that cannot possibly fit".into();
+        }),
+        ("log", |a| {
+            a.show_log = true;
+            a.operation_logs = vec![
+                "✓ 日本語のとても長いログ行 that is longer than the panel"
+                    .into();
+                30
+            ];
+        }),
+    ];
+    let sizes = [
+        (1, 1),
+        (5, 3),
+        (10, 4),
+        (20, 6),
+        (30, 10),
+        (40, 12),
+        (60, 20),
+        (80, 24),
+        (100, 30),
+        (140, 45),
+        (220, 60),
+    ];
+    for (name, setup) in views {
+        for (w, h) in sizes {
+            let mut app = app_with_categories();
+            app.terminal_width = w;
+            app.terminal_height = h;
+            setup(&mut app);
+            let mut terminal = Terminal::new(TestBackend::new(w, h)).expect("terminal");
+            let res = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                terminal.draw(|f| ui(f, &mut app)).expect("draw");
+            }));
+            assert!(res.is_ok(), "view {name} panicked at {w}x{h}");
+        }
+    }
+}

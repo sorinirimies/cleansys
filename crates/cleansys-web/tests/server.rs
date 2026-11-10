@@ -634,6 +634,7 @@ async fn settings_page_shows_every_section() {
         "Never delete",
         "action=\"/settings/root-add\"",
         "action=\"/settings/exclude-add\"",
+        "action=\"/settings/deep-root-add\"",
     ] {
         assert!(r.body.contains(needle), "missing {needle}");
     }
@@ -652,6 +653,17 @@ async fn settings_forms_validate_and_report_back() {
     assert_eq!(r.status, 303);
     let loc = r.header("location").unwrap_or_default();
     assert!(loc.starts_with("/settings?msg="), "{loc}");
+    let r = post(
+        addr,
+        "/settings/deep-root-add",
+        "path=%2Fdefinitely%2Fnot%2Fa%2Fdir",
+    )
+    .await;
+    assert!(
+        r.header("location")
+            .unwrap_or_default()
+            .contains("not%20a%20folder")
+    );
     let r = post(addr, "/settings/exclude-add", "pattern=%5B").await;
     assert!(
         r.header("location")

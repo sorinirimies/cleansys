@@ -28,6 +28,9 @@ pub mod menu;
 
 pub mod run;
 
+/// Disk-usage browser (`U`).
+pub mod usage_view;
+
 /// Colour themes (every core preset plus "follow system").
 pub mod theme;
 

@@ -197,6 +197,35 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             state.new_root = v;
             Task::none()
         }
+        Message::NewDeepRootChanged(v) => {
+            state.new_deep_root = v;
+            Task::none()
+        }
+        Message::AddDeepRoot => {
+            match state.engine_cfg.add_deep_root(&state.new_deep_root) {
+                Ok(()) => {
+                    state.new_deep_root.clear();
+                    state.settings_message = "Deep clean folder added.".into();
+                    if state.save_engine() {
+                        return start_scan(state);
+                    }
+                }
+                Err(e) => state.settings_message = e,
+            }
+            Task::none()
+        }
+        Message::RemoveDeepRoot(i) => {
+            match state.engine_cfg.remove_deep_root(i) {
+                Ok(()) => {
+                    state.settings_message = "Deep clean folder removed.".into();
+                    if state.save_engine() {
+                        return start_scan(state);
+                    }
+                }
+                Err(e) => state.settings_message = e,
+            }
+            Task::none()
+        }
         Message::NewExcludeChanged(v) => {
             state.new_exclude = v;
             Task::none()

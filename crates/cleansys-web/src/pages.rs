@@ -530,6 +530,7 @@ async fn settings_page(cx: &Cx) -> Result<impl View> {
     let cfg = EngineConfig::load();
     let prefs = cleansys_core::load_settings().unwrap_or_default();
     let roots = cfg.roots_for_editing();
+    let deep_roots = cfg.deep_roots_for_editing();
     let auto_roots = cfg.scan_roots.is_empty();
     let ages = cleansys_core::engine::config::MIN_AGE_CHOICES;
     let depths = cleansys_core::engine::config::MAX_DEPTH_CHOICES;
@@ -589,6 +590,24 @@ async fn settings_page(cx: &Cx) -> Result<impl View> {
                 </ul>
                 <form class="add" method="post" action="/settings/root-add">
                     <input type="text" name="path" placeholder="Add a folder, e.g. ~/code" aria-label="Folder to scan" required=(true)>
+                    <button type="submit">"Add"</button>
+                </form>
+            </div>
+            <div class="card">
+                <h2>"Deep clean searches (large / old / duplicate files)"</h2>
+                <p class="dim">"Your home folder unless you list folders here. Add another drive to include it; nothing else is searched."</p>
+                <ul class="plain">
+                    for (i, r) in deep_roots.iter().enumerate() {
+                        <li><code>(r.clone())</code>
+                            <form method="post" action="/settings/deep-root-remove" class="inline">
+                                <input type="hidden" name="idx" value=(i.to_string())>
+                                <button type="submit" title="Remove this folder">"Remove"</button>
+                            </form>
+                        </li>
+                    }
+                </ul>
+                <form class="add" method="post" action="/settings/deep-root-add">
+                    <input type="text" name="path" placeholder="Add a folder, e.g. /mnt/data" aria-label="Folder for the deep clean" required=(true)>
                     <button type="submit">"Add"</button>
                 </form>
             </div>
@@ -670,6 +689,16 @@ async fn settings_root_add(cx: &Cx, Form(f): Form<PathForm>) -> Result<SeeOther>
     )
 }
 
+#[route(POST "/settings/deep-root-add")]
+async fn settings_deep_root_add(cx: &Cx, Form(f): Form<PathForm>) -> Result<SeeOther> {
+    Ok(
+        match shared(cx).edit_engine(true, |c| c.add_deep_root(&f.path)) {
+            Ok(()) => settings_back("Deep clean folder added — re-measuring."),
+            Err(e) => settings_back(&e),
+        },
+    )
+}
+
 #[derive(Deserialize)]
 struct PatternForm {
     pattern: String,
@@ -688,6 +717,16 @@ async fn settings_exclude_add(cx: &Cx, Form(f): Form<PatternForm>) -> Result<See
 #[derive(Deserialize)]
 struct IdxForm {
     idx: usize,
+}
+
+#[route(POST "/settings/deep-root-remove")]
+async fn settings_deep_root_remove(cx: &Cx, Form(f): Form<IdxForm>) -> Result<SeeOther> {
+    Ok(
+        match shared(cx).edit_engine(true, |c| c.remove_deep_root(f.idx)) {
+            Ok(()) => settings_back("Deep clean folder removed — re-measuring."),
+            Err(e) => settings_back(&e),
+        },
+    )
 }
 
 #[route(POST "/settings/root-remove")]
