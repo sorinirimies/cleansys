@@ -4,20 +4,31 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.11.1](https://github.com/sorinirimies/cleansys/compare/v0.11.0...v0.11.1) — 2026-11-10
+
+### 📦 Dependencies
+
+- Bump tui-nuances to 0.1.11 ([`5a19d2b`](https://github.com/sorinirimies/cleansys/commit/5a19d2b20f9820ad9b9c5c8baca615da4d6883e7))
+
 ## [0.11.0](https://github.com/sorinirimies/cleansys/compare/v0.10.1...v0.11.0) — 2026-11-10
 
 ### ✨ Features
 
-- **tui,gui,web:** Responsive layout, usage browser and deep-clean folders ([`2995983`](https://github.com/sorinirimies/cleansys/commit/299598306ef0bc26e1d4e88dbf34b580e64f408d))
-- **core:** Deep clean, disk usage and guarded delete ([`099e727`](https://github.com/sorinirimies/cleansys/commit/099e7273a2db41bd27560adf56970b3344a298cd))
+- **tui,gui,web:** Responsive layout, usage browser and deep-clean folders ([`187f32e`](https://github.com/sorinirimies/cleansys/commit/187f32e2aa0c12af9b9422204ef2ad66f407d41f))
+- **core:** Deep clean, disk usage and guarded delete ([`d461307`](https://github.com/sorinirimies/cleansys/commit/d46130726c7f9f71a1b9f0147170ba87d856f7e4))
 
 ### 🐛 Bug fixes
 
-- **ci:** Make the Gitea release upload resilient ([`ddc53e3`](https://github.com/sorinirimies/cleansys/commit/ddc53e3b796fddc240f38a4db2f7b18d26c0cd44))
+- **ci:** Make the Gitea release upload resilient ([`85359da`](https://github.com/sorinirimies/cleansys/commit/85359daee2b0ba882c8da0c01c01eab4bb515e2b))
 
 ### 📚 Documentation
 
-- Fix rustdoc links ([`efaba8e`](https://github.com/sorinirimies/cleansys/commit/efaba8eed026b9e893360e6c96c6e63ae9a66e17))
+- Fix rustdoc links ([`3e936b1`](https://github.com/sorinirimies/cleansys/commit/3e936b1bb7d63f7d53c9e52e51283754566f97e8))
+
+### 📦 Dependencies
+
+- Nightly cargo update 2026-11-10 ([`6157a1e`](https://github.com/sorinirimies/cleansys/commit/6157a1e577ca5a1f5fa22d91f73bfb6544cf762e))
+- Nightly cargo update 2026-11-10 ([`67a551a`](https://github.com/sorinirimies/cleansys/commit/67a551a224afe06b2c2336a03acea17dbbb45d5d))
 
 ## [0.10.1](https://github.com/sorinirimies/cleansys/compare/v0.10.0...v0.10.1) — 2026-11-09
 
