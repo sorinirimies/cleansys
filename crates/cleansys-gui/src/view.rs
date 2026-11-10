@@ -2172,6 +2172,47 @@ fn settings_tab_body<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a,
         .align_y(Alignment::Center),
     );
 
+    col = col.push(heading(
+        "Deep clean searches (large / old / duplicate files)",
+    ));
+    col = col.push(
+        text("Your home folder unless you list folders here — add another drive to include it.")
+            .size(11)
+            .color(c.muted),
+    );
+    for (i, root) in cfg.deep_roots_for_editing().into_iter().enumerate() {
+        col = col.push(
+            row![
+                text(root)
+                    .size(13)
+                    .color(c.text_primary)
+                    .width(Length::Fill),
+                button(text("Remove").size(12))
+                    .padding([4, 10])
+                    .style(action_button_style(c))
+                    .on_press(Message::RemoveDeepRoot(i)),
+            ]
+            .spacing(10)
+            .align_y(Alignment::Center),
+        );
+    }
+    col = col.push(
+        row![
+            text_input("Add a folder, e.g. /mnt/data", &state.new_deep_root)
+                .on_input(Message::NewDeepRootChanged)
+                .on_submit(Message::AddDeepRoot)
+                .padding(6)
+                .size(13)
+                .width(Length::Fill),
+            button(text("Add").size(12))
+                .padding([6, 14])
+                .style(clean_button_style(c))
+                .on_press(Message::AddDeepRoot),
+        ]
+        .spacing(10)
+        .align_y(Alignment::Center),
+    );
+
     col = col.push(heading("Never delete (glob patterns)"));
     for (i, pat) in cfg.exclude.iter().enumerate() {
         col = col.push(

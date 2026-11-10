@@ -27,6 +27,9 @@ pub fn ui(f: &mut Frame, app: &mut App) {
     );
 
     // Adjust title and footer heights based on terminal size
+    // Use the frame's real size, not the cached one (it lags behind until a resize event).
+    app.terminal_width = f.area().width;
+    app.terminal_height = f.area().height;
     let (title_height, footer_height, min_content_height) = if app.terminal_height < 20 {
         // Very small terminals: minimal UI
         (2, 2, 6)
@@ -53,7 +56,7 @@ pub fn ui(f: &mut Frame, app: &mut App) {
     render_title(f, app, chunks[0]);
 
     if app.show_help {
-        render_help(f, chunks[1]);
+        app.help_scroll = render_help(f, chunks[1], app.help_scroll);
     } else {
         render_main_content(f, app, chunks[1]);
     }
@@ -79,6 +82,8 @@ pub fn ui(f: &mut Frame, app: &mut App) {
         render_preview(f, app, f.area());
     } else if app.report_open {
         crate::charts::render_report(f, app, f.area());
+    } else if let Some(u) = &app.usage {
+        crate::usage_view::render(f, u, f.area());
     } else if app.dashboard_open {
         crate::charts::render_dashboard(f, app, f.area());
     } else if app.detail_open {
@@ -178,7 +183,17 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
     } else {
         key_hints(&[("?", "help", t.accent), ("q", "quit", t.error)])
     };
+    // Not enough room for both: shrink the key hints, then clip the brand part.
+    let left_full = Line::from(left.clone()).width();
+    let mut right = right;
+    if left_full + Line::from(right.clone()).width() + 2 > inner.width as usize {
+        right = key_hints(&[("?", "", t.accent), ("q", "", t.error)]);
+    }
     let right_w = Line::from(right.clone()).width() as u16 + 1;
+    let left = clip_spans(
+        left,
+        (inner.width as usize).saturating_sub(right_w as usize + 1),
+    );
     let left_w = Line::from(left.clone()).width() as u16;
 
     // The search field sits between the two when there is room.
@@ -205,7 +220,11 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
             width: room.saturating_sub(1),
             height: 1,
         };
-        let mut shown: String = text.chars().take(room as usize - 1).collect();
+        let mut shown = if searching {
+            shorten_left(&text, room as usize - 1)
+        } else {
+            clip_str(&text, room as usize - 1)
+        };
         shown.push(' ');
         f.render_widget(
             Paragraph::new(Span::styled(
@@ -225,8 +244,7 @@ fn render_title(f: &mut Frame, app: &App, area: Rect) {
 /// One `key  label  value` row of the options panel.
 fn option_row(key: &str, label: &str, value: Span<'static>, width: usize) -> Line<'static> {
     let t = crate::theme::th();
-    let used =
-        key.chars().count().max(4) + 1 + label.chars().count() + value.content.chars().count();
+    let used = text_width(key).max(4) + 1 + text_width(label) + value.width();
     let gap = width.saturating_sub(used).max(1);
     Line::from(vec![
         Span::styled(
@@ -352,7 +370,7 @@ fn render_main_content(f: &mut Frame, app: &mut App, area: Rect) {
     };
     let use_sidebar = area.width >= 90;
     let content = if use_sidebar {
-        let sidebar_w = (area.width * 28 / 100).clamp(26, 40);
+        let sidebar_w = (area.width * 30 / 100).clamp(30, 44).min(area.width / 2);
         let chunks = Layout::default()
             .direction(Direction::Horizontal)
             .constraints([Constraint::Length(sidebar_w), Constraint::Min(30)])
@@ -569,7 +587,7 @@ fn render_activity_log(f: &mut Frame, app: &App, area: Rect) {
             } else {
                 crate::theme::th().secondary
             };
-            let text: String = l.chars().take(width).collect();
+            let text = clip_str(l, width);
             Line::from(Span::styled(text, Style::default().fg(color)))
         })
         .collect();
@@ -640,17 +658,94 @@ fn row_line<'a>(left: Vec<Span<'a>>, right: Span<'a>, width: usize) -> Line<'a> 
     row_line_spans(left, vec![right], width)
 }
 
-/// Like [`row_line`] with several spans on the right.
-fn row_line_spans<'a>(mut left: Vec<Span<'a>>, right: Vec<Span<'a>>, width: usize) -> Line<'a> {
-    let used: usize = left
-        .iter()
-        .chain(right.iter())
-        .map(|s| s.content.chars().count())
-        .sum();
-    let gap = width.saturating_sub(used).max(1);
-    left.push(Span::raw(" ".repeat(gap)));
+/// Like [`row_line`] with several spans on the right. The right part always stays whole;
+/// the left part is clipped (with `…`) to what is left, so a row never overflows `width`.
+fn row_line_spans<'a>(left: Vec<Span<'a>>, right: Vec<Span<'a>>, width: usize) -> Line<'a> {
+    let right_w: usize = right.iter().map(Span::width).sum();
+    let room = width.saturating_sub(right_w + 1);
+    let mut left = clip_spans(left, room);
+    let used = left.iter().map(Span::width).sum::<usize>() + right_w;
+    left.push(Span::raw(" ".repeat(width.saturating_sub(used).max(1))));
     left.extend(right);
     Line::from(left)
+}
+
+/// Display width of `s` in terminal columns.
+fn text_width(s: &str) -> usize {
+    unicode_width::UnicodeWidthStr::width(s)
+}
+
+/// `s` cut to at most `max` columns, ending in `…` when something was dropped.
+fn clip_str(s: &str, max: usize) -> String {
+    if text_width(s) <= max {
+        return s.to_string();
+    }
+    if max == 0 {
+        return String::new();
+    }
+    let mut out = String::new();
+    let mut w = 0;
+    for c in s.chars() {
+        let cw = unicode_width::UnicodeWidthChar::width(c).unwrap_or(0);
+        if w + cw > max - 1 {
+            break;
+        }
+        out.push(c);
+        w += cw;
+    }
+    out.push('…');
+    out
+}
+
+/// Spans cut to at most `max` columns in total; the span that does not fit ends in `…`.
+fn clip_spans<'a>(spans: Vec<Span<'a>>, max: usize) -> Vec<Span<'a>> {
+    let total: usize = spans.iter().map(Span::width).sum();
+    if total <= max {
+        return spans;
+    }
+    let mut out = Vec::new();
+    let mut left = max;
+    for sp in spans {
+        let w = sp.width();
+        if w <= left {
+            left -= w;
+            out.push(sp);
+            continue;
+        }
+        if left > 0 {
+            out.push(Span::styled(clip_str(&sp.content, left), sp.style));
+        }
+        break;
+    }
+    out
+}
+
+/// Key hints packed into at most `rows` lines of `width` columns. Hints are in priority
+/// order: whatever does not fit is dropped (from the end), never cut in half.
+fn fit_hints(pairs: &[(&str, &str, Color)], width: usize, rows: usize) -> Vec<Line<'static>> {
+    const SEP: usize = 5; // "  ·  "
+    let mut lines: Vec<Vec<(&str, &str, Color)>> = vec![Vec::new()];
+    let mut used = 0usize;
+    for &(k, l, c) in pairs {
+        let w = text_width(k) + if l.is_empty() { 0 } else { 1 + text_width(l) };
+        let need = if used == 0 { w } else { used + SEP + w };
+        if need <= width {
+            used = need;
+        } else if lines.len() < rows && w <= width {
+            lines.push(Vec::new());
+            used = w;
+        } else {
+            continue;
+        }
+        if let Some(cur) = lines.last_mut() {
+            cur.push((k, l, c));
+        }
+    }
+    lines
+        .into_iter()
+        .filter(|l| !l.is_empty())
+        .map(|l| Line::from(key_hints(&l)))
+        .collect()
 }
 
 /// A [`panel`] whose border switches to the theme's focus colour when `focused`.
@@ -812,13 +907,6 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
             None => Span::raw(""),
         });
         // Truncate the name so the size column never gets pushed out.
-        let right_w: usize = right.iter().map(|s| s.content.chars().count()).sum();
-        let budget = inner_w.saturating_sub(2 + right_w + 1);
-        let name = if name.chars().count() > budget && budget > 1 {
-            format!("{}…", name.chars().take(budget - 1).collect::<String>())
-        } else {
-            name
-        };
         let left = vec![Span::raw(if active { "▎ " } else { "  " }), Span::raw(name)];
         let style = if active {
             Style::default()
@@ -854,7 +942,7 @@ fn entry_rows(app: &App, ci: usize, ii: usize, width: usize) -> Vec<ListItem<'st
         };
         let size = format_size(e.bytes);
         let head = format!("    {mark} {}", e.label);
-        let used = head.chars().count() + size.chars().count() + 4;
+        let used = text_width(&head) + text_width(&size) + 4;
         let room = width.saturating_sub(used);
         let path = shorten_left(&e.path, room);
         let left = vec![
@@ -875,11 +963,14 @@ fn entry_rows(app: &App, ci: usize, ii: usize, width: usize) -> Vec<ListItem<'st
         "    removed together — paths can't be unticked · ←/Esc back"
     };
     rows.push(ListItem::new(Line::from(Span::styled(
-        if hidden > 0 {
-            format!("{hint}  (+{hidden} smaller not listed)")
-        } else {
-            hint.to_string()
-        },
+        clip_str(
+            &if hidden > 0 {
+                format!("{hint}  (+{hidden} smaller not listed)")
+            } else {
+                hint.to_string()
+            },
+            width,
+        ),
         Style::default().fg(crate::theme::th().muted),
     ))));
     rows
@@ -887,15 +978,24 @@ fn entry_rows(app: &App, ci: usize, ii: usize, width: usize) -> Vec<ListItem<'st
 
 /// Keep the tail of `s` (the interesting part of a path) within `max` chars.
 fn shorten_left(s: &str, max: usize) -> String {
-    let n = s.chars().count();
-    if n <= max {
+    if text_width(s) <= max {
         return s.to_string();
     }
     if max <= 1 {
         return String::new();
     }
-    let tail: String = s.chars().skip(n - (max - 1)).collect();
-    format!("…{tail}")
+    let mut tail: Vec<char> = Vec::new();
+    let mut w = 0;
+    for c in s.chars().rev() {
+        let cw = unicode_width::UnicodeWidthChar::width(c).unwrap_or(0);
+        if w + cw > max - 1 {
+            break;
+        }
+        tail.push(c);
+        w += cw;
+    }
+    tail.reverse();
+    format!("…{}", tail.into_iter().collect::<String>())
 }
 
 /// The list of cleaners (+ optional category bar and detail box).
@@ -934,7 +1034,8 @@ fn render_cleaner_pane(f: &mut Frame, app: &mut App, area: Rect, show_category_b
             .filter(|b| *b > 0)
             .map(|b| format!("  {}", format_size(b)))
             .unwrap_or_default();
-        let bar = Paragraph::new(Line::from(
+        let bar_w = chunks[idx].width as usize;
+        let bar = Paragraph::new(Line::from(clip_spans(
             vec![
                 Span::styled("‹ ", Style::default().fg(crate::theme::th().muted)),
                 Span::styled(
@@ -958,7 +1059,8 @@ fn render_cleaner_pane(f: &mut Frame, app: &mut App, area: Rect, show_category_b
                 Vec::new()
             })
             .collect::<Vec<_>>(),
-        ));
+            bar_w,
+        )));
         f.render_widget(bar, chunks[idx]);
         idx += 1;
     }
@@ -1089,8 +1191,8 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
                 Some(s) if s.bytes > 0 => format!("{} item(s)", s.items),
                 _ => String::new(),
             };
-            let desc_room = inner_w.saturating_sub(count.chars().count() + 6);
-            let desc: String = item.description.chars().take(desc_room).collect();
+            let desc_room = inner_w.saturating_sub(text_width(&count) + 6);
+            let desc = clip_str(&item.description, desc_room);
             let second = row_line(
                 vec![
                     Span::raw("    "),
@@ -1107,7 +1209,10 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
                     .unwrap_or_default();
                 lines.push(Line::from(vec![
                     Span::raw("    "),
-                    Span::styled(path, Style::default().fg(crate::theme::th().info)),
+                    Span::styled(
+                        clip_str(&path, inner_w.saturating_sub(4)),
+                        Style::default().fg(crate::theme::th().info),
+                    ),
                 ]));
             }
             ListItem::new(lines)
@@ -1199,6 +1304,7 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
 /// Description + scan details of the highlighted cleaner.
 fn render_item_detail(f: &mut Frame, app: &App, area: Rect) {
     let mut lines: Vec<Line> = Vec::new();
+    let w = area.width.saturating_sub(2) as usize;
     if let Some((ci, ii)) = app.current_item() {
         let item = &app.categories[ci].items[ii];
         let info = app.board.get(ci, ii);
@@ -1223,11 +1329,14 @@ fn render_item_detail(f: &mut Frame, app: &App, area: Rect) {
                 Style::default().fg(crate::theme::th().error),
             ));
         }
-        lines.push(Line::from(head));
-        lines.push(Line::from(item.description.clone()));
+        lines.push(Line::from(clip_spans(head, w)));
+        lines.push(Line::from(clip_str(&item.description, w)));
         lines.push(Line::from(match info {
             Some(s) if s.error.is_some() => Span::styled(
-                format!("Scan failed: {}", s.error.clone().unwrap_or_default()),
+                clip_str(
+                    &format!("Scan failed: {}", s.error.clone().unwrap_or_default()),
+                    w,
+                ),
                 Style::default().fg(crate::theme::th().error),
             ),
             Some(s) if s.bytes > 0 => Span::styled(
@@ -1245,14 +1354,12 @@ fn render_item_detail(f: &mut Frame, app: &App, area: Rect) {
         }));
         if let Some(top) = info.and_then(|s| s.top_path.as_ref()) {
             lines.push(Line::from(Span::styled(
-                format!("Biggest: {top}"),
+                format!("Biggest: {}", shorten_left(top, w.saturating_sub(9))),
                 Style::default().fg(crate::theme::th().muted),
             )));
         }
     }
-    let widget = Paragraph::new(lines)
-        .block(panel("Details"))
-        .wrap(Wrap { trim: true });
+    let widget = Paragraph::new(lines).block(panel("Details"));
     f.render_widget(widget, area);
 }
 
@@ -1292,7 +1399,7 @@ fn render_action_bar(f: &mut Frame, app: &App, area: Rect) {
     let parts = Layout::default()
         .direction(Direction::Horizontal)
         .constraints([
-            Constraint::Length(34.min(inner.width / 2)),
+            Constraint::Length(38.min(inner.width / 3)),
             Constraint::Min(0),
             Constraint::Length(btn_w),
         ])
@@ -1340,7 +1447,11 @@ fn render_action_bar(f: &mut Frame, app: &App, area: Rect) {
         top.push(Span::styled(" measuring…", Style::default().fg(t.muted)));
     } else if n == 0 {
         top.push(Span::styled(
-            "tick cleaners to free space",
+            if parts[0].width >= 36 {
+                "tick cleaners to free space"
+            } else {
+                "tick cleaners"
+            },
             Style::default().fg(t.muted),
         ));
     } else {
@@ -1366,8 +1477,12 @@ fn render_action_bar(f: &mut Frame, app: &App, area: Rect) {
             Style::default().fg(t.muted),
         )
     };
+    let left_w = parts[0].width.saturating_sub(1) as usize;
     f.render_widget(
-        Paragraph::new(vec![Line::from(top), Line::from(second)]),
+        Paragraph::new(vec![
+            Line::from(clip_spans(top, left_w)),
+            Line::from(clip_spans(vec![second], left_w)),
+        ]),
         Rect {
             x: parts[0].x + 1,
             width: parts[0].width.saturating_sub(1),
@@ -1375,49 +1490,33 @@ fn render_action_bar(f: &mut Frame, app: &App, area: Rect) {
         },
     );
 
-    // Middle: the keys, two lines, right-aligned.
-    let compact = parts[1].width < 72;
-    let (l1, l2) = if compact {
-        (
-            key_hints(&[
-                ("Space", "sel", t.warning),
-                ("Enter", "run", t.success),
-                ("Tab", "cat", t.accent),
-            ]),
-            key_hints(&[
-                ("S", "", t.accent),
-                ("D", "", t.accent),
-                ("v", "", t.accent),
-                ("?", "help", t.accent),
-                ("q", "quit", t.error),
-            ]),
-        )
-    } else {
-        (
-            key_hints(&[
-                ("Space", "select", t.warning),
-                ("Enter", "run", t.success),
-                ("Tab", "category", t.accent),
-                ("r", "recommended", t.accent),
-                ("/", "search", t.accent),
-            ]),
-            key_hints(&[
-                ("S", "schedule", t.accent),
-                ("D", "storage chart", t.accent),
-                ("v", "details", t.accent),
-                ("L", "log", t.accent),
-                ("?", "help", t.accent),
-                ("q", "quit", t.error),
-            ]),
-        )
-    };
+    // Middle: the keys, up to two lines, right-aligned; low-priority ones drop on narrow widths.
     let mid = Rect {
         width: parts[1].width.saturating_sub(1),
         ..parts[1]
     };
+    let long = mid.width >= 72;
+    let pairs = [
+        ("Space", if long { "select" } else { "sel" }, t.warning),
+        ("Enter", "run", t.success),
+        ("Tab", if long { "category" } else { "cat" }, t.accent),
+        ("r", if long { "recommended" } else { "rec" }, t.accent),
+        ("/", "search", t.accent),
+        ("S", if long { "schedule" } else { "" }, t.accent),
+        ("D", if long { "storage chart" } else { "" }, t.accent),
+        ("U", if long { "disk usage" } else { "" }, t.accent),
+        ("v", if long { "details" } else { "" }, t.accent),
+        ("L", "log", t.accent),
+        ("?", "help", t.accent),
+        ("q", "quit", t.error),
+    ];
     f.render_widget(
-        Paragraph::new(vec![Line::from(l1), Line::from(l2)])
-            .alignment(ratatui::layout::Alignment::Right),
+        Paragraph::new(fit_hints(
+            &pairs,
+            mid.width as usize,
+            inner.height.min(2) as usize,
+        ))
+        .alignment(ratatui::layout::Alignment::Right),
         mid,
     );
 }
@@ -1441,23 +1540,24 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             .flat_map(|c| &c.items)
             .filter(|i| i.selected)
             .count();
-        let key = |k: &'static str, label: &'static str, color: Color| {
-            vec![
-                Span::styled(k, Style::default().fg(color).add_modifier(Modifier::BOLD)),
-                Span::raw(format!(" {label}  ")),
-            ]
-        };
-        let mut hints: Vec<Span> = Vec::new();
-        hints.extend(key("Space", "Sel", crate::theme::th().warning));
-        hints.extend(key("Enter", "Run", crate::theme::th().success));
-        hints.extend(key("Tab", "Cat", crate::theme::th().accent));
-        hints.extend(key("r", "Rec", crate::theme::th().accent));
-        hints.extend(key("D", "Dash", crate::theme::th().accent));
-        hints.extend(key("v", "Detail", crate::theme::th().accent));
-        hints.extend(key("S", "Sched", crate::theme::th().accent));
-        hints.extend(key("L", "Log", crate::theme::th().accent));
-        hints.extend(key("?", "Help", crate::theme::th().accent));
-        hints.extend(key("q", "Quit", crate::theme::th().error));
+        let th = crate::theme::th();
+        let hints = fit_hints(
+            &[
+                ("Space", "Sel", th.warning),
+                ("Enter", "Run", th.success),
+                ("Tab", "Cat", th.accent),
+                ("q", "Quit", th.error),
+                ("?", "Help", th.accent),
+                ("r", "Rec", th.accent),
+                ("D", "Dash", th.accent),
+                ("U", "Usage", th.accent),
+                ("v", "Detail", th.accent),
+                ("S", "Sched", th.accent),
+                ("L", "Log", th.accent),
+            ],
+            inner_area.width as usize,
+            1,
+        );
         let mut status_spans = vec![
             Span::styled(
                 "Selected: ",
@@ -1479,11 +1579,11 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             Style::default().fg(crate::theme::th().accent),
         ));
         status_spans.extend(to_free_spans(app));
-        let status = Line::from(status_spans);
+        let status = Line::from(clip_spans(status_spans, inner_area.width as usize));
         let lines = if inner_area.height >= 2 {
-            vec![status, Line::from(hints)]
+            std::iter::once(status).chain(hints).collect()
         } else {
-            vec![Line::from(hints)]
+            hints
         };
         f.render_widget(Paragraph::new(lines), inner_area);
     } else {
@@ -1627,7 +1727,8 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
     f.render_widget(block, area);
 }
 
-fn render_help(f: &mut Frame, area: Rect) {
+/// Draws the help; returns the scroll offset actually used (clamped to the content).
+fn render_help(f: &mut Frame, area: Rect, scroll: u16) -> u16 {
     let h = |t: &'static str| {
         Line::from(vec![Span::styled(
             t,
@@ -1669,6 +1770,7 @@ fn render_help(f: &mut Frame, area: Rect) {
         l("  q / Esc cancels a running clean, Esc dismisses the summary, L toggles the log"),
         l("  R: Re-scan sizes      S: Schedule automatic cleaning"),
         l("  D: Dashboard (disk, space by category/risk)   v: Charts for the highlighted cleaner"),
+        l("  U: Disk usage — where did my disk go? (↑/↓, Enter opens a folder, ← goes up)"),
         l("  P: Report of the last clean (opens automatically when a clean finishes)"),
         l("  T: Theme picker (System follows your OS light/dark; ↑/↓ previews, Esc closes)"),
         l(""),
@@ -1681,18 +1783,44 @@ fn render_help(f: &mut Frame, area: Rect) {
         l("  q: Quit"),
     ];
 
+    // Rows after wrapping (a line wraps at word boundaries; this is a close estimate).
+    let inner_w = area.width.saturating_sub(2).max(1) as usize;
+    let rows: usize = help_text
+        .iter()
+        .map(|l| l.width().div_ceil(inner_w).max(1))
+        .sum();
+    let max_scroll = (rows as u16).saturating_sub(area.height.saturating_sub(2));
+    let scroll = scroll.min(max_scroll);
+    let mut block = Block::default().title("Help").borders(Borders::ALL);
+    if max_scroll > 0 {
+        block = block.title_bottom(
+            Line::from(format!(
+                " ↑/↓ PgUp/PgDn scroll · {}/{} ",
+                scroll, max_scroll
+            ))
+            .right_aligned(),
+        );
+    }
     let help = Paragraph::new(help_text)
-        .block(Block::default().title("Help").borders(Borders::ALL))
+        .block(block)
+        .scroll((scroll, 0))
         .wrap(Wrap { trim: true });
 
     f.render_widget(help, area);
+    scroll
 }
 
 /// Compute a centered popup `Rect` covering roughly `width_pct`/`height_pct`
 /// of `area`, clamped to a sensible minimum/maximum size.
 fn centered_popup(area: Rect, width_pct: u16, height_pct: u16) -> Rect {
-    let width = (area.width * width_pct / 100).clamp(30, area.width.saturating_sub(2).max(30));
-    let height = (area.height * height_pct / 100).clamp(10, area.height.saturating_sub(2).max(10));
+    // Never larger than the area itself, even on a tiny terminal.
+    let (min_w, min_h) = (30.min(area.width), 10.min(area.height));
+    let width = (area.width * width_pct / 100)
+        .clamp(min_w, area.width.saturating_sub(2).max(min_w))
+        .min(area.width);
+    let height = (area.height * height_pct / 100)
+        .clamp(min_h, area.height.saturating_sub(2).max(min_h))
+        .min(area.height);
     let x = area.x + (area.width.saturating_sub(width)) / 2;
     let y = area.y + (area.height.saturating_sub(height)) / 2;
     Rect {
@@ -2017,7 +2145,7 @@ fn render_admin_notice(f: &mut Frame, area: Rect) {
 
 // ── Settings / About overlay ──────────────────────────────────────────────
 
-fn tab_line(app: &App) -> Line<'static> {
+fn tab_line(app: &App, width: usize) -> Line<'static> {
     let tab = |label: &'static str, active: bool| {
         if active {
             Span::styled(
@@ -2034,15 +2162,18 @@ fn tab_line(app: &App) -> Line<'static> {
             )
         }
     };
-    Line::from(vec![
-        tab("Settings (o)", app.info_tab == InfoTab::Settings),
-        Span::raw(" "),
-        tab("About (i)", app.info_tab == InfoTab::About),
-        Span::styled(
-            "   Tab: switch",
-            Style::default().fg(crate::theme::th().muted),
-        ),
-    ])
+    Line::from(clip_spans(
+        vec![
+            tab("Settings (o)", app.info_tab == InfoTab::Settings),
+            Span::raw(" "),
+            tab("About (i)", app.info_tab == InfoTab::About),
+            Span::styled(
+                "   Tab: switch",
+                Style::default().fg(crate::theme::th().muted),
+            ),
+        ],
+        width,
+    ))
 }
 
 fn render_info(f: &mut Frame, app: &mut App, area: Rect) {
@@ -2064,7 +2195,7 @@ fn render_info(f: &mut Frame, app: &mut App, area: Rect) {
         ])
         .split(inner);
     f.render_widget(
-        Paragraph::new(vec![tab_line(app), Line::raw("")]),
+        Paragraph::new(vec![tab_line(app, chunks[0].width as usize), Line::raw("")]),
         chunks[0],
     );
 
@@ -2073,18 +2204,23 @@ fn render_info(f: &mut Frame, app: &mut App, area: Rect) {
         InfoTab::About => render_about_tab(f, app, chunks[1]),
     }
 
-    let hint = match (app.info_tab, app.settings_input.is_some()) {
-        (_, true) => "Enter: add · Esc: cancel",
-        (InfoTab::Settings, false) => {
+    let wide = chunks[2].width >= 74;
+    let hint = match (app.info_tab, app.settings_input.is_some(), wide) {
+        (_, true, _) => "Enter: add · Esc: cancel",
+        (InfoTab::Settings, false, true) => {
             "↑/↓ move · ←/→ change · Space toggle/add · d remove · Tab About · Esc close"
         }
-        (InfoTab::About, false) => {
+        (InfoTab::Settings, false, false) => "↑/↓ ←/→ Space d · Tab · Esc",
+        (InfoTab::About, false, true) => {
             "↑/↓ move · Enter: open link in your browser · Tab Settings · Esc close"
         }
+        (InfoTab::About, false, false) => "↑/↓ · Enter open · Tab · Esc",
     };
+    let hint = clip_str(hint, chunks[2].width as usize);
+    let message = clip_str(&app.settings_message, chunks[2].width as usize);
     let msg_style = Style::default().fg(crate::theme::th().warning);
     let lines = vec![
-        Line::from(Span::styled(app.settings_message.clone(), msg_style)),
+        Line::from(Span::styled(message, msg_style)),
         Line::from(Span::styled(
             hint,
             Style::default().fg(crate::theme::th().muted),
@@ -2129,6 +2265,7 @@ fn render_settings_tab(f: &mut Frame, app: &mut App, area: Rect) {
         )))
     };
     let roots = app.engine_cfg.roots_for_editing();
+    let deep_roots = app.engine_cfg.deep_roots_for_editing();
     let mut last_group = "";
     for (idx, row) in rows.iter().enumerate() {
         let group = match row {
@@ -2136,6 +2273,9 @@ fn render_settings_tab(f: &mut Frame, app: &mut App, area: Rect) {
             SettingsRow::HideEmpty | SettingsRow::Confirm => "Behaviour",
             SettingsRow::Root(_) | SettingsRow::AddRoot => {
                 "Project folders scanned for build output"
+            }
+            SettingsRow::DeepRoot(_) | SettingsRow::AddDeepRoot => {
+                "Deep clean searches (large / old files)"
             }
             SettingsRow::Exclude(_) | SettingsRow::AddExclude => "Never delete (glob patterns)",
         };
@@ -2175,20 +2315,38 @@ fn render_settings_tab(f: &mut Frame, app: &mut App, area: Rect) {
             SettingsRow::Root(i) => Line::from(vec![
                 Span::raw("  "),
                 Span::styled(
-                    roots.get(*i).cloned().unwrap_or_default(),
+                    shorten_left(
+                        &roots.get(*i).cloned().unwrap_or_default(),
+                        width.saturating_sub(2),
+                    ),
+                    Style::default().fg(crate::theme::th().foreground),
+                ),
+            ]),
+            SettingsRow::DeepRoot(i) => Line::from(vec![
+                Span::raw("  "),
+                Span::styled(
+                    shorten_left(
+                        &deep_roots.get(*i).cloned().unwrap_or_default(),
+                        width.saturating_sub(2),
+                    ),
                     Style::default().fg(crate::theme::th().foreground),
                 ),
             ]),
             SettingsRow::Exclude(i) => Line::from(vec![
                 Span::raw("  "),
                 Span::styled(
-                    app.engine_cfg.exclude.get(*i).cloned().unwrap_or_default(),
+                    shorten_left(
+                        &app.engine_cfg.exclude.get(*i).cloned().unwrap_or_default(),
+                        width.saturating_sub(2),
+                    ),
                     Style::default().fg(crate::theme::th().foreground),
                 ),
             ]),
-            SettingsRow::AddRoot | SettingsRow::AddExclude => {
+            SettingsRow::AddRoot | SettingsRow::AddDeepRoot | SettingsRow::AddExclude => {
                 let kind = if *row == SettingsRow::AddRoot {
                     InputKind::Root
+                } else if *row == SettingsRow::AddDeepRoot {
+                    InputKind::DeepRoot
                 } else {
                     InputKind::Exclude
                 };
@@ -2196,12 +2354,12 @@ fn render_settings_tab(f: &mut Frame, app: &mut App, area: Rect) {
                     Some(inp) if inp.kind == kind => Line::from(vec![
                         Span::styled("  ＋ ", Style::default().fg(crate::theme::th().success)),
                         Span::styled(
-                            format!("{}▏", inp.text),
+                            format!("{}▏", shorten_left(&inp.text, width.saturating_sub(6))),
                             Style::default().fg(crate::theme::th().foreground),
                         ),
                     ]),
                     _ => Line::from(Span::styled(
-                        if kind == InputKind::Root {
+                        if kind != InputKind::Exclude {
                             "  ＋ Add a folder…"
                         } else {
                             "  ＋ Add a pattern…"

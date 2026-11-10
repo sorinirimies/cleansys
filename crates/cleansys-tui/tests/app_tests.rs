@@ -709,6 +709,7 @@ fn settings_app() -> App {
         exclude: vec!["~/keep/**".into()],
         max_depth: 6,
         min_age_days: 14,
+        ..Default::default()
     };
     app
 }
@@ -755,6 +756,8 @@ fn settings_rows_follow_the_config() {
             SettingsRow::Confirm,
             SettingsRow::Root(0),
             SettingsRow::AddRoot,
+            SettingsRow::DeepRoot(0),
+            SettingsRow::AddDeepRoot,
             SettingsRow::Exclude(0),
             SettingsRow::AddExclude,
         ]

@@ -98,6 +98,8 @@ pub struct CleanSysGui {
     pub engine_cfg: cleansys_core::engine::EngineConfig,
     /// Text of the "add folder" / "add pattern" fields.
     pub new_root: String,
+    /// Text field: a folder to add to the deep clean.
+    pub new_deep_root: String,
     pub new_exclude: String,
     /// Feedback line in the dialog (validation errors, confirmations).
     pub settings_message: String,
@@ -195,6 +197,7 @@ impl CleanSysGui {
             settings_tab: SettingsTab::Settings,
             engine_cfg: cleansys_core::engine::EngineConfig::load(),
             new_root: String::new(),
+            new_deep_root: String::new(),
             new_exclude: String::new(),
             settings_message: String::new(),
             show_log: false,
@@ -485,6 +488,7 @@ impl CleanSysGui {
             c.max_depth = mine.max_depth;
             c.min_age_days = mine.min_age_days;
             c.exclude = mine.exclude;
+            c.deep_roots = mine.deep_roots;
         }) {
             Ok(()) => true,
             Err(e) => {
@@ -504,6 +508,7 @@ impl CleanSysGui {
         self.settings_open = true;
         self.settings_message.clear();
         self.new_root.clear();
+        self.new_deep_root.clear();
         self.new_exclude.clear();
     }
 
