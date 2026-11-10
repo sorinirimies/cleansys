@@ -129,6 +129,40 @@ pub enum Action {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
+    /// Deep clean: find big and/or long-untouched files in the deep roots (your home
+    /// folder unless `deep_roots` is configured). Every match is listed and can be
+    /// unticked individually; nothing is searched outside the roots.
+    LargeFiles {
+        /// Folders to search instead of the configured deep roots (`~`, `$VAR` allowed).
+        #[serde(default)]
+        roots: Vec<String>,
+        /// Only files at least this many MB.
+        #[serde(default)]
+        min_mb: u64,
+        /// Only files not modified for this many days (0 = any age).
+        #[serde(default)]
+        min_age_days: u64,
+        /// Only these extensions (no dot, case-insensitive). Empty = any file.
+        #[serde(default)]
+        extensions: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
+    /// Deep clean: files that exist twice or more (identical bytes) in the deep roots.
+    /// One copy of each group — the oldest — is kept; the others are listed.
+    Duplicates {
+        #[serde(default)]
+        roots: Vec<String>,
+        /// Only files at least this many MB (default 1).
+        #[serde(default = "one")]
+        min_mb: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
+}
+
+fn one() -> u64 {
+    1
 }
 
 impl CleanerSpec {

@@ -350,6 +350,16 @@ include `caution` cleaners** unless you explicitly ticked them (scope *selected*
 `min_age_days` (default **14**): build output is only removed when nothing in the project changed for that
 long — set `0` to disable. Change it live from the TUI (`[` / `]`), GUI or web UI (*Idle ≥* selector). `CLEANSYS_SCAN_ROOTS` overrides `scan_roots` (path-list).
 
+### Deep clean (PC-wide, opt-in)
+
+The **Deep Clean** category finds big or forgotten files: files over 500 MB, large files untouched for a year, old downloads, disk images, archives, leftover installers and dumps. Every cleaner is `caution`/`moderate`, so nothing is ticked by default, never part of `--recommended`, and a scheduled run skips it unless you ask. Each file is listed and can be unticked (`→` / `v`), and `cleansys scan -c "Deep Clean" --include-caution` previews it.
+
+**Duplicate Files** hashes same-size files (size, then first 64 KiB, then the whole file, then a byte-for-byte check), keeps the oldest copy of each group and lists the rest. Hard links are not duplicates.
+
+**Where did my disk go?** `cleansys usage [PATH] [-d depth] [-n top]` prints a size tree with bars, biggest first (real on-disk size, so sparse files are not overstated; never leaves the drive). In the TUI, `U` opens the same view as a browser: ↑/↓, Enter opens a folder, ← goes up, and `d` deletes the highlighted entry — after a confirmation, to the **trash** by default (`p` switches to permanent). Protected system paths and your "never delete" patterns are refused, Steam and app-data paths get a warning, and a file on another drive than your trash can only be deleted permanently.
+
+It searches only the **deep roots**: your home folder, or `"deep_roots": ["~", "/mnt/data"]` in `engine.json` (`CLEANSYS_DEEP_ROOTS` overrides). A second drive is included only when you list it (settings `o`, or `cleansys config add-deep-root /mnt/data`). Symlinks, hidden folders, build/dependency trees, Wine prefixes, Steam libraries and the Android SDK are skipped, and a drive mounted below a root is never entered. The project scan likewise stays on the drive of its root.
+
 **Your own cleaners** are plain TOML in `~/.config/cleansys/cleaners.d/*.toml` (same `id` overrides a built-in):
 
 ```toml
