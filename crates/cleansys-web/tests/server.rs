@@ -665,12 +665,8 @@ async fn settings_forms_validate_and_report_back() {
     assert_eq!(r.status, 303);
     let loc = r.header("location").unwrap_or_default();
     assert!(loc.starts_with("/settings?msg="), "{loc}");
-    let r = post(
-        addr,
-        "/settings/deep-root-add",
-        "path=%2Fdefinitely%2Fnot%2Fa%2Fdir",
-    )
-    .await;
+    let body = format!("path={}", form_encode(&missing.to_string_lossy()));
+    let r = post(addr, "/settings/deep-root-add", &body).await;
     assert!(
         r.header("location")
             .unwrap_or_default()
