@@ -195,6 +195,19 @@ async fn get(addr: SocketAddr, path: &str) -> Response {
     send(addr, "GET", path, &addr.to_string(), None).await
 }
 
+/// Percent-encode a value for an `application/x-www-form-urlencoded` body.
+fn form_encode(value: &str) -> String {
+    value
+        .bytes()
+        .map(|b| match b {
+            b'A'..=b'Z' | b'a'..=b'z' | b'0'..=b'9' | b'-' | b'_' | b'.' | b'~' => {
+                (b as char).to_string()
+            }
+            _ => format!("%{b:02X}"),
+        })
+        .collect()
+}
+
 async fn post(addr: SocketAddr, path: &str, form: &str) -> Response {
     send(addr, "POST", path, &addr.to_string(), Some(form)).await
 }
@@ -644,12 +657,11 @@ async fn settings_page_shows_every_section() {
 async fn settings_forms_validate_and_report_back() {
     let addr = start().await;
     // Invalid input is refused with a message and changes nothing.
-    let r = post(
-        addr,
-        "/settings/root-add",
-        "path=%2Fdefinitely%2Fnot%2Fa%2Fdir",
-    )
-    .await;
+    // An absolute path that does not exist on this platform: `/x/y` is not
+    // absolute on Windows, which would fail on a different message.
+    let missing = std::env::temp_dir().join("definitely-not-a-dir");
+    let body = format!("path={}", form_encode(&missing.to_string_lossy()));
+    let r = post(addr, "/settings/root-add", &body).await;
     assert_eq!(r.status, 303);
     let loc = r.header("location").unwrap_or_default();
     assert!(loc.starts_with("/settings?msg="), "{loc}");
