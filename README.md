@@ -4,6 +4,7 @@
 [![Documentation](https://docs.rs/cleansys/badge.svg)](https://docs.rs/cleansys)
 [![TUI Downloads](https://img.shields.io/crates/d/cleansys?label=TUI%20downloads)](https://crates.io/crates/cleansys)
 [![GUI Downloads](https://img.shields.io/crates/d/cleansys-gui?label=GUI%20downloads)](https://crates.io/crates/cleansys-gui)
+[![Web Downloads](https://img.shields.io/crates/d/cleansys-web?label=Web%20downloads)](https://crates.io/crates/cleansys-web)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![CI](https://github.com/sorinirimies/cleansys/actions/workflows/ci.yml/badge.svg)](https://github.com/sorinirimies/cleansys/actions/workflows/ci.yml)
 [![Audit](https://github.com/sorinirimies/cleansys/actions/workflows/security.yml/badge.svg)](https://github.com/sorinirimies/cleansys/actions/workflows/security.yml)
@@ -143,6 +144,8 @@ makepkg -si          # builds and installs cleansys and cleansys-gui (pick which
 ```
 
 ### Download the desktop GUI
+
+**Web downloads page: <https://github.com/sorinirimies/cleansys/releases/latest>**
 
 Pre-built `cleansys-gui` packages are on the [Releases](https://github.com/sorinirimies/cleansys/releases) page (only the latest version is kept):
 
@@ -497,5 +500,6 @@ This project is licensed under the MIT License - see the LICENSE file for detail
 ## 🔗 Links
 
 - [Repository](https://github.com/sorinirimies/cleansys)
+- [Downloads](https://github.com/sorinirimies/cleansys/releases/latest) — pre-built TUI, GUI and web UI packages
 - [Crates.io](https://crates.io/crates/cleansys)
 - [Documentation](https://docs.rs/cleansys)

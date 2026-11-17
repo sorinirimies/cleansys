@@ -224,12 +224,28 @@ impl From<SelectArgs> for cleansys_core::engine::headless::Selection {
     }
 }
 
-fn setup_logger(verbose: bool) {
+/// Where TUI-mode logs go: stderr would be painted over the alternate screen and wreck the layout.
+fn tui_log_target() -> env_logger::Target {
+    let path = std::env::temp_dir().join("cleansys-tui.log");
+    match std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(path)
+    {
+        Ok(f) => env_logger::Target::Pipe(Box::new(f)),
+        Err(_) => env_logger::Target::Pipe(Box::new(io::sink())),
+    }
+}
+
+fn setup_logger(verbose: bool, tui: bool) {
     let env = env_logger::Env::default()
         .filter_or("CLEANSYS_LOG", if verbose { "debug" } else { "info" });
-    env_logger::Builder::from_env(env)
-        .format_timestamp(None)
-        .init();
+    let mut b = env_logger::Builder::from_env(env);
+    b.format_timestamp(None);
+    if tui {
+        b.target(tui_log_target());
+    }
+    b.init();
 }
 
 fn load_cleaners(app: &mut App) {
@@ -573,7 +589,8 @@ fn main() -> Result<()> {
         }
     }
 
-    setup_logger(cli.verbose);
+    let tui = matches!(cli.command, Some(Commands::Tui) | None);
+    setup_logger(cli.verbose, tui);
     debug!(
         "Starting CleanSys with arguments: {:?}",
         std::env::args().collect::<Vec<_>>()
