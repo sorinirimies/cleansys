@@ -4,13 +4,29 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
-## [0.11.1](https://github.com/sorinirimies/cleansys/compare/v0.11.0...v0.11.1) — 2026-11-10
+## [0.11.2](https://github.com/sorinirimies/cleansys/compare/v0.11.1...v0.11.2) — 2026-11-17
+
+### 🐛 Bug fixes
+
+- **tui:** Send logs to a file so warnings stop corrupting the screen ([`0a9a5ab`](https://github.com/sorinirimies/cleansys/commit/0a9a5ab5054a10c43fab9a0d82568bf545058471))
+
+### 🧪 Tests
+
+- **tui:** Cover the TUI log sink ([`5868aa9`](https://github.com/sorinirimies/cleansys/commit/5868aa9e1d2a45648dff9f2bf98709be495a5452))
+- **web:** Deep-root-add invalid-folder case uses the platform temp path too ([`4b87b67`](https://github.com/sorinirimies/cleansys/commit/4b87b6728ae9c3d1b9887c40700334e9ac18b41e))
+- **web:** Settings invalid-folder test uses a platform-absolute path (Windows) ([`15c6ed3`](https://github.com/sorinirimies/cleansys/commit/15c6ed367c87157ff5bcd94bca6ccc10b490cc68))
 
 ### 📦 Dependencies
 
-- Bump tui-nuances to 0.1.11 ([`5a19d2b`](https://github.com/sorinirimies/cleansys/commit/5a19d2b20f9820ad9b9c5c8baca615da4d6883e7))
+- Nightly cargo update 2026-11-17 ([`d8c200f`](https://github.com/sorinirimies/cleansys/commit/d8c200f149622aa99fa4f9914ff1da5cda741d27))
+- Nightly cargo update 2026-11-16 ([`9dacec7`](https://github.com/sorinirimies/cleansys/commit/9dacec7b200b39769efcbe042f8f78dba1e599b2))
+- Nightly cargo update 2026-11-15 ([`027c561`](https://github.com/sorinirimies/cleansys/commit/027c561c1f443c4d9cac6a424dbba3eb1abbbde5))
+- Nightly cargo update 2026-11-14 ([`842002b`](https://github.com/sorinirimies/cleansys/commit/842002bca311753c89dc2201c33ac1361bbfbda2))
+- Nightly cargo update 2026-11-13 ([`11c5e20`](https://github.com/sorinirimies/cleansys/commit/11c5e202b83e606143fd8a0c623a9c4440082221))
+- Nightly cargo update 2026-11-12 ([`d309ae6`](https://github.com/sorinirimies/cleansys/commit/d309ae6b45f6136427a4fd7fc1236cd4a9703613))
+- Nightly cargo update 2026-11-11 ([`d1cdd4e`](https://github.com/sorinirimies/cleansys/commit/d1cdd4ef40040d5ea102472db2293aa9d373176f))
 
-## [0.11.0](https://github.com/sorinirimies/cleansys/compare/v0.10.1...v0.11.0) — 2026-11-10
+## [0.11.1](https://github.com/sorinirimies/cleansys/compare/v0.10.1...v0.11.1) — 2026-11-10
 
 ### ✨ Features
 
@@ -27,6 +43,7 @@ All notable changes to this project are documented here. It is generated from
 
 ### 📦 Dependencies
 
+- Bump tui-nuances to 0.1.11 ([`5a19d2b`](https://github.com/sorinirimies/cleansys/commit/5a19d2b20f9820ad9b9c5c8baca615da4d6883e7))
 - Nightly cargo update 2026-11-10 ([`6157a1e`](https://github.com/sorinirimies/cleansys/commit/6157a1e577ca5a1f5fa22d91f73bfb6544cf762e))
 - Nightly cargo update 2026-11-10 ([`67a551a`](https://github.com/sorinirimies/cleansys/commit/67a551a224afe06b2c2336a03acea17dbbb45d5d))
 
@@ -459,8 +476,9 @@ All notable changes to this project are documented here. It is generated from
 ### 📦 Dependencies
 
 - Nightly dependency upgrade 2026-09-19 ([`f7f1aa4`](https://github.com/sorinirimies/cleansys/commit/f7f1aa4642ae953f01df6c1e73822295063217d4))
+- Nightly dependency upgrade 2026-09-17 ([`9c67b95`](https://github.com/sorinirimies/cleansys/commit/9c67b950f197aead781d897d170ff44d23076ca7))
 
-## [0.6.8](https://github.com/sorinirimies/cleansys/compare/v0.6.7...v0.6.8) — 2026-09-17
+## [0.6.8](https://github.com/sorinirimies/cleansys/compare/v0.6.7...v0.6.8) — 2026-09-16
 
 ### 🐛 Bug fixes
 
@@ -475,10 +493,6 @@ All notable changes to this project are documented here. It is generated from
 ### 🧪 Tests
 
 - **tui:** Add render.rs smoke-test suite; cleanup: finish DRY'ing system_cleaners.rs sudo call sites ([`e2a90e3`](https://github.com/sorinirimies/cleansys/commit/e2a90e381614578c8fbf03d4ee6217722fea27b3))
-
-### 📦 Dependencies
-
-- Nightly dependency upgrade 2026-09-17 ([`9c67b95`](https://github.com/sorinirimies/cleansys/commit/9c67b950f197aead781d897d170ff44d23076ca7))
 
 ## [0.6.7](https://github.com/sorinirimies/cleansys/compare/v0.6.6...v0.6.7) — 2026-09-15
 
