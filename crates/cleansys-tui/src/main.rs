@@ -226,14 +226,20 @@ impl From<SelectArgs> for cleansys_core::engine::headless::Selection {
 
 /// Where TUI-mode logs go: stderr would be painted over the alternate screen and wreck the layout.
 fn tui_log_target() -> env_logger::Target {
-    let path = std::env::temp_dir().join("cleansys-tui.log");
+    env_logger::Target::Pipe(open_log_sink(
+        &std::env::temp_dir().join("cleansys-tui.log"),
+    ))
+}
+
+/// Append-mode log file at `path`; a sink if it cannot be opened (logging must never break the UI).
+fn open_log_sink(path: &std::path::Path) -> Box<dyn io::Write + Send> {
     match std::fs::OpenOptions::new()
         .create(true)
         .append(true)
         .open(path)
     {
-        Ok(f) => env_logger::Target::Pipe(Box::new(f)),
-        Err(_) => env_logger::Target::Pipe(Box::new(io::sink())),
+        Ok(f) => Box::new(f),
+        Err(_) => Box::new(io::sink()),
     }
 }
 
@@ -719,6 +725,24 @@ fn main() -> Result<()> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn log_sink_appends_to_file_not_stderr() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("tui.log");
+        open_log_sink(&path).write_all(b"one\n").unwrap();
+        open_log_sink(&path).write_all(b"two\n").unwrap();
+        assert_eq!(std::fs::read_to_string(&path).unwrap(), "one\ntwo\n");
+    }
+
+    #[test]
+    fn log_sink_falls_back_to_sink_when_unopenable() {
+        use std::io::Write;
+        let dir = tempfile::tempdir().unwrap();
+        // A directory cannot be opened as a file: the sink must swallow writes, not panic.
+        let mut w = open_log_sink(dir.path());
+        assert!(w.write_all(b"dropped").is_ok());
+    }
 
     #[test]
     fn cli_parses_exclude_saved_and_rescan() {
