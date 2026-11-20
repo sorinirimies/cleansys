@@ -116,11 +116,13 @@ impl ScanBoard {
         if !filter.trim().is_empty() {
             return self.visible_items(categories, 0, filter, hide_empty);
         }
-        scope
+        let mut out: Vec<(usize, usize)> = scope
             .categories(categories)
             .into_iter()
             .flat_map(|ci| self.visible_items(categories, ci, "", hide_empty))
-            .collect()
+            .collect();
+        self.sort_biggest_first(&mut out);
+        out
     }
 
     /// Whether the entry has anything worth listing.

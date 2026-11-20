@@ -156,6 +156,33 @@ mod tests {
     }
 
     #[test]
+    fn lists_are_biggest_first_and_unmeasured_keep_menu_order() {
+        let mut c = cats();
+        c[0].items = vec![item("a1", 10), item("a2", 300), item("a3", 0)];
+        let mut board = ScanBoard::new(&c);
+        board.start(9);
+        let info = |bytes| ScanInfo {
+            bytes,
+            items: 1,
+            top_path: None,
+            error: None,
+            entries: Vec::new(),
+        };
+        board.record(0, 0, info(10));
+        board.record(0, 1, info(300));
+        board.record(1, 0, info(50));
+        assert_eq!(
+            board.visible_items(&c, 0, "", false),
+            vec![(0, 1), (0, 0), (0, 2)]
+        );
+        // Across categories, a filter hit list is ordered the same way.
+        assert_eq!(
+            board.visible_items(&c, 0, "name", false),
+            vec![(0, 1), (1, 0), (0, 0), (0, 2)]
+        );
+    }
+
+    #[test]
     fn scan_fills_board_and_hides_empty() {
         let c = cats();
         let (rx, total) = spawn_scan(&c);

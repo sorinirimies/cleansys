@@ -314,7 +314,14 @@ impl ScanBoard {
                 }
             }
         }
+        self.sort_biggest_first(&mut out);
         out
+    }
+
+    /// Order listed cleaners by size, biggest first. Unmeasured ones count as 0 and keep
+    /// their menu order (the sort is stable).
+    pub fn sort_biggest_first(&self, items: &mut [(usize, usize)]) {
+        items.sort_by_key(|&(c, i)| std::cmp::Reverse(self.get(c, i).map_or(0, |s| s.bytes)));
     }
 
     /// The "recommended" preset (safe, user-land cleaners) minus anything a
