@@ -14,7 +14,7 @@ use ratatui::{
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
     text::{Line, Span},
-    widgets::{Block, Borders, Clear, Paragraph, Widget},
+    widgets::{Block, Borders, Paragraph, Widget},
 };
 use tui_chart::{
     Bullet, BulletItem, RadialBar, RadialRing, RadialSweep, Sankey, SankeyLink, Sparkline,
@@ -624,7 +624,7 @@ pub(crate) fn popup(
     } else {
         (w_pct, h_pct)
     };
-    let w = (area.width * w_pct / 100).min(area.width);
+    let w = (area.width * w_pct / 100).min(area.width).min(120);
     let h = (area.height * h_pct / 100).min(area.height);
     let rect = Rect::new(
         area.x + (area.width - w) / 2,
@@ -632,7 +632,7 @@ pub(crate) fn popup(
         w,
         h,
     );
-    f.render_widget(Clear, rect);
+    crate::render::clear_popup(f, rect);
     let block = Block::default()
         .title(title.to_string())
         .title_bottom(Line::from(hint.to_string()).right_aligned())

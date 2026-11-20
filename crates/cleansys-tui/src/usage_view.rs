@@ -291,7 +291,7 @@ pub fn render(f: &mut Frame, view: &UsageView, area: Rect) {
 }
 
 fn render_confirm(f: &mut Frame, p: &PendingDelete, area: Rect) {
-    use ratatui::widgets::{Block, BorderType, Borders, Clear, Wrap};
+    use ratatui::widgets::{Block, BorderType, Borders, Wrap};
     let t = crate::theme::th();
     let w = area.width.min(70);
     let h = area.height.min(11);
@@ -301,7 +301,7 @@ fn render_confirm(f: &mut Frame, p: &PendingDelete, area: Rect) {
         w,
         h,
     );
-    f.render_widget(Clear, rect);
+    crate::render::clear_popup(f, rect);
     let permanent = p.mode == Mode::Permanent;
     let block = Block::default()
         .title(if permanent {

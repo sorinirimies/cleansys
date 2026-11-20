@@ -1818,6 +1818,23 @@ fn render_help(f: &mut Frame, area: Rect, scroll: u16) -> u16 {
     scroll
 }
 
+/// Wipe `rect` and paint the theme background, so a dialog is opaque even on terminals
+/// where the reset colour is transparent.
+pub(crate) fn clear_popup(f: &mut Frame, rect: Rect) {
+    f.render_widget(Clear, rect);
+    f.render_widget(
+        Block::default().style(
+            Style::default()
+                .bg(crate::theme::bg(&crate::theme::th()))
+                .fg(crate::theme::th().foreground),
+        ),
+        rect,
+    );
+}
+
+/// Widest a dialog gets, however large the terminal.
+const MAX_POPUP_WIDTH: u16 = 100;
+
 /// Compute a centered popup `Rect` covering roughly `width_pct`/`height_pct`
 /// of `area`, clamped to a sensible minimum/maximum size.
 fn centered_popup(area: Rect, width_pct: u16, height_pct: u16) -> Rect {
@@ -1825,7 +1842,8 @@ fn centered_popup(area: Rect, width_pct: u16, height_pct: u16) -> Rect {
     let (min_w, min_h) = (30.min(area.width), 10.min(area.height));
     let width = (area.width * width_pct / 100)
         .clamp(min_w, area.width.saturating_sub(2).max(min_w))
-        .min(area.width);
+        .min(area.width)
+        .min(MAX_POPUP_WIDTH);
     let height = (area.height * height_pct / 100)
         .clamp(min_h, area.height.saturating_sub(2).max(min_h))
         .min(area.height);
@@ -1887,7 +1905,7 @@ fn render_confirm_run(f: &mut Frame, app: &App, area: Rect) {
         )
         .wrap(Wrap { trim: true });
 
-    f.render_widget(Clear, popup);
+    clear_popup(f, popup);
     f.render_widget(popup_widget, popup);
 }
 
@@ -2024,7 +2042,7 @@ fn render_schedule(f: &mut Frame, app: &App, area: Rect) {
                 .border_style(Style::default().fg(crate::theme::th().accent)),
         )
         .wrap(Wrap { trim: false });
-    f.render_widget(Clear, popup);
+    clear_popup(f, popup);
     f.render_widget(widget, popup);
 }
 
@@ -2105,7 +2123,7 @@ fn render_preview(f: &mut Frame, app: &App, area: Rect) {
         )
         .wrap(Wrap { trim: true });
 
-    f.render_widget(Clear, popup);
+    clear_popup(f, popup);
     f.render_widget(popup_widget, popup);
 }
 
@@ -2147,7 +2165,7 @@ fn render_admin_notice(f: &mut Frame, area: Rect) {
         )
         .wrap(Wrap { trim: true });
 
-    f.render_widget(Clear, popup);
+    clear_popup(f, popup);
     f.render_widget(popup_widget, popup);
 }
 
@@ -2186,7 +2204,7 @@ fn tab_line(app: &App, width: usize) -> Line<'static> {
 
 fn render_info(f: &mut Frame, app: &mut App, area: Rect) {
     let popup = centered_popup(area, 82, 88);
-    f.render_widget(Clear, popup);
+    clear_popup(f, popup);
     let block = Block::default()
         .title(format!(" {} ", cleansys_core::appinfo::title()))
         .borders(Borders::ALL)
@@ -2459,7 +2477,7 @@ fn render_theme_picker(f: &mut Frame, app: &App, area: Rect) {
         w,
         h.min(area.height),
     );
-    f.render_widget(Clear, popup);
+    clear_popup(f, popup);
 
     let items: Vec<ListItem> = (0..crate::theme::PICKER_LEN)
         .map(|i| {
@@ -2520,4 +2538,26 @@ fn render_theme_picker(f: &mut Frame, app: &App, area: Rect) {
         .highlight_symbol("▶ ");
     let mut state = ListState::default().with_selected(Some(app.picker_index()));
     f.render_stateful_widget(list, popup, &mut state);
+}
+
+#[cfg(test)]
+mod popup_tests {
+    use super::*;
+
+    #[test]
+    fn dialogs_stay_narrow_on_wide_terminals() {
+        let wide = Rect::new(0, 0, 300, 60);
+        assert!(centered_popup(wide, 82, 88).width <= MAX_POPUP_WIDTH);
+        let small = Rect::new(0, 0, 60, 20);
+        assert!(centered_popup(small, 82, 88).width <= 60);
+    }
+
+    #[test]
+    fn dialogs_paint_an_opaque_background() {
+        use ratatui::{Terminal, backend::TestBackend};
+        let mut t = Terminal::new(TestBackend::new(20, 6)).unwrap();
+        t.draw(|f| clear_popup(f, Rect::new(2, 1, 10, 3))).unwrap();
+        let bg = crate::theme::bg(&crate::theme::th());
+        assert_eq!(t.backend().buffer()[(3, 2)].bg, bg);
+    }
 }
