@@ -1832,6 +1832,21 @@ pub(crate) fn clear_popup(f: &mut Frame, rect: Rect) {
     );
 }
 
+/// A popup `width` columns wide and just tall enough for `lines` rows plus the border
+/// (wrapped text may need a little more, so one spare row), centred in `area`.
+fn fit_popup(area: Rect, width: u16, lines: usize) -> Rect {
+    let w = width.min(area.width);
+    let h = u16::try_from(lines + 3)
+        .unwrap_or(u16::MAX)
+        .min(area.height);
+    Rect::new(
+        area.x + (area.width - w) / 2,
+        area.y + (area.height - h) / 2,
+        w,
+        h,
+    )
+}
+
 /// Widest a dialog gets, however large the terminal.
 const MAX_POPUP_WIDTH: u16 = 100;
 
@@ -1860,8 +1875,6 @@ fn centered_popup(area: Rect, width_pct: u16, height_pct: u16) -> Rect {
 /// Overlay shown before actually cleaning: lists exactly what's selected and
 /// requires an explicit Enter/y (confirm) or Esc/n (cancel).
 fn render_confirm_run(f: &mut Frame, app: &App, area: Rect) {
-    let popup = centered_popup(area, 70, 60);
-
     let selected_count = app.pending_run_selection.len();
     let mut lines = vec![
         Line::from(vec![Span::styled(
@@ -1896,6 +1909,7 @@ fn render_confirm_run(f: &mut Frame, app: &App, area: Rect) {
             .add_modifier(Modifier::BOLD),
     )]));
 
+    let popup = fit_popup(area, 60, lines.len());
     let popup_widget = Paragraph::new(lines)
         .block(
             Block::default()
@@ -2550,6 +2564,14 @@ mod popup_tests {
         assert!(centered_popup(wide, 82, 88).width <= MAX_POPUP_WIDTH);
         let small = Rect::new(0, 0, 60, 20);
         assert!(centered_popup(small, 82, 88).width <= 60);
+    }
+
+    #[test]
+    fn fitted_popup_hugs_its_content() {
+        let area = Rect::new(0, 0, 200, 60);
+        let r = fit_popup(area, 60, 8);
+        assert_eq!((r.width, r.height), (60, 11));
+        assert_eq!(fit_popup(Rect::new(0, 0, 40, 5), 60, 30).height, 5);
     }
 
     #[test]
