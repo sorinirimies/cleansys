@@ -820,3 +820,26 @@ fn renders_every_view_at_every_size_without_panic() {
         }
     }
 }
+
+#[test]
+fn opted_out_cleaner_shows_scan_off_and_help_lists_the_key() {
+    let mut app = app_with_categories();
+    app.persist = false;
+    app.item_list_state.select(Some(0));
+    app.toggle_scan_enabled();
+    let text = screen_text(&mut app, 120, 40);
+    assert!(text.contains("scan off"), "row says scan off");
+    app.show_help = true;
+    let help = screen_text(&mut app, 120, 60);
+    assert!(help.contains("Scan on/off"), "help documents the s key");
+}
+
+#[test]
+fn a_stopped_scan_is_announced() {
+    let mut app = app_with_categories();
+    app.persist = false;
+    app.start_scan();
+    app.stop_scan();
+    let text = screen_text(&mut app, 120, 40);
+    assert!(text.contains("scan stopped"));
+}

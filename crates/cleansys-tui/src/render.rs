@@ -1777,6 +1777,7 @@ fn render_help(f: &mut Frame, area: Rect, scroll: u16) -> u16 {
         l("  Progress, the outcome and the activity log appear under the list;"),
         l("  q / Esc cancels a running clean, Esc dismisses the summary, L toggles the log"),
         l("  R: Re-scan sizes      S: Schedule automatic cleaning"),
+        l("  s: Scan on/off for the highlighted cleaner (saved; a clean never waits for the scan)"),
         l("  D: Dashboard (disk, space by category/risk)   v: Charts for the highlighted cleaner"),
         l("  U: Disk usage — where did my disk go? (↑/↓, Enter opens a folder, ← goes up)"),
         l("  P: Report of the last clean (opens automatically when a clean finishes)"),
