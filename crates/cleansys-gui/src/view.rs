@@ -622,10 +622,11 @@ fn item_row<'a>(
         .disabled_cleaners
         .contains(&state.categories[cat_idx].items[item_idx].id);
     name_row = name_row.push(tooltip(
-        button(text(if scan_on { "Scan: on" } else { "Scan: off" }).size(11))
-            .padding([2, 8])
-            .style(button::text)
-            .on_press(Message::ToggleScan(cat_idx, item_idx)),
+        iced::widget::toggler(scan_on)
+            .label("Scan")
+            .size(14)
+            .text_size(11)
+            .on_toggle(move |_| Message::ToggleScan(cat_idx, item_idx)),
         container(text("Include this cleaner when scanning for sizes").size(12))
             .padding(6)
             .style(container::rounded_box),

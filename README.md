@@ -27,7 +27,7 @@ from a **terminal UI**, a **desktop GUI**, a **local web UI** or the **command l
 
 ## ✨ Highlights
 
-- **Never wait for a scan** — a cleaner with a size can be cleaned right away: starting a clean stops the running scan (the sizes found so far stay), and a fresh scan starts by itself when the clean ends. Each cleaner can be opted out of scanning (`s` in the TUI, *Scan: on/off* in the GUI and web); the choice is saved. The UIs show two flat lists — user and system — with every cleaner in them.
+- **Never wait for a scan** — a cleaner with a size can be cleaned right away: starting a clean stops the running scan (the sizes found so far stay), and a fresh scan starts by itself when the clean ends. Each cleaner can be opted out of scanning (`s` in the TUI, `s` on the focused cleaner in the web UI, a *Scan* switch on every row in the GUI and web). Rescan: `R` (TUI), `⌘/Ctrl+R` (GUI), `Shift+R` (web); stop the scan: `⌘/Ctrl+.` (GUI); the choice is saved. The UIs show two flat lists — user and system — with every cleaner in them.
 - **See before you delete** — every cleaner is measured in the background, in parallel (one shared thread pool, sizes cached per scan, slowest cleaners first; tune with `scan_threads` in `settings.json` or `CLEANSYS_SCAN_THREADS`, default 2× cores), biggest first; preview (`d` / 🔍) lists exact paths.
 - **~230 cleaners** — browsers, apps, IDEs, Gradle/Cargo/npm, Docker, AI/LLM caches, OS logs and more. See [What it cleans](#-what-it-cleans).
 - **Project build output** — `target/`, `node_modules/`, `.venv/`… next to a marker file, by default only in projects idle for 14 days.

@@ -727,3 +727,14 @@ async fn progress_bar_and_spinner_are_animated_in_the_stylesheet() {
     let r = get(addr, "/progress").await;
     assert_eq!(r.status, 200);
 }
+
+#[tokio::test]
+async fn scan_is_a_switch_and_the_page_script_has_shortcuts() {
+    let addr = start().await;
+    wait_for_scan(addr).await;
+    let home = get(addr, "/").await;
+    assert!(home.body.contains("scan-switch"), "scan toggle is a switch");
+    assert!(!home.body.contains("Scan: on"), "no text button any more");
+    let js = get(addr, "/app.js").await;
+    assert!(js.body.contains("scan-switch") && js.body.contains("rescan"));
+}

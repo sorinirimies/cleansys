@@ -74,6 +74,8 @@ label.item input[type=checkbox] { width:18px; height:18px; accent-color:var(--ac
 .size.mid b { color:var(--warn); }
 .size.none { color:var(--dim); }
 .itemwrap { display:flex; flex-direction:column; }
+.scanform { margin:0 0 2px 34px; font-size:12px; color:var(--dim); }
+.scantoggle { display:inline-flex; align-items:center; gap:6px; cursor:pointer; }
 a.more { font-size:12px; color:var(--fg); text-decoration:none; padding:4px 12px; margin:2px 0 0 12px; border:1px solid var(--line); border-radius:6px; align-self:flex-start; }
 a.more:hover { color:var(--accent); border-color:var(--accent); }
 .entries { margin:4px 0 4px 18px; padding:8px 10px; border-left:2px solid var(--line); display:flex; flex-direction:column; gap:3px; max-height:420px; overflow:auto; }

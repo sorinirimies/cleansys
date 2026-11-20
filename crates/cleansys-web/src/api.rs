@@ -105,6 +105,14 @@ var p=function(u){try{navigator.sendBeacon(u)}catch(e){fetch(u,{method:'POST',ke
 p('/api/hello');\
 addEventListener('pageshow',function(e){if(e.persisted)p('/api/hello')});\
 addEventListener('pagehide',function(){p('/api/bye')});\
+addEventListener('keydown',function(e){\
+if(e.ctrlKey||e.metaKey||e.altKey)return;\
+var a=document.activeElement,t=a&&a.tagName;\
+if(t==='INPUT'&&a.type!=='checkbox'||t==='TEXTAREA'||t==='SELECT')return;\
+if(e.key==='s'){var w=a&&a.closest&&a.closest('.itemwrap');\
+var b=w&&w.querySelector('.scan-switch');if(b){e.preventDefault();b.click()}}\
+else if(e.key==='R'){var r=document.querySelector('button[name=op][value=rescan]');if(r){e.preventDefault();r.click()}}\
+});\
 })();";
 
 #[route(GET "/app.js")]

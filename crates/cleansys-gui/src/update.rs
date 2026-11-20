@@ -339,6 +339,10 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             }
         }
         Message::ScanAll => start_scan(state),
+        Message::StopScan => {
+            stop_scan(state);
+            Task::none()
+        }
         Message::ScanStopped => Task::none(),
         Message::ToggleScan(cat_idx, item_idx) => {
             let Some(id) = state
@@ -1727,5 +1731,14 @@ mod tests {
         let _ = update(&mut state, Message::ToggleScan(0, 1));
         assert!(state.disabled_cleaners.is_empty() && !state.board.is_off(0, 1));
         assert_eq!(state.board.total, 2);
+    }
+
+    #[test]
+    fn stop_scan_message_stops_the_scan_and_keeps_results() {
+        let mut state = tiny_state();
+        let _ = start_scan(&mut state);
+        let _ = update(&mut state, Message::StopScan);
+        assert!(!state.board.is_scanning() && state.board.was_interrupted());
+        assert!(state.scan_handle.is_none());
     }
 }

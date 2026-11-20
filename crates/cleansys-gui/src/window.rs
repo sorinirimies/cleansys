@@ -126,6 +126,7 @@ pub fn initial_size(saved: Option<(u32, u32)>) -> (f32, f32) {
 /// Map a key press to a window action. `⌘` on macOS, `Ctrl` elsewhere:
 ///
 /// * `⌘1`–`⌘4` presets · `⌘0` reset · `⌘=` / `⌘+` grow · `⌘-` shrink
+/// * `⌘R` rescan · `⌘.` stop the scan
 /// * `⌃⌘F` (macOS) / `F11` full screen · `⌘⇧M` maximise
 pub fn shortcut(key: &Key, mods: Modifiers) -> Option<Message> {
     if let Key::Named(Named::F11) = key {
@@ -145,6 +146,8 @@ pub fn shortcut(key: &Key, mods: Modifiers) -> Option<Message> {
         "0" => Some(Message::WindowReset),
         "=" | "+" => Some(Message::WindowScale(GROW_FACTOR)),
         "-" | "_" => Some(Message::WindowScale(1.0 / GROW_FACTOR)),
+        "r" | "R" => Some(Message::ScanAll),
+        "." => Some(Message::StopScan),
         "f" | "F" if mods.control() => Some(Message::ToggleFullscreen),
         "m" | "M" if mods.shift() => Some(Message::ToggleMaximize),
         _ => None,
@@ -169,7 +172,7 @@ pub fn shortcut_hint() -> String {
         "F11".to_string()
     };
     format!(
-        "{m}1–4 presets · {m}0 reset · {m}+ / {m}− grow / shrink · {m}⇧M maximise · {fs} full screen"
+        "{m}1–4 presets · {m}0 reset · {m}+ / {m}− grow / shrink · {m}⇧M maximise · {fs} full screen · {m}R rescan · {m}. stop scan"
     )
 }
 
@@ -247,6 +250,13 @@ mod tests {
         assert_eq!(initial_size(None), DEFAULT_SIZE);
         assert_eq!(initial_size(Some((900, 700))), (900.0, 700.0));
         assert_eq!(initial_size(Some((10, 10))), MIN_SIZE);
+    }
+
+    #[test]
+    fn scan_shortcuts_rescan_and_stop() {
+        assert!(matches!(shortcut(&ch("r"), cmd()), Some(Message::ScanAll)));
+        assert!(matches!(shortcut(&ch("."), cmd()), Some(Message::StopScan)));
+        assert!(shortcut(&ch("r"), Modifiers::empty()).is_none());
     }
 
     #[test]

@@ -54,6 +54,8 @@ pub enum Message {
     ClearSearch,
     /// Measure how much every cleaner could free (read-only), in the background.
     ScanAll,
+    /// Stop the running scan (keeps the sizes found so far).
+    StopScan,
     /// One cleaner's background scan finished.
     /// `(scan generation, category, item, result)`; results of a replaced scan are ignored.
     ScanItemFinished(u64, usize, usize, cleansys_core::ScanInfo),

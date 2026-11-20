@@ -238,10 +238,14 @@ pub(crate) async fn item_row(
                 <noscript><button type="submit">"Toggle"</button></noscript>
             </label>
         </form>
-        <form class="bulk" method="post" action="/toggle-scan">
+        <form class="scanform" method="post" action="/toggle-scan">
             <input type="hidden" name="id" value=(item.id.clone())>
             <input type="hidden" name="back" value=(back_url.clone())>
-            <button type="submit" title="Include this cleaner when scanning for sizes">(if item.scan_off { "Scan: off" } else { "Scan: on" })</button>
+            <label class="scantoggle" title="Include this cleaner when scanning for sizes (shortcut: s on the focused cleaner)">
+                <input type="checkbox" class="scan-switch" role="switch" checked=(!item.scan_off) onchange="this.form.submit()" aria-label=(format!("Scan {}", item.name))>
+                " Scan"
+            </label>
+            <noscript><button type="submit">"Toggle scan"</button></noscript>
         </form>
         if has_entries {
             <a class="more" href=(more_href) aria-expanded=(if open { "true" } else { "false" })>
@@ -323,7 +327,7 @@ pub(crate) async fn action_bar(
                     if !hide { <input type="hidden" name="hide" value="0"> }
                     <button name="op" value="recommended" title="Tick only the safe, user-land cleaners that have something to free"><span class="ico">"✨"</span><span class="lbl">"✨ Recommended"</span></button>
                     <button name="op" value="none" title="Untick everything"><span class="ico">"☐"</span><span class="lbl">"Select none"</span></button>
-                    <button name="op" value="rescan" title="Measure what every cleaner can free again"><span class="ico">"⟳"</span><span class="lbl">"⟳ Rescan"</span></button>
+                    <button name="op" value="rescan" title="Measure what every cleaner can free again (shortcut: Shift+R)"><span class="ico">"⟳"</span><span class="lbl">"⟳ Rescan"</span></button>
                 </form>
                 <form method="post" action="/min-age" class="age" title="Project build output (target/, node_modules, …) is only offered when its project was untouched this long">
                     <input type="hidden" name="back" value=(back.clone())>
