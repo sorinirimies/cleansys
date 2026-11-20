@@ -32,6 +32,10 @@ const BUILTIN: &[(&str, &str)] = &[
     ("system_more.toml", include_str!("builtin/system_more.toml")),
     ("containers.toml", include_str!("builtin/containers.toml")),
     ("privacy.toml", include_str!("builtin/privacy.toml")),
+    (
+        "platform_extra.toml",
+        include_str!("builtin/platform_extra.toml"),
+    ),
 ];
 
 /// Parse one TOML document into specs.
@@ -52,6 +56,9 @@ pub fn user_spec_dir() -> Option<PathBuf> {
 pub fn load_specs() -> Vec<CleanerSpec> {
     let mut specs = load_all_unfiltered(user_spec_dir().as_deref());
     specs.retain(|s| s.applies_to_current_os() && spec_has_targets(s));
+    // Cache folders of installed apps that no cleaner above knows about.
+    let found = super::discover::discover(&specs);
+    merge(&mut specs, found);
     specs
 }
 

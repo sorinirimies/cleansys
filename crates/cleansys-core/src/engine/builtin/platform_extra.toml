@@ -1,0 +1,48 @@
+# Platform-specific additions. Everything here exists on one OS only.
+
+[[cleaner]]
+id = "lin-gstreamer-registry"
+name = "GStreamer Plugin Registry"
+description = "GStreamer plugin registry cache (rebuilt on the next media playback)"
+category = "Everyday Junk"
+os = ["linux"]
+[[cleaner.action]]
+type = "delete"
+paths = ["$XDG_CACHE_HOME/gstreamer-1.0/*"]
+label = "GStreamer registry"
+
+[[cleaner]]
+id = "lin-baloo-index"
+name = "KDE Baloo File Index"
+description = "Baloo desktop-search index (can be large; rebuilt in the background by Baloo)"
+category = "Everyday Junk"
+risk = "moderate"
+os = ["linux"]
+process = ["baloo_file", "baloo_file_extractor"]
+[[cleaner.action]]
+type = "delete"
+paths = ["$XDG_DATA_HOME/baloo/*"]
+label = "Baloo index"
+
+[[cleaner]]
+id = "mac-carthage"
+name = "Carthage Caches"
+description = "Carthage binary and dependency caches (re-downloaded on the next build)"
+category = "Developer Caches"
+risk = "moderate"
+os = ["macos"]
+[[cleaner.action]]
+type = "delete"
+paths = ["~/Library/Caches/org.carthage.CarthageKit/*", "~/Library/Caches/carthage/*"]
+label = "Carthage cache"
+
+[[cleaner]]
+id = "win-webview2-caches"
+name = "WebView2 App Caches"
+description = "Embedded-browser (WebView2) caches that Windows apps keep in their own folders"
+category = "Everyday Junk"
+os = ["windows"]
+[[cleaner.action]]
+type = "delete"
+paths = ["$LOCALAPPDATA/*/EBWebView/Default/Cache/*", "$LOCALAPPDATA/*/EBWebView/Default/Code Cache/*", "$LOCALAPPDATA/*/EBWebView/Default/GPUCache/*"]
+label = "WebView2 cache"

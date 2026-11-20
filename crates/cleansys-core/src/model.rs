@@ -151,6 +151,7 @@ pub const USER_ORDER: &[&str] = &[
     "Containers & Virtualization",
     "AI & LLM Caches",
     "Applications",
+    "Detected App Caches",
     "Games",
     "Installers & Backups",
     "Large & Old Files",
@@ -322,6 +323,9 @@ fn category_description(name: &str) -> &'static str {
         "Web Browsers" => "Cache, cookies, sessions and history of installed browsers",
         "Applications" => "Caches and logs of chat, media, productivity and creative apps",
         "Games" => "Shader caches, launcher caches and logs of game platforms",
+        "Detected App Caches" => {
+            "Cache folders of apps installed here that have no dedicated cleaner (found automatically)"
+        }
         "Everyday Junk" => "Caches, temporary files, thumbnails and the trash",
         "Installers & Backups" => "Downloaded installers, OS update files and device backups",
         "Large & Old Files" => {

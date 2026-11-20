@@ -17,6 +17,7 @@
 
 pub mod config;
 pub mod deep;
+pub mod discover;
 pub mod exec;
 pub mod headless;
 pub mod paths;
