@@ -393,6 +393,18 @@ mod tests {
     }
 
     #[test]
+    fn every_category_is_a_known_theme_on_the_right_side() {
+        for c in load_categories() {
+            let base = c.name.trim_end_matches(ROOT_SUFFIX);
+            if c.name.ends_with(ROOT_SUFFIX) {
+                assert!(ROOT_ORDER.contains(&base), "unknown system category {base}");
+            } else {
+                assert!(USER_ORDER.contains(&base), "unknown user category {base}");
+            }
+        }
+    }
+
+    #[test]
     fn builtin_cleaners_land_in_their_theme() {
         let find = |id: &str| {
             load_categories()

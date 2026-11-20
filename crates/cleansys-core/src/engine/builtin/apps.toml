@@ -169,6 +169,66 @@ windows = ["$APPDATA/GitHub Desktop/Cache", "$APPDATA/GitHub Desktop/Code Cache"
 label = "GitHub Desktop cache"
 
 [[cleaner]]
+id = "app-mattermost"
+name = "Mattermost Cache & Logs"
+description = "Chromium/Electron caches and logs of Mattermost"
+category = "Applications"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CONFIG_HOME/Mattermost/Cache", "$XDG_CONFIG_HOME/Mattermost/Code Cache", "$XDG_CONFIG_HOME/Mattermost/GPUCache", "$XDG_CONFIG_HOME/Mattermost/DawnCache", "$XDG_CONFIG_HOME/Mattermost/Service Worker/CacheStorage", "$XDG_CONFIG_HOME/Mattermost/Service Worker/ScriptCache", "$XDG_CONFIG_HOME/Mattermost/logs", "$XDG_CONFIG_HOME/Mattermost/Crashpad/completed", "$XDG_CONFIG_HOME/Mattermost/blob_storage"]
+macos = ["~/Library/Application Support/Mattermost/Cache", "~/Library/Application Support/Mattermost/Code Cache", "~/Library/Application Support/Mattermost/GPUCache", "~/Library/Application Support/Mattermost/DawnCache", "~/Library/Application Support/Mattermost/Service Worker/CacheStorage", "~/Library/Application Support/Mattermost/Service Worker/ScriptCache", "~/Library/Application Support/Mattermost/logs", "~/Library/Application Support/Mattermost/Crashpad/completed", "~/Library/Application Support/Mattermost/blob_storage"]
+windows = ["$APPDATA/Mattermost/Cache", "$APPDATA/Mattermost/Code Cache", "$APPDATA/Mattermost/GPUCache", "$APPDATA/Mattermost/DawnCache", "$APPDATA/Mattermost/Service Worker/CacheStorage", "$APPDATA/Mattermost/Service Worker/ScriptCache", "$APPDATA/Mattermost/logs", "$APPDATA/Mattermost/Crashpad/completed", "$APPDATA/Mattermost/blob_storage"]
+label = "Mattermost cache"
+
+[[cleaner]]
+id = "app-zulip"
+name = "Zulip Cache & Logs"
+description = "Chromium/Electron caches and logs of Zulip"
+category = "Applications"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CONFIG_HOME/Zulip/Cache", "$XDG_CONFIG_HOME/Zulip/Code Cache", "$XDG_CONFIG_HOME/Zulip/GPUCache", "$XDG_CONFIG_HOME/Zulip/DawnCache", "$XDG_CONFIG_HOME/Zulip/Service Worker/CacheStorage", "$XDG_CONFIG_HOME/Zulip/Service Worker/ScriptCache", "$XDG_CONFIG_HOME/Zulip/logs", "$XDG_CONFIG_HOME/Zulip/Crashpad/completed", "$XDG_CONFIG_HOME/Zulip/blob_storage"]
+macos = ["~/Library/Application Support/Zulip/Cache", "~/Library/Application Support/Zulip/Code Cache", "~/Library/Application Support/Zulip/GPUCache", "~/Library/Application Support/Zulip/DawnCache", "~/Library/Application Support/Zulip/Service Worker/CacheStorage", "~/Library/Application Support/Zulip/Service Worker/ScriptCache", "~/Library/Application Support/Zulip/logs", "~/Library/Application Support/Zulip/Crashpad/completed", "~/Library/Application Support/Zulip/blob_storage"]
+windows = ["$APPDATA/Zulip/Cache", "$APPDATA/Zulip/Code Cache", "$APPDATA/Zulip/GPUCache", "$APPDATA/Zulip/DawnCache", "$APPDATA/Zulip/Service Worker/CacheStorage", "$APPDATA/Zulip/Service Worker/ScriptCache", "$APPDATA/Zulip/logs", "$APPDATA/Zulip/Crashpad/completed", "$APPDATA/Zulip/blob_storage"]
+label = "Zulip cache"
+
+[[cleaner]]
+id = "app-skype"
+name = "Skype Cache & Logs"
+description = "Chromium/Electron caches and logs of Skype"
+category = "Applications"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CONFIG_HOME/skypeforlinux/Cache", "$XDG_CONFIG_HOME/skypeforlinux/Code Cache", "$XDG_CONFIG_HOME/skypeforlinux/GPUCache", "$XDG_CONFIG_HOME/skypeforlinux/DawnCache", "$XDG_CONFIG_HOME/skypeforlinux/Service Worker/CacheStorage", "$XDG_CONFIG_HOME/skypeforlinux/Service Worker/ScriptCache", "$XDG_CONFIG_HOME/skypeforlinux/logs", "$XDG_CONFIG_HOME/skypeforlinux/Crashpad/completed", "$XDG_CONFIG_HOME/skypeforlinux/blob_storage"]
+macos = ["~/Library/Application Support/Skype/Cache", "~/Library/Application Support/Skype/Code Cache", "~/Library/Application Support/Skype/GPUCache", "~/Library/Application Support/Skype/DawnCache", "~/Library/Application Support/Skype/Service Worker/CacheStorage", "~/Library/Application Support/Skype/Service Worker/ScriptCache", "~/Library/Application Support/Skype/logs", "~/Library/Application Support/Skype/Crashpad/completed", "~/Library/Application Support/Skype/blob_storage"]
+windows = ["$APPDATA/Microsoft/Skype for Desktop/Cache", "$APPDATA/Microsoft/Skype for Desktop/Code Cache", "$APPDATA/Microsoft/Skype for Desktop/GPUCache", "$APPDATA/Microsoft/Skype for Desktop/DawnCache", "$APPDATA/Microsoft/Skype for Desktop/Service Worker/CacheStorage", "$APPDATA/Microsoft/Skype for Desktop/Service Worker/ScriptCache", "$APPDATA/Microsoft/Skype for Desktop/logs", "$APPDATA/Microsoft/Skype for Desktop/Crashpad/completed", "$APPDATA/Microsoft/Skype for Desktop/blob_storage"]
+label = "Skype cache"
+
+[[cleaner]]
+id = "app-logseq"
+name = "Logseq Cache & Logs"
+description = "Chromium/Electron caches and logs of Logseq"
+category = "Applications"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CONFIG_HOME/Logseq/Cache", "$XDG_CONFIG_HOME/Logseq/Code Cache", "$XDG_CONFIG_HOME/Logseq/GPUCache", "$XDG_CONFIG_HOME/Logseq/DawnCache", "$XDG_CONFIG_HOME/Logseq/Service Worker/CacheStorage", "$XDG_CONFIG_HOME/Logseq/Service Worker/ScriptCache", "$XDG_CONFIG_HOME/Logseq/logs", "$XDG_CONFIG_HOME/Logseq/Crashpad/completed", "$XDG_CONFIG_HOME/Logseq/blob_storage"]
+macos = ["~/Library/Application Support/Logseq/Cache", "~/Library/Application Support/Logseq/Code Cache", "~/Library/Application Support/Logseq/GPUCache", "~/Library/Application Support/Logseq/DawnCache", "~/Library/Application Support/Logseq/Service Worker/CacheStorage", "~/Library/Application Support/Logseq/Service Worker/ScriptCache", "~/Library/Application Support/Logseq/logs", "~/Library/Application Support/Logseq/Crashpad/completed", "~/Library/Application Support/Logseq/blob_storage"]
+windows = ["$APPDATA/Logseq/Cache", "$APPDATA/Logseq/Code Cache", "$APPDATA/Logseq/GPUCache", "$APPDATA/Logseq/DawnCache", "$APPDATA/Logseq/Service Worker/CacheStorage", "$APPDATA/Logseq/Service Worker/ScriptCache", "$APPDATA/Logseq/logs", "$APPDATA/Logseq/Crashpad/completed", "$APPDATA/Logseq/blob_storage"]
+label = "Logseq cache"
+
+[[cleaner]]
+id = "app-bitwarden"
+name = "Bitwarden Cache & Logs"
+description = "Chromium/Electron caches and logs of Bitwarden"
+category = "Applications"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CONFIG_HOME/Bitwarden/Cache", "$XDG_CONFIG_HOME/Bitwarden/Code Cache", "$XDG_CONFIG_HOME/Bitwarden/GPUCache", "$XDG_CONFIG_HOME/Bitwarden/DawnCache", "$XDG_CONFIG_HOME/Bitwarden/Service Worker/CacheStorage", "$XDG_CONFIG_HOME/Bitwarden/Service Worker/ScriptCache", "$XDG_CONFIG_HOME/Bitwarden/logs", "$XDG_CONFIG_HOME/Bitwarden/Crashpad/completed", "$XDG_CONFIG_HOME/Bitwarden/blob_storage", "~/.var/app/com.bitwarden.desktop/config/Bitwarden/Cache", "~/.var/app/com.bitwarden.desktop/config/Bitwarden/Code Cache", "~/.var/app/com.bitwarden.desktop/config/Bitwarden/GPUCache", "~/.var/app/com.bitwarden.desktop/config/Bitwarden/DawnCache", "~/.var/app/com.bitwarden.desktop/config/Bitwarden/Service Worker/CacheStorage", "~/.var/app/com.bitwarden.desktop/config/Bitwarden/Service Worker/ScriptCache", "~/.var/app/com.bitwarden.desktop/config/Bitwarden/logs", "~/.var/app/com.bitwarden.desktop/config/Bitwarden/Crashpad/completed", "~/.var/app/com.bitwarden.desktop/config/Bitwarden/blob_storage"]
+macos = ["~/Library/Application Support/Bitwarden/Cache", "~/Library/Application Support/Bitwarden/Code Cache", "~/Library/Application Support/Bitwarden/GPUCache", "~/Library/Application Support/Bitwarden/DawnCache", "~/Library/Application Support/Bitwarden/Service Worker/CacheStorage", "~/Library/Application Support/Bitwarden/Service Worker/ScriptCache", "~/Library/Application Support/Bitwarden/logs", "~/Library/Application Support/Bitwarden/Crashpad/completed", "~/Library/Application Support/Bitwarden/blob_storage"]
+windows = ["$APPDATA/Bitwarden/Cache", "$APPDATA/Bitwarden/Code Cache", "$APPDATA/Bitwarden/GPUCache", "$APPDATA/Bitwarden/DawnCache", "$APPDATA/Bitwarden/Service Worker/CacheStorage", "$APPDATA/Bitwarden/Service Worker/ScriptCache", "$APPDATA/Bitwarden/logs", "$APPDATA/Bitwarden/Crashpad/completed", "$APPDATA/Bitwarden/blob_storage"]
+label = "Bitwarden cache"
+
+[[cleaner]]
 id = "app-spotify"
 name = "Spotify Cache"
 description = "Offline-song cache and browse data of Spotify"
@@ -179,6 +239,18 @@ linux = ["$XDG_CACHE_HOME/spotify", "~/.var/app/com.spotify.Client/cache/spotify
 macos = ["~/Library/Caches/com.spotify.client", "~/Library/Application Support/Spotify/PersistentCache"]
 windows = ["$LOCALAPPDATA/Spotify/Storage", "$LOCALAPPDATA/Spotify/Data"]
 label = "Spotify Cache"
+
+[[cleaner]]
+id = "app-wechat"
+name = "WeChat Cache"
+description = "Cached media and web data of WeChat (macOS)"
+category = "Applications"
+risk = "moderate"
+os = ["macos"]
+[[cleaner.action]]
+type = "delete"
+macos = ["~/Library/Containers/com.tencent.xinWeChat/Data/Library/Caches/*", "~/Library/Containers/com.tencent.xinWeChat/Data/Library/Application Support/com.tencent.xinWeChat/*/Message/MessageTemp/*"]
+label = "WeChat Cache"
 
 [[cleaner]]
 id = "app-zoom"

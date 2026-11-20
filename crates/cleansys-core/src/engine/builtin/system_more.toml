@@ -305,13 +305,13 @@ label = "Font cache"
 
 [[cleaner]]
 id = "sys-win-store-cache"
-name = "Microsoft Store & Shader Caches"
-description = "Store local cache plus DirectX and GPU driver shader caches"
+name = "Microsoft Store Cache"
+description = "Microsoft Store local cache (GPU shader caches are under Games)"
 category = "Everyday Junk"
 os = ["windows"]
 [[cleaner.action]]
 type = "delete"
-paths = ["$LOCALAPPDATA/Packages/Microsoft.WindowsStore_8wekyb3d8bbwe/LocalCache/*", "$LOCALAPPDATA/D3DSCache/*", "$LOCALAPPDATA/NVIDIA/DXCache/*", "$LOCALAPPDATA/NVIDIA/GLCache/*", "$LOCALAPPDATA/AMD/DxCache/*"]
+paths = ["$LOCALAPPDATA/Packages/Microsoft.WindowsStore_8wekyb3d8bbwe/LocalCache/*"]
 label = "Store/shader cache"
 
 [[cleaner]]

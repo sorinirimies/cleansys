@@ -179,6 +179,30 @@ mod tests {
     }
 
     #[test]
+    fn no_two_builtin_cleaners_delete_the_same_path() {
+        use std::collections::HashMap;
+        for os in ["linux", "macos", "windows"] {
+            let mut owner: HashMap<String, String> = HashMap::new();
+            for s in load_all_unfiltered(None) {
+                if !(s.os.is_empty() || s.os.iter().any(|o| o == os)) {
+                    continue;
+                }
+                for a in &s.actions {
+                    for t in a.delete_templates_for(os) {
+                        if let Some(prev) = owner.insert(t.to_string(), s.id.clone()) {
+                            assert!(
+                                prev == s.id,
+                                "{os}: {t} is deleted by both {prev} and {} (double-counted)",
+                                s.id
+                            );
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn user_spec_overrides_builtin_by_id() {
         let dir = tempfile::tempdir().unwrap();
         let first = load_all_unfiltered(None)[0].clone();

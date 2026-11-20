@@ -15,13 +15,13 @@ label = "Version manager cache"
 [[cleaner]]
 id = "dev-cloud-cli-caches"
 name = "Cloud CLI Caches"
-description = "Logs and caches of gcloud, aws, az and kubectl (credentials and config stay)"
+description = "Logs and caches of gcloud, aws and az (credentials and config stay)"
 category = "Developer Caches"
 [[cleaner.action]]
 type = "delete"
-linux = ["~/.config/gcloud/logs", "~/.aws/cli/cache", "~/.azure/logs", "~/.azure/commands", "~/.kube/cache", "~/.kube/http-cache"]
-macos = ["~/.config/gcloud/logs", "~/.aws/cli/cache", "~/.azure/logs", "~/.azure/commands", "~/.kube/cache", "~/.kube/http-cache"]
-windows = ["$APPDATA/gcloud/logs", "~/.aws/cli/cache", "~/.azure/logs", "~/.kube/cache"]
+linux = ["~/.config/gcloud/logs", "~/.aws/cli/cache", "~/.azure/logs", "~/.azure/commands"]
+macos = ["~/.config/gcloud/logs", "~/.aws/cli/cache", "~/.azure/logs", "~/.azure/commands"]
+windows = ["$APPDATA/gcloud/logs", "~/.aws/cli/cache", "~/.azure/logs"]
 label = "Cloud CLI cache"
 
 [[cleaner]]

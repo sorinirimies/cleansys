@@ -129,7 +129,7 @@ category = "Everyday Junk"
 os = ["linux"]
 [[cleaner.action]]
 type = "delete"
-paths = ["$XDG_CACHE_HOME/gnome-software", "$XDG_CACHE_HOME/tracker3", "$XDG_CACHE_HOME/ibus", "$XDG_CACHE_HOME/plasma*", "$XDG_CACHE_HOME/krunner", "$XDG_CACHE_HOME/fontconfig", "$XDG_CACHE_HOME/mesa_shader_cache_db", "~/.xsession-errors", "~/.xsession-errors.old", "$XDG_DATA_HOME/xorg/*.log*"]
+paths = ["$XDG_CACHE_HOME/gnome-software", "$XDG_CACHE_HOME/tracker3", "$XDG_CACHE_HOME/ibus", "$XDG_CACHE_HOME/plasma*", "$XDG_CACHE_HOME/krunner", "$XDG_CACHE_HOME/fontconfig", "~/.xsession-errors", "~/.xsession-errors.old", "$XDG_DATA_HOME/xorg/*.log*"]
 label = "Desktop cache"
 
 # ───────────────────────────── macOS ─────────────────────────────

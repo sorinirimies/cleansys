@@ -179,6 +179,11 @@ def electron_table [] {
         ["WhatsApp" "WhatsApp" "WhatsApp" "WhatsApp" []]
         ["1Password" "1Password" "1Password" "1Password" []]
         ["GitHub Desktop" "GitHub Desktop" "GitHub Desktop" "GitHub Desktop" []]
+        ["Mattermost" "Mattermost" "Mattermost" "Mattermost" []]
+        ["Zulip" "Zulip" "Zulip" "Zulip" []]
+        ["Skype" "skypeforlinux" "Skype" "Microsoft/Skype for Desktop" []]
+        ["Logseq" "Logseq" "Logseq" "Logseq" []]
+        ["Bitwarden" "Bitwarden" "Bitwarden" "Bitwarden" ["~/.var/app/com.bitwarden.desktop/config/Bitwarden"]]
     ]
 }
 
@@ -196,6 +201,7 @@ def apps_pack [] {
     # id, name, description, paths record, risk, os
     let simple = [
         ["app-spotify" "Spotify Cache" "Offline-song cache and browse data of Spotify" {linux: [$"($CACHE)/spotify" "~/.var/app/com.spotify.Client/cache/spotify"], macos: ["~/Library/Caches/com.spotify.client" $"($MAC)/Spotify/PersistentCache"], windows: [$"($LAD)/Spotify/Storage" $"($LAD)/Spotify/Data"]} "safe" []]
+        ["app-wechat" "WeChat Cache" "Cached media and web data of WeChat (macOS)" {macos: ["~/Library/Containers/com.tencent.xinWeChat/Data/Library/Caches/*" "~/Library/Containers/com.tencent.xinWeChat/Data/Library/Application Support/com.tencent.xinWeChat/*/Message/MessageTemp/*"]} "moderate" ["macos"]]
         ["app-zoom" "Zoom Logs & Cache" "Logs and updater data of Zoom" {paths: ["~/.zoom/logs"], macos: ["~/Library/Logs/zoom.us" $"($MAC)/zoom.us/AutoUpdater"], windows: [$"($AD)/Zoom/logs"]} "safe" []]
         ["app-telegram" "Telegram Desktop Cache" "Downloaded media cache of Telegram Desktop" {linux: [$"($DATA)/TelegramDesktop/tdata/user_data/cache" $"($DATA)/TelegramDesktop/tdata/user_data/media_cache"], macos: [$"($MAC)/Telegram Desktop/tdata/user_data/cache" $"($MAC)/Telegram Desktop/tdata/user_data/media_cache"], windows: [$"($AD)/Telegram Desktop/tdata/user_data/cache" $"($AD)/Telegram Desktop/tdata/user_data/media_cache"]} "moderate" []]
         ["app-dropbox" "Dropbox Cache" "Dropbox deleted-file cache (~/Dropbox/.dropbox.cache)" {paths: ["~/Dropbox/.dropbox.cache/*"]} "safe" []]
@@ -228,6 +234,7 @@ def games_pack [] {
         ["game-epic" "Epic Games Launcher Cache" "Web cache and logs of the Epic Games Launcher" {macos: ["~/Library/Caches/com.epicgames.EpicGamesLauncher" $"($MAC)/Epic/EpicGamesLauncher/Saved/webcache*" $"($MAC)/Epic/EpicGamesLauncher/Saved/Logs/*"], windows: [$"($LAD)/EpicGamesLauncher/Saved/webcache*" $"($LAD)/EpicGamesLauncher/Saved/Logs/*"]} "safe" []]
         ["game-heroic-lutris" "Heroic / Lutris Caches" "Launcher caches of Heroic Games Launcher and Lutris" {linux: [$"($CONF)/heroic/Cache" $"($CONF)/heroic/Code Cache" $"($CONF)/heroic/GPUCache" $"($CACHE)/lutris"]} "safe" ["linux"]]
         ["game-wine" "Wine / Winetricks Caches" "Downloaded installers and caches of Wine and winetricks" {linux: [$"($CACHE)/wine" $"($CACHE)/winetricks"], macos: ["~/Library/Caches/winetricks" "~/Library/Caches/Wine"]} "moderate" ["linux" "macos"]]
+        ["game-roblox-logs" "Roblox Logs" "Roblox client logs" {macos: ["~/Library/Logs/Roblox/*"], windows: [$"($LAD)/Roblox/logs/*"]} "safe" ["macos" "windows"]]
         ["game-minecraft" "Minecraft Logs & Crash Reports" "Launcher/game logs and crash reports" {paths: ["~/.minecraft/logs/*" "~/.minecraft/crash-reports/*"], macos: [$"($MAC)/minecraft/logs/*" $"($MAC)/minecraft/crash-reports/*"], windows: [$"($AD)/.minecraft/logs/*" $"($AD)/.minecraft/crash-reports/*"]} "safe" []]
         ["game-gpu-shaders" "GPU Shader Caches" "Mesa, NVIDIA, AMD and DirectX shader caches (rebuilt on demand)" {linux: [$"($CACHE)/mesa_shader_cache" $"($CACHE)/mesa_shader_cache_db" $"($CACHE)/radv_builtin_shaders*" $"($CACHE)/nvidia/GLCache" $"($CACHE)/nvidia/DXCache" "~/.nv/GLCache" "~/.nv/ComputeCache" $"($CACHE)/AMD/GLCache"], windows: [$"($LAD)/D3DSCache/*" $"($LAD)/NVIDIA/DXCache/*" $"($LAD)/NVIDIA/GLCache/*" $"($LAD)/AMD/DxCache/*" $"($LAD)/AMD/GLCache/*"]} "moderate" ["linux" "windows"]]
     ]

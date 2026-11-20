@@ -200,6 +200,11 @@ pub const fn current_os() -> &'static str {
 impl Action {
     /// For `Delete`: the raw path templates that apply to this OS.
     pub fn delete_templates(&self) -> Vec<&str> {
+        self.delete_templates_for(current_os())
+    }
+
+    /// Like [`Self::delete_templates`] for an explicit OS name (`linux`, `macos`, `windows`).
+    pub fn delete_templates_for(&self, os: &str) -> Vec<&str> {
         match self {
             Action::Delete {
                 paths,
@@ -208,7 +213,7 @@ impl Action {
                 windows,
                 ..
             } => {
-                let per_os = match current_os() {
+                let per_os = match os {
                     "linux" => linux,
                     "macos" => macos,
                     "windows" => windows,

@@ -133,3 +133,30 @@ type = "delete"
 linux = ["$XDG_CACHE_HOME/Homebrew"]
 windows = ["~/scoop/cache/*", "C:/ProgramData/chocolatey/lib-bad/*", "$LOCALAPPDATA/Temp/chocolatey/*"]
 label = "Package-manager cache"
+
+[[cleaner]]
+id = "dev-vcpkg"
+name = "vcpkg Binary & Download Caches"
+description = "vcpkg prebuilt-package archives and downloaded sources (re-fetched or rebuilt on demand)"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/vcpkg/archives/*", "$XDG_CACHE_HOME/vcpkg/registries/*"]
+macos = ["~/.cache/vcpkg/archives/*", "~/.cache/vcpkg/registries/*"]
+windows = ["$LOCALAPPDATA/vcpkg/archives/*", "$LOCALAPPDATA/vcpkg/registries/*"]
+label = "vcpkg cache"
+
+[[cleaner]]
+id = "dev-unity"
+name = "Unity Editor Caches & Logs"
+description = "Unity package/asset caches and Editor logs (the purchased Asset Store downloads stay)"
+category = "Developer Caches"
+risk = "moderate"
+process = ["Unity", "Unity Hub"]
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CONFIG_HOME/unity3d/cache/*", "$XDG_CONFIG_HOME/unity3d/Editor.log", "$XDG_CONFIG_HOME/unity3d/Editor-prev.log"]
+macos = ["~/Library/Unity/cache/*", "~/Library/Logs/Unity/*"]
+windows = ["$LOCALAPPDATA/Unity/cache/*", "$LOCALAPPDATA/Unity/Editor/Editor.log", "$LOCALAPPDATA/Unity/Editor/Editor-prev.log"]
+label = "Unity cache"

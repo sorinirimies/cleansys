@@ -61,6 +61,18 @@ macos = ["~/Library/Caches/winetricks", "~/Library/Caches/Wine"]
 label = "Wine / Winetricks Caches"
 
 [[cleaner]]
+id = "game-roblox-logs"
+name = "Roblox Logs"
+description = "Roblox client logs"
+category = "Games"
+os = ["macos", "windows"]
+[[cleaner.action]]
+type = "delete"
+macos = ["~/Library/Logs/Roblox/*"]
+windows = ["$LOCALAPPDATA/Roblox/logs/*"]
+label = "Roblox Logs"
+
+[[cleaner]]
 id = "game-minecraft"
 name = "Minecraft Logs & Crash Reports"
 description = "Launcher/game logs and crash reports"

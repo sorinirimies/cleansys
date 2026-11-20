@@ -116,3 +116,16 @@ type = "project_artifacts"
 markers = ["Cargo.toml", "package.json", "pyproject.toml", "go.mod", "build.gradle", "build.gradle.kts", "pom.xml"]
 artifacts = [".codegraph"]
 label = "Code index"
+
+[[cleaner]]
+id = "ai-speech-models"
+name = "Speech Model Caches (Whisper, TTS)"
+description = "Downloaded Whisper and Coqui-TTS model files (re-downloaded when used again)"
+category = "AI & LLM Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.cache/whisper/*"]
+linux = ["$XDG_DATA_HOME/tts/*"]
+macos = ["~/Library/Application Support/tts/*"]
+label = "Speech models"
