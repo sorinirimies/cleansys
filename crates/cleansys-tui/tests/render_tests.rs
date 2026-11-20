@@ -843,3 +843,10 @@ fn a_stopped_scan_is_announced() {
     let text = screen_text(&mut app, 120, 40);
     assert!(text.contains("scan stopped"));
 }
+
+#[test]
+fn action_bar_shows_the_scan_toggle_key() {
+    let mut app = app_with_categories();
+    let text = screen_text(&mut app, 160, 40);
+    assert!(text.contains("scan on/off"));
+}

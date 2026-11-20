@@ -1510,6 +1510,7 @@ fn render_action_bar(f: &mut Frame, app: &App, area: Rect) {
         ("Tab", if long { "category" } else { "cat" }, t.accent),
         ("r", if long { "recommended" } else { "rec" }, t.accent),
         ("/", "search", t.accent),
+        ("s", if long { "scan on/off" } else { "scan" }, t.accent),
         ("S", if long { "schedule" } else { "" }, t.accent),
         ("D", if long { "storage chart" } else { "" }, t.accent),
         ("U", if long { "disk usage" } else { "" }, t.accent),
