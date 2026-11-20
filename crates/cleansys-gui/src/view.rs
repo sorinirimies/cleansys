@@ -130,11 +130,8 @@ fn main_layout<'a>(state: &'a CleanSysGui, c: &ThemeColors, width: f32) -> Eleme
 /// category is open; otherwise USER. Having authenticated with sudo does not count — that
 /// used to leave the badge on ROOT even after switching back to the user cleaners.
 pub fn scope_is_root(state: &CleanSysGui) -> bool {
-    let in_root_section = state.search.trim().is_empty()
-        && state
-            .categories
-            .get(state.active_tab)
-            .is_some_and(|cat| is_root_category(&cat.name, &cat.items));
+    let in_root_section =
+        state.search.trim().is_empty() && state.scope().is_system(&state.categories);
     state.is_root || in_root_section
 }
 
@@ -268,12 +265,15 @@ fn sidebar<'a>(state: &'a CleanSysGui, c: &ThemeColors, width: f32) -> Element<'
     let mut user_rows: Vec<Element<'a, Message>> = Vec::new();
     let mut root_rows: Vec<Element<'a, Message>> = Vec::new();
 
-    for (idx, cat) in state.categories.iter().enumerate() {
-        if !state.category_visible(idx) {
+    for scope in cleansys_core::nav_scopes(&state.categories) {
+        if !state
+            .board
+            .scope_visible(&state.categories, scope, state.hide_empty)
+        {
             continue;
         }
-        let row_el = category_button(state, &c, idx);
-        if is_root_category(&cat.name, &cat.items) {
+        let row_el = category_button(state, &c, scope);
+        if scope.is_system(&state.categories) {
             root_rows.push(row_el);
         } else {
             user_rows.push(row_el);
@@ -307,22 +307,23 @@ fn sidebar<'a>(state: &'a CleanSysGui, c: &ThemeColors, width: f32) -> Element<'
 fn category_button<'a>(
     state: &'a CleanSysGui,
     c: &ThemeColors,
-    idx: usize,
+    scope: cleansys_core::Scope,
 ) -> Element<'a, Message> {
     let c = *c;
-    let cat = &state.categories[idx];
-    let active = idx == state.active_tab && state.search.trim().is_empty();
-    let ticked = state.selected_count_in(idx);
+    let active = scope == state.scope() && state.search.trim().is_empty();
+    let ticked = state.selected_count_in_scope(scope);
+    let is_all = matches!(scope, cleansys_core::Scope::All { .. });
 
-    let right: Element<'a, Message> = match state.category_bytes(idx) {
-        Some(b) if b > 0 => text(format_size(b))
-            .size(12)
-            .color(size_color(&c, b))
-            .into(),
-        Some(_) => text("—").size(12).color(c.muted).into(),
-        None if state.board.is_scanning() => ring(&c, state.anim_tick, 13.0),
-        None => Space::new().into(),
-    };
+    let right: Element<'a, Message> =
+        match state.board.scope_bytes_when_done(&state.categories, scope) {
+            Some(b) if b > 0 => text(format_size(b))
+                .size(12)
+                .color(size_color(&c, b))
+                .into(),
+            Some(_) => text("—").size(12).color(c.muted).into(),
+            None if state.board.is_scanning() => ring(&c, state.anim_tick, 13.0),
+            None => Space::new().into(),
+        };
     let tick: Element<'a, Message> = if ticked > 0 {
         text(format!("{ticked} ✓")).size(11).color(c.accent).into()
     } else {
@@ -330,11 +331,11 @@ fn category_button<'a>(
     };
 
     let label = row![
-        text(
-            cat.name
-                .trim_end_matches(cleansys_core::model::ROOT_SUFFIX)
-                .to_string()
-        )
+        text(if is_all {
+            scope.title(&state.categories)
+        } else {
+            format!("  {}", scope.title(&state.categories))
+        })
         .size(13)
         .width(Length::Fill),
         tick,
@@ -369,7 +370,10 @@ fn category_button<'a>(
                 ..base
             }
         })
-        .on_press(Message::SwitchCategoryTab(idx))
+        .on_press(match scope {
+            cleansys_core::Scope::All { system } => Message::SwitchAllTab(system),
+            cleansys_core::Scope::Category(idx) => Message::SwitchCategoryTab(idx),
+        })
         .into()
 }
 
@@ -406,25 +410,37 @@ fn category_header<'a>(
                 f.write_str(&self.1)
             }
         }
-        let opts: Vec<Opt> = state
-            .categories
-            .iter()
+        let opts: Vec<Opt> = cleansys_core::nav_scopes(&state.categories)
+            .into_iter()
             .enumerate()
-            .filter(|(i, _)| state.category_visible(*i))
-            .map(|(i, cat)| {
+            .filter(|(_, sc)| {
+                state
+                    .board
+                    .scope_visible(&state.categories, *sc, state.hide_empty)
+            })
+            .map(|(i, sc)| {
                 let size = state
-                    .category_bytes(i)
+                    .board
+                    .scope_bytes_when_done(&state.categories, sc)
                     .filter(|b| *b > 0)
                     .map(|b| format!("  ·  {}", format_size(b)))
                     .unwrap_or_default();
-                Opt(i, format!("{}{size}", cat.name))
+                Opt(i, format!("{}{size}", sc.title(&state.categories)))
             })
             .collect();
-        let selected = opts.iter().find(|o| o.0 == state.active_tab).cloned();
+        let scopes = cleansys_core::nav_scopes(&state.categories);
+        let selected = opts
+            .iter()
+            .find(|o| scopes.get(o.0).copied() == Some(state.scope()))
+            .cloned();
         col = col.push(
-            pick_list(opts, selected, |o: Opt| Message::SwitchCategoryTab(o.0))
-                .text_size(14.0)
-                .width(Length::Fill),
+            pick_list(opts, selected, move |o: Opt| match scopes.get(o.0) {
+                Some(cleansys_core::Scope::All { system }) => Message::SwitchAllTab(*system),
+                Some(cleansys_core::Scope::Category(i)) => Message::SwitchCategoryTab(*i),
+                None => Message::SearchChanged(String::new()),
+            })
+            .text_size(14.0)
+            .width(Length::Fill),
         );
     }
 
@@ -433,6 +449,15 @@ fn category_header<'a>(
         (
             format!("Search results ({n})"),
             format!("Matching “{}” in every category", state.search.trim()),
+        )
+    } else if let Some(system) = state.active_all {
+        (
+            state.scope().title(&state.categories),
+            if system {
+                "Every system cleaner in one list (asks for your password)".to_string()
+            } else {
+                "Every user-land cleaner in one list".to_string()
+            },
         )
     } else if let Some(cat) = state.categories.get(state.active_tab) {
         (
@@ -453,11 +478,17 @@ fn category_header<'a>(
             button(text("All").size(12))
                 .padding([4, 10])
                 .style(action_button_style(c))
-                .on_press(Message::SelectAllCategory(cat_idx)),
+                .on_press(match state.active_all {
+                    Some(system) => Message::SelectAllScope(system, true),
+                    None => Message::SelectAllCategory(cat_idx),
+                }),
             button(text("None").size(12))
                 .padding([4, 10])
                 .style(action_button_style(c))
-                .on_press(Message::DeselectAllCategory(cat_idx)),
+                .on_press(match state.active_all {
+                    Some(system) => Message::SelectAllScope(system, false),
+                    None => Message::DeselectAllCategory(cat_idx),
+                }),
         ]
         .spacing(6)
         .into()

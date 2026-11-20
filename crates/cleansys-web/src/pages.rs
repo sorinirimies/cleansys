@@ -69,16 +69,15 @@ async fn home(cx: &Cx) -> Result<impl View> {
     let q = p.q.clone().unwrap_or_default();
 
     let mut snap = st.snapshot();
-    for c in &mut snap.categories {
+    for c in snap.categories.iter_mut().chain(snap.areas.iter_mut()) {
         c.visible = st.category_visible(c.index, hide);
     }
-    let mut active = p
-        .cat
-        .unwrap_or(0)
-        .min(snap.categories.len().saturating_sub(1));
-    if !snap.categories.get(active).is_some_and(|c| c.visible) {
-        active = snap
-            .categories
+    // Menu order: All user land, its categories, All system, its categories.
+    let nav_entries = snap.nav_entries();
+    let last = snap.categories.len() + snap.areas.len();
+    let mut active = p.cat.unwrap_or(0).min(last.saturating_sub(1));
+    if !snap.nav(active).is_some_and(|c| c.visible) {
+        active = nav_entries
             .iter()
             .find(|c| c.visible)
             .map_or(0, |c| c.index);
@@ -92,8 +91,7 @@ async fn home(cx: &Cx) -> Result<impl View> {
         None => nav.clone(),
     };
     // The header badge shows the scope you are in: ROOT while a system category is open.
-    let root_scope =
-        snap.is_root || (!searching && snap.categories.get(active).is_some_and(|c| c.root));
+    let root_scope = snap.is_root || (!searching && snap.nav(active).is_some_and(|c| c.root));
 
     let rows: Vec<usize> = st
         .visible(active, &q, hide)
@@ -110,8 +108,7 @@ async fn home(cx: &Cx) -> Result<impl View> {
             format!("Matching “{}” in every category", q.trim()),
         )
     } else {
-        snap.categories
-            .get(active)
+        snap.nav(active)
             .map_or((String::new(), String::new()), |c| {
                 (
                     c.name
@@ -135,9 +132,9 @@ async fn home(cx: &Cx) -> Result<impl View> {
                 <div class=(format!("banner {cls}"))>(msg.clone()) " " <a href="/progress">"View"</a></div>
             }
             <div class="app">
-                side_nav(categories: &snap.categories, active: active, q: q.clone(), hide: hide, scanning: snap.scanning)
+                side_nav(categories: &snap.categories, areas: &snap.areas, active: active, q: q.clone(), hide: hide, scanning: snap.scanning)
                 <section class="pane">
-                    cat_pick(categories: &snap.categories, active: active, hide: hide)
+                    cat_pick(entries: &nav_entries, active: active, hide: hide)
                     <div class="head">
                         <div>
                             <h2>(title)</h2>

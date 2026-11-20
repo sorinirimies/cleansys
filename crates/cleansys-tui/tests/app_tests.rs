@@ -45,7 +45,8 @@ fn app_with_categories() -> App {
             ],
         },
     ];
-    app.category_index = 0;
+    // Menu: All user land (0), User (1), All system (2), System (3) — open the first category.
+    app.category_index = 1;
     app.item_list_state.select(Some(0));
     app
 }
@@ -81,17 +82,19 @@ fn next_and_previous_category_wrap_and_reset_selection() {
     let mut app = app_with_categories();
     app.item_list_state.select(Some(2));
 
+    // Menu: All user land, User, All system, System (all-root cleaners count as system).
     app.next_category();
-    assert_eq!(app.category_index, 1);
+    assert_eq!(app.category_index, 2);
     // Selection resets to the first item of the new category.
     assert_eq!(app.item_list_state.selected(), Some(0));
 
-    // Wraps back to category 0.
     app.next_category();
+    app.next_category();
+    // Wraps to the "All user land" entry at the top of the menu.
     assert_eq!(app.category_index, 0);
 
     app.previous_category();
-    assert_eq!(app.category_index, 1);
+    assert_eq!(app.category_index, 3);
 }
 
 #[test]
@@ -423,6 +426,8 @@ fn app_with_two_categories() -> App {
             items: vec![sample_item("System Logs", true)],
         },
     ];
+    // Menu: All user land, User Land Cleaners, All system, System Cleaners.
+    app.category_index = 1;
     app
 }
 
@@ -476,7 +481,7 @@ fn hide_empty_hides_scanned_empty_cleaners_but_never_selected_ones() {
     board.record(1, 0, ScanInfo::default());
     app.board = board;
     assert_eq!(app.view_items(), vec![(0, 0)]); // Trash hidden
-    // System category fully empty -> skipped by Tab navigation.
+    // The system side is fully empty -> its entries are skipped by Tab navigation.
     app.next_category();
     assert_eq!(app.category_index, 0);
 
@@ -1023,4 +1028,30 @@ fn s_key_opts_the_cleaner_out_of_scanning_and_back_in() {
     assert!(app.board.is_off(0, 0) && app.board.get(0, 0).is_none());
     key(&mut app, KeyCode::Char('s'));
     assert!(app.disabled_cleaners.is_empty() && !app.board.is_off(0, 0));
+}
+
+#[test]
+fn the_menu_has_an_all_entry_listing_every_cleaner_of_its_area() {
+    let mut app = app_with_two_categories();
+    app.category_index = 0; // All user land
+    assert_eq!(app.view_items(), vec![(0, 0), (0, 1)]);
+    app.category_index = 2; // All system
+    assert_eq!(app.view_items(), vec![(1, 0)]);
+    // Ticking in "All" selects across the area.
+    app.category_index = 0;
+    app.select_all();
+    assert!(app.categories[0].items.iter().all(|i| i.selected));
+    assert!(!app.categories[1].items[0].selected);
+}
+
+#[test]
+fn tab_walks_all_then_its_categories_then_the_next_area() {
+    let mut app = app_with_two_categories();
+    app.category_index = 0;
+    let mut seen = vec![app.category_index];
+    for _ in 0..4 {
+        app.next_category();
+        seen.push(app.category_index);
+    }
+    assert_eq!(seen, vec![0, 1, 2, 3, 0]);
 }

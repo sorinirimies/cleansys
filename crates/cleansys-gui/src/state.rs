@@ -59,6 +59,8 @@ pub struct CleanSysGui {
     pub pending_root_ops: Vec<(usize, usize)>,
     /// Index of the currently active category tab.
     pub active_tab: usize,
+    /// `Some(system)` while an "All" menu entry is open (then `active_tab` is ignored).
+    pub active_all: Option<bool>,
     /// Index of the currently selected UI theme (see `cleansys_core::THEME_NAMES`).
     pub theme_index: usize,
     /// Follow the OS light/dark setting (`theme_index` is then derived, not chosen).
@@ -158,7 +160,7 @@ impl CleanSysGui {
         } else {
             cleansys_core::load_settings().unwrap_or_default()
         };
-        let mut categories = cleansys_core::load_areas();
+        let mut categories = cleansys_core::load_categories();
         for category in &mut categories {
             for item in &mut category.items {
                 item.selected = settings.is_selected(&category.name, &item.name);
@@ -177,6 +179,7 @@ impl CleanSysGui {
             password_error: None,
             pending_root_ops: Vec::new(),
             active_tab: 0,
+            active_all: None,
             theme_index: settings.theme_index(),
             follow_system: settings.follow_system_theme(),
             confirm_run_pending: false,
@@ -227,12 +230,39 @@ impl CleanSysGui {
 
     /// Cleaners to list in the main pane (search hits or active category).
     pub fn visible_items(&self) -> Vec<(usize, usize)> {
-        self.board.visible_items(
+        self.board.scope_items(
             &self.categories,
-            self.active_tab,
+            self.scope(),
             &self.search,
             self.hide_empty,
         )
+    }
+
+    /// The menu entry that is open: an area's "All" list or one category.
+    pub fn scope(&self) -> cleansys_core::Scope {
+        match self.active_all {
+            Some(system) => cleansys_core::Scope::All { system },
+            None => cleansys_core::Scope::Category(self.active_tab),
+        }
+    }
+
+    /// Number of ticked cleaners in a menu entry.
+    pub fn selected_count_in_scope(&self, scope: cleansys_core::Scope) -> usize {
+        scope
+            .categories(&self.categories)
+            .into_iter()
+            .map(|c| self.selected_count_in(c))
+            .sum()
+    }
+
+    /// Tick or untick every cleaner of a menu entry.
+    pub fn set_scope_selected(&mut self, scope: cleansys_core::Scope, on: bool) {
+        for ci in scope.categories(&self.categories) {
+            for item in &mut self.categories[ci].items {
+                item.selected = on;
+            }
+        }
+        self.board.sync_all_entries_to_items(&self.categories);
     }
 
     /// Whether a category should appear in the sidebar.

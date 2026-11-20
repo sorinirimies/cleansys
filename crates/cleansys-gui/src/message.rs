@@ -13,6 +13,10 @@ pub enum Message {
     DeselectAllEverywhere,
     /// Switch the active category tab.
     SwitchCategoryTab(usize),
+    /// Open the "All" entry of the user-land (`false`) or system (`true`) side.
+    SwitchAllTab(bool),
+    /// Tick / untick every cleaner of that side.
+    SelectAllScope(bool, bool),
     /// User picked a different theme from the theme selector.
     ThemeChanged(usize),
     /// Periodic re-check of the OS appearance while following the system theme.

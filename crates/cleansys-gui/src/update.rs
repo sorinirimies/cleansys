@@ -440,7 +440,19 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
         Message::SwitchCategoryTab(idx) => {
             if idx < state.categories.len() {
                 state.active_tab = idx;
+                state.active_all = None;
             }
+            Task::none()
+        }
+
+        Message::SwitchAllTab(system) => {
+            state.active_all = Some(system);
+            Task::none()
+        }
+
+        Message::SelectAllScope(system, on) => {
+            state.set_scope_selected(cleansys_core::Scope::All { system }, on);
+            state.save_selections();
             Task::none()
         }
 
@@ -1740,5 +1752,20 @@ mod tests {
         let _ = update(&mut state, Message::StopScan);
         assert!(!state.board.is_scanning() && state.board.was_interrupted());
         assert!(state.scan_handle.is_none());
+    }
+
+    #[test]
+    fn all_entry_lists_every_cleaner_of_its_side_and_ticks_them() {
+        let mut state = tiny_state();
+        let _ = update(&mut state, Message::SwitchAllTab(false));
+        assert_eq!(state.active_all, Some(false));
+        assert_eq!(state.visible_items(), vec![(0, 0), (0, 1)]);
+        let _ = update(&mut state, Message::SelectAllScope(false, true));
+        assert!(state.categories[0].items.iter().all(|i| i.selected));
+        let _ = update(&mut state, Message::SelectAllScope(false, false));
+        assert!(state.categories[0].items.iter().all(|i| !i.selected));
+        // Picking a normal category leaves "All" mode.
+        let _ = update(&mut state, Message::SwitchCategoryTab(0));
+        assert_eq!(state.active_all, None);
     }
 }

@@ -86,10 +86,33 @@ pub struct CatView {
     pub visible: bool,
 }
 
+impl Snapshot {
+    /// The menu entries in display order: All user land, its categories, All system, its
+    /// categories.
+    pub fn nav_entries(&self) -> Vec<CatView> {
+        let mut out = Vec::new();
+        for system in [false, true] {
+            out.extend(self.areas.iter().filter(|a| a.root == system).cloned());
+            out.extend(self.categories.iter().filter(|c| c.root == system).cloned());
+        }
+        out
+    }
+
+    /// The menu entry a `?cat=` value points at (categories, then the two "All" entries).
+    pub fn nav(&self, cat: usize) -> Option<&CatView> {
+        self.categories
+            .get(cat)
+            .or_else(|| self.areas.iter().find(|a| a.index == cat))
+    }
+}
+
 /// An immutable copy of everything a page render needs.
 #[derive(Debug, Clone)]
 pub struct Snapshot {
     pub categories: Vec<CatView>,
+    /// The "All user land" / "All system" menu entries. Their `index` is
+    /// `categories.len()` (user) and `categories.len() + 1` (system), the values `?cat=` takes.
+    pub areas: Vec<CatView>,
     pub items: Vec<ItemView>,
     pub scanning: bool,
     pub scan_done: usize,
@@ -143,6 +166,18 @@ pub fn is_root_category(c: &CleanerCategory) -> bool {
     c.name == "System Cleaners" || c.name.ends_with(cleansys_core::model::ROOT_SUFFIX)
 }
 
+/// What `?cat=` means: a category index, or — one and two past the last category — the
+/// "All user land" / "All system" entries.
+fn scope_for(categories: &[CleanerCategory], cat: usize) -> Option<cleansys_core::Scope> {
+    use cleansys_core::Scope;
+    match cat.checked_sub(categories.len()) {
+        None => Some(Scope::Category(cat)),
+        Some(0) => Some(Scope::All { system: false }),
+        Some(1) => Some(Scope::All { system: true }),
+        Some(_) => None,
+    }
+}
+
 impl Shared {
     /// Build from an explicit category list (tests) — no scan is started.
     pub fn new(categories: Vec<CleanerCategory>) -> Self {
@@ -164,7 +199,7 @@ impl Shared {
 
     /// Load the real cleaners (restoring nothing: the web UI starts unticked).
     pub fn load() -> Self {
-        let s = Self::new(cleansys_core::load_areas());
+        let s = Self::new(cleansys_core::load_categories());
         s.lock().disabled = cleansys_core::load_settings()
             .unwrap_or_default()
             .disabled_cleaners;
@@ -398,8 +433,12 @@ impl Shared {
     pub fn set_category(&self, category: usize, on: bool) {
         let mut g = self.lock();
         let can_root = g.is_root || g.elevation_allowed;
-        if let Some(c) = g.categories.get_mut(category) {
-            for item in &mut c.items {
+        let scope = scope_for(&g.categories, category);
+        for ci in scope
+            .map(|s| s.categories(&g.categories))
+            .unwrap_or_default()
+        {
+            for item in &mut g.categories[ci].items {
                 if !item.requires_root || can_root {
                     item.selected = on;
                 }
@@ -420,7 +459,7 @@ impl Shared {
                 index: ci,
                 name: c.name.clone(),
                 description: c.description.clone(),
-                root: is_root_category(c),
+                root: cleansys_core::Scope::Category(ci).is_system(&g.categories),
                 bytes: g.board.category_bytes_when_done(ci),
                 ticked: c.items.iter().filter(|i| i.selected).count(),
                 visible: true,
@@ -453,8 +492,36 @@ impl Shared {
                 });
             }
         }
+        let areas = [false, true]
+            .into_iter()
+            .enumerate()
+            .filter_map(|(n, system)| {
+                let scope = cleansys_core::Scope::All { system };
+                let cats = scope.categories(&g.categories);
+                if cats.is_empty() {
+                    return None;
+                }
+                Some(CatView {
+                    index: g.categories.len() + n,
+                    name: scope.title(&g.categories),
+                    description: if system {
+                        "Every system cleaner in one list".to_string()
+                    } else {
+                        "Every user-land cleaner in one list".to_string()
+                    },
+                    root: system,
+                    bytes: g.board.scope_bytes_when_done(&g.categories, scope),
+                    ticked: cats
+                        .iter()
+                        .map(|c| g.categories[*c].items.iter().filter(|i| i.selected).count())
+                        .sum(),
+                    visible: true,
+                })
+            })
+            .collect();
         Snapshot {
             categories,
+            areas,
             items,
             scanning: g.board.is_scanning(),
             scan_done: g.board.total.saturating_sub(g.board.pending),
@@ -483,14 +550,19 @@ impl Shared {
     /// `(category, item)` pairs to list for a category / filter / hide-empty setting.
     pub fn visible(&self, active: usize, filter: &str, hide_empty: bool) -> Vec<(usize, usize)> {
         let g = self.lock();
-        g.board
-            .visible_items(&g.categories, active, filter, hide_empty)
+        match scope_for(&g.categories, active) {
+            Some(scope) => g
+                .board
+                .scope_items(&g.categories, scope, filter, hide_empty),
+            None => Vec::new(),
+        }
     }
 
     /// Is a category worth showing in the navigation?
     pub fn category_visible(&self, cat: usize, hide_empty: bool) -> bool {
         let g = self.lock();
-        g.board.category_visible(&g.categories, cat, hide_empty)
+        scope_for(&g.categories, cat)
+            .is_some_and(|s| g.board.scope_visible(&g.categories, s, hide_empty))
     }
 
     // ── preview / run ──────────────────────────────────────────────
@@ -863,5 +935,50 @@ mod tests {
         let snap = s.snapshot();
         assert!(!snap.scanning, "scan stopped by the clean");
         assert!(!snap.complete);
+    }
+
+    #[test]
+    fn all_entries_list_and_tick_every_cleaner_of_an_area() {
+        let cat = |name: &str, ids: &[&str]| CleanerCategory {
+            name: name.into(),
+            description: "d".into(),
+            items: ids.iter().map(|i| item(i, 1, false, Risk::Safe)).collect(),
+        };
+        let s = Shared::new(vec![
+            cat("User Land Cleaners", &["u1"]),
+            cat("Browsers", &["b1", "b2"]),
+            cat("System Cleaners", &["s1"]),
+        ]);
+        s.set_root(true);
+        let snap = s.snapshot();
+        assert_eq!(snap.areas.len(), 2);
+        assert_eq!((snap.areas[0].index, snap.areas[1].index), (3, 4));
+        assert!(!snap.areas[0].root && snap.areas[1].root);
+        let order: Vec<&str> = snap
+            .nav_entries()
+            .iter()
+            .map(|c| c.index)
+            .map(|i| snap.nav(i).unwrap().name.as_str())
+            .collect();
+        assert_eq!(
+            order,
+            [
+                "All user land",
+                "User Land Cleaners",
+                "Browsers",
+                "All system",
+                "System Cleaners"
+            ]
+        );
+        // `?cat=3` lists the whole user side, `?cat=4` the system side.
+        assert_eq!(s.visible(3, "", false), vec![(0, 0), (1, 0), (1, 1)]);
+        assert_eq!(s.visible(4, "", false), vec![(2, 0)]);
+        assert!(s.visible(9, "", false).is_empty());
+        s.set_category(3, true);
+        let snap = s.snapshot();
+        assert_eq!(snap.areas[0].ticked, 3);
+        assert_eq!(snap.areas[1].ticked, 0);
+        s.set_category(3, false);
+        assert_eq!(s.snapshot().areas[0].ticked, 0);
     }
 }

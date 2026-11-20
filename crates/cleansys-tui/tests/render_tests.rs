@@ -850,3 +850,10 @@ fn action_bar_shows_the_scan_toggle_key() {
     let text = screen_text(&mut app, 160, 40);
     assert!(text.contains("scan on/off"));
 }
+
+#[test]
+fn the_menu_shows_an_all_entry_for_each_area() {
+    let mut app = app_with_categories();
+    let text = screen_text(&mut app, 120, 40);
+    assert!(text.contains("All user land"));
+}

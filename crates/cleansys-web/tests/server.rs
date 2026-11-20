@@ -738,3 +738,19 @@ async fn scan_is_a_switch_and_the_page_script_has_shortcuts() {
     let js = get(addr, "/app.js").await;
     assert!(js.body.contains("scan-switch") && js.body.contains("rescan"));
 }
+
+#[tokio::test]
+async fn the_menu_offers_an_all_entry_per_area_and_it_opens() {
+    let addr = start().await;
+    wait_for_scan(addr).await;
+    let home = get(addr, "/").await;
+    assert!(home.body.contains("All user land"), "user All entry");
+    let n = get(addr, "/api/categories")
+        .await
+        .body
+        .matches("\"root\"")
+        .count();
+    let all = get(addr, &format!("/?cat={n}")).await;
+    assert_eq!(all.status, 200);
+    assert!(all.body.contains("<h2>All user land</h2>"));
+}

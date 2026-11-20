@@ -767,11 +767,6 @@ fn panel<'a>(title: impl Into<Line<'a>>) -> Block<'a> {
         .border_style(Style::default().fg(crate::theme::th().border))
 }
 
-/// `true` for categories on the root/system side (kept visibly separate).
-fn is_root_category(c: &cleansys_core::CleanerCategory) -> bool {
-    c.name == "System Cleaners" || c.name.ends_with(cleansys_core::model::ROOT_SUFFIX)
-}
-
 /// Scan progress / total, for block titles: a spinner while measuring, the total after.
 fn scan_line(app: &App) -> Line<'static> {
     if app.board.is_scanning() {
@@ -838,14 +833,15 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
     let mut shown_user_header = false;
     let mut shown_root_header = false;
 
-    for (i, category) in app.categories.iter().enumerate() {
+    let scopes = app.scopes();
+    for (i, scope) in scopes.iter().enumerate() {
         if !app
             .board
-            .category_visible(&app.categories, i, app.hide_empty)
+            .scope_visible(&app.categories, *scope, app.hide_empty)
         {
             continue;
         }
-        let root = is_root_category(category);
+        let root = scope.is_system(&app.categories);
         if !root && !shown_user_header {
             shown_user_header = true;
             items.push(ListItem::new(Line::from(vec![
@@ -890,11 +886,18 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
         }
 
         let active = i == app.category_index && app.filter.is_empty();
-        let ticked = category.items.iter().filter(|it| it.selected).count();
-        let name = category
-            .name
-            .trim_end_matches(cleansys_core::model::ROOT_SUFFIX)
-            .to_string();
+        let ticked = scope
+            .categories(&app.categories)
+            .into_iter()
+            .flat_map(|ci| &app.categories[ci].items)
+            .filter(|it| it.selected)
+            .count();
+        let is_all = matches!(scope, cleansys_core::Scope::All { .. });
+        let name = if is_all {
+            scope.title(&app.categories)
+        } else {
+            format!("  {}", scope.title(&app.categories))
+        };
         let mut right: Vec<Span> = Vec::new();
         if ticked > 0 {
             right.push(Span::styled(
@@ -902,15 +905,17 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
                 Style::default().fg(crate::theme::th().success),
             ));
         }
-        right.push(match app.board.category_bytes_when_done(i) {
-            Some(b) if b > 0 => Span::styled(format_size(b), size_style(b)),
-            Some(_) => Span::styled("—", Style::default().fg(crate::theme::th().muted)),
-            None if app.board.is_scanning() => spinner_spans(app)
-                .into_iter()
-                .next()
-                .unwrap_or_else(|| Span::raw("…")),
-            None => Span::raw(""),
-        });
+        right.push(
+            match app.board.scope_bytes_when_done(&app.categories, *scope) {
+                Some(b) if b > 0 => Span::styled(format_size(b), size_style(b)),
+                Some(_) => Span::styled("—", Style::default().fg(crate::theme::th().muted)),
+                None if app.board.is_scanning() => spinner_spans(app)
+                    .into_iter()
+                    .next()
+                    .unwrap_or_else(|| Span::raw("…")),
+                None => Span::raw(""),
+            },
+        );
         // Truncate the name so the size column never gets pushed out.
         let left = vec![Span::raw(if active { "▎ " } else { "  " }), Span::raw(name)];
         let style = if active {
@@ -1021,21 +1026,19 @@ fn render_cleaner_pane(f: &mut Frame, app: &mut App, area: Rect, show_category_b
     let mut idx = 0;
 
     if show_category_bar {
-        let cat = &app.categories[app.category_index];
-        let visible: Vec<usize> = (0..app.categories.len())
-            .filter(|i| {
-                app.board
-                    .category_visible(&app.categories, *i, app.hide_empty)
-            })
+        let scopes = app.scopes();
+        let cur = scopes.get(app.category_index).copied();
+        let cat_name = cur.map(|s| s.title(&app.categories)).unwrap_or_default();
+        let visible: Vec<usize> = (0..scopes.len())
+            .filter(|i| app.category_shown(*i))
             .collect();
         let pos = visible
             .iter()
             .position(|i| *i == app.category_index)
             .map(|p| p + 1)
             .unwrap_or(1);
-        let size = app
-            .board
-            .category_bytes_when_done(app.category_index)
+        let size = cur
+            .and_then(|s| app.board.scope_bytes_when_done(&app.categories, s))
             .filter(|b| *b > 0)
             .map(|b| format!("  {}", format_size(b)))
             .unwrap_or_default();
@@ -1044,7 +1047,7 @@ fn render_cleaner_pane(f: &mut Frame, app: &mut App, area: Rect, show_category_b
             vec![
                 Span::styled("‹ ", Style::default().fg(crate::theme::th().muted)),
                 Span::styled(
-                    cat.name.clone(),
+                    cat_name.clone(),
                     Style::default()
                         .fg(crate::theme::th().warning)
                         .add_modifier(Modifier::BOLD),
@@ -1234,16 +1237,16 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
             if app.filter_active { "▏" } else { "" }
         )
     } else {
-        let c = &app.categories[app.category_index];
+        let name = app
+            .scope()
+            .map(|s| s.title(&app.categories))
+            .unwrap_or_default();
         let hidden = if app.hide_empty && app.board.complete() {
             "  (empty hidden, e: show)"
         } else {
             ""
         };
-        format!(
-            "{}{hidden}",
-            c.name.trim_end_matches(cleansys_core::model::ROOT_SUFFIX)
-        )
+        format!("{name}{hidden}")
     };
 
     let block = focus_panel(

@@ -5,7 +5,9 @@ use ratatui::widgets::ListState;
 use std::time::Instant;
 
 use crate::components::password_prompt::PasswordPrompt;
-use cleansys_core::{CleanerCategory, CleanerFn, Status, check_root, format_size};
+use cleansys_core::{
+    CleanerCategory, CleanerFn, Scope, Status, check_root, format_size, nav_scopes,
+};
 
 /// One editable row of the schedule overlay.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -781,14 +783,25 @@ impl App {
             .filter(|v| cleansys_core::appinfo::is_link(v))
     }
 
+    /// The category menu: an "All" entry per area, then its categories.
+    pub fn scopes(&self) -> Vec<Scope> {
+        nav_scopes(&self.categories)
+    }
+
+    /// The menu entry that is open (`category_index` is a position in [`Self::scopes`]).
+    pub fn scope(&self) -> Option<Scope> {
+        self.scopes().get(self.category_index).copied()
+    }
+
     /// `(category, item)` pairs shown in the list right now.
     pub fn view_items(&self) -> Vec<(usize, usize)> {
-        self.board.visible_items(
-            &self.categories,
-            self.category_index,
-            &self.filter,
-            self.hide_empty,
-        )
+        match self.scope() {
+            Some(scope) => {
+                self.board
+                    .scope_items(&self.categories, scope, &self.filter, self.hide_empty)
+            }
+            None => Vec::new(),
+        }
     }
 
     /// The highlighted cleaner, if any.
@@ -798,9 +811,12 @@ impl App {
             .copied()
     }
 
-    fn category_shown(&self, idx: usize) -> bool {
-        self.board
-            .category_visible(&self.categories, idx, self.hide_empty)
+    /// Is menu entry `idx` worth showing (not empty once hidden-empty applies)?
+    pub fn category_shown(&self, idx: usize) -> bool {
+        self.scopes().get(idx).is_some_and(|s| {
+            self.board
+                .scope_visible(&self.categories, *s, self.hide_empty)
+        })
     }
 
     /// If the active category got hidden (empty after a scan), move on.
@@ -808,10 +824,7 @@ impl App {
         if self.categories.is_empty() || self.category_shown(self.category_index) {
             return;
         }
-        if let Some(first) = self
-            .board
-            .first_visible_category(&self.categories, self.hide_empty)
-        {
+        if let Some(first) = (0..self.scopes().len()).find(|i| self.category_shown(*i)) {
             self.category_index = first;
             self.item_list_state.select(Some(0));
         }
@@ -888,7 +901,7 @@ impl App {
     }
 
     pub fn next_category(&mut self) {
-        let n = self.categories.len();
+        let n = self.scopes().len();
         for step in 1..=n {
             let cand = (self.category_index + step) % n;
             if self.category_shown(cand) {
@@ -900,7 +913,7 @@ impl App {
     }
 
     pub fn previous_category(&mut self) {
-        let n = self.categories.len();
+        let n = self.scopes().len();
         for step in 1..=n {
             let cand = (self.category_index + n - step) % n;
             if self.category_shown(cand) {
@@ -1776,7 +1789,7 @@ impl App {
             (KeyCode::Home, _) if !self.show_help => match self.focus {
                 Focus::Items => self.item_list_state.select(Some(0)),
                 Focus::Categories => {
-                    if let Some(c) = (0..self.categories.len()).find(|c| self.category_shown(*c)) {
+                    if let Some(c) = (0..self.scopes().len()).find(|c| self.category_shown(*c)) {
                         self.category_index = c;
                         self.item_list_state.select(Some(0));
                     }
@@ -1791,7 +1804,7 @@ impl App {
                     }
                 }
                 Focus::Categories => {
-                    if let Some(c) = (0..self.categories.len())
+                    if let Some(c) = (0..self.scopes().len())
                         .rev()
                         .find(|c| self.category_shown(*c))
                     {

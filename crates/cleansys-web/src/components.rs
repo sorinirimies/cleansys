@@ -112,22 +112,36 @@ pub(crate) async fn spinner() -> Result<impl View> {
     Ok(view! { <span class="spin" role="status" aria-label="measuring"></span> })
 }
 
-/// Sidebar of categories: USER LAND above SYSTEM · ROOT.
+/// Sidebar: USER LAND above SYSTEM · ROOT, each starting with its "All" entry.
 #[component]
 pub(crate) async fn side_nav(
     categories: &[CatView],
+    areas: &[CatView],
     active: usize,
     q: String,
     hide: bool,
     scanning: bool,
 ) -> Result<impl View> {
-    let user: Vec<&CatView> = categories.iter().filter(|c| !c.root && c.visible).collect();
-    let root: Vec<&CatView> = categories.iter().filter(|c| c.root && c.visible).collect();
+    let entries = |system: bool| -> Vec<(bool, &CatView)> {
+        areas
+            .iter()
+            .filter(|a| a.root == system && a.visible)
+            .map(|a| (true, a))
+            .chain(
+                categories
+                    .iter()
+                    .filter(|c| c.root == system && c.visible)
+                    .map(|c| (false, c)),
+            )
+            .collect()
+    };
+    let user = entries(false);
+    let root = entries(true);
     Ok(view! {
         <nav class="side" aria-label="Categories">
             <div class="section">"User land" <small>"no password needed"</small></div>
-            for c in &user {
-                <a class=(if c.index == active && q.trim().is_empty() { "cat active" } else { "cat" }) href=(nav_href(c.index, &q, hide))>
+            for (all, c) in &user {
+                <a class=(format!("cat{}{}", if c.index == active && q.trim().is_empty() { " active" } else { "" }, if *all { " all" } else { "" })) href=(nav_href(c.index, &q, hide))>
                     <span class="name">(c.name.clone())</span>
                     if c.ticked > 0 { <span class="tick">(c.ticked) " ✓"</span> }
                     <span class=(format!("sz {}", cat_size(c).1))>
@@ -137,8 +151,8 @@ pub(crate) async fn side_nav(
             }
             if !root.is_empty() {
                 <div class="section">"System · root" <small>"asks for your password"</small></div>
-                for c in &root {
-                    <a class=(if c.index == active && q.trim().is_empty() { "cat active" } else { "cat" }) href=(nav_href(c.index, &q, hide))>
+                for (all, c) in &root {
+                    <a class=(format!("cat{}{}", if c.index == active && q.trim().is_empty() { " active" } else { "" }, if *all { " all" } else { "" })) href=(nav_href(c.index, &q, hide))>
                         <span class="name">(c.name.trim_end_matches(cleansys_core::model::ROOT_SUFFIX).to_string())</span>
                         if c.ticked > 0 { <span class="tick">(c.ticked) " ✓"</span> }
                         <span class=(format!("sz {}", cat_size(c).1))>
@@ -156,16 +170,12 @@ pub(crate) async fn side_nav(
 
 /// Drop-down navigation shown instead of the sidebar on narrow screens.
 #[component]
-pub(crate) async fn cat_pick(
-    categories: &[CatView],
-    active: usize,
-    hide: bool,
-) -> Result<impl View> {
+pub(crate) async fn cat_pick(entries: &[CatView], active: usize, hide: bool) -> Result<impl View> {
     Ok(view! {
         <form class="catpick" method="get" action="/">
             if !hide { <input type="hidden" name="hide" value="0"> }
             <select name="cat" onchange="this.form.submit()" aria-label="Category">
-                for c in categories.iter().filter(|c| c.visible) {
+                for c in entries.iter().filter(|c| c.visible) {
                     <option value=(c.index.to_string()) selected=(c.index == active)>
                         (c.name.clone()) (if c.bytes.unwrap_or(0) > 0 { format!(" · {}", fmt(c.bytes.unwrap_or(0))) } else { String::new() })
                     </option>
