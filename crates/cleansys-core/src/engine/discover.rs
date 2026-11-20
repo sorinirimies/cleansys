@@ -174,6 +174,24 @@ pub fn discover(known: &[CleanerSpec]) -> Vec<CleanerSpec> {
     build_specs(candidates(), &covered_paths(known))
 }
 
+/// Folders that have their own detected cleaner. The broad "Application Caches" sweeper
+/// leaves these alone so the same space is never offered twice. Computed once per process.
+pub fn is_discovered(dir: &Path) -> bool {
+    static SET: std::sync::OnceLock<HashSet<PathBuf>> = std::sync::OnceLock::new();
+    SET.get_or_init(|| dirs_of(&discover(&super::registry::load_declared())))
+        .contains(dir)
+}
+
+/// The folders the given (detected) cleaners delete.
+fn dirs_of(specs: &[CleanerSpec]) -> HashSet<PathBuf> {
+    specs
+        .iter()
+        .flat_map(|s| &s.actions)
+        .flat_map(Action::delete_templates)
+        .map(PathBuf::from)
+        .collect()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -226,6 +244,16 @@ mod tests {
         let specs = build_specs(vec![a, dir_with_file(tmp.path(), "A-b")], &[]);
         let ids: HashSet<_> = specs.iter().map(|s| s.id.clone()).collect();
         assert_eq!(ids.len(), 2);
+    }
+
+    #[test]
+    fn detected_folders_are_the_ones_the_sweeper_must_skip() {
+        let tmp = tempfile::tempdir().unwrap();
+        let app = dir_with_file(tmp.path(), "SomeApp");
+        let specs = build_specs(vec![app.clone()], &[]);
+        let dirs = dirs_of(&specs);
+        assert!(dirs.contains(&app));
+        assert!(!dirs.contains(&tmp.path().join("Other")));
     }
 
     #[test]

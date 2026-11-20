@@ -54,11 +54,17 @@ pub fn user_spec_dir() -> Option<PathBuf> {
 /// All specs applicable on this OS whose targets exist on this machine:
 /// built-ins first, then user files (same `id` replaces the built-in).
 pub fn load_specs() -> Vec<CleanerSpec> {
-    let mut specs = load_all_unfiltered(user_spec_dir().as_deref());
-    specs.retain(|s| s.applies_to_current_os() && spec_has_targets(s));
+    let mut specs = load_declared();
     // Cache folders of installed apps that no cleaner above knows about.
     let found = super::discover::discover(&specs);
     merge(&mut specs, found);
+    specs
+}
+
+/// Declared (built-in + user) specs that apply here, without the auto-detected ones.
+pub fn load_declared() -> Vec<CleanerSpec> {
+    let mut specs = load_all_unfiltered(user_spec_dir().as_deref());
+    specs.retain(|s| s.applies_to_current_os() && spec_has_targets(s));
     specs
 }
 
