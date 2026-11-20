@@ -33,8 +33,6 @@ const APP_TREES: &[&str] = &[
     "Windows",
 ];
 
-type Hits = Vec<(PathBuf, u64)>;
-
 /// What to look for.
 #[derive(Debug, Clone)]
 pub struct Query {
@@ -73,11 +71,40 @@ impl Query {
     }
 }
 
-/// `(path, bytes)` of every matching file, biggest first.
-pub fn find_files(q: &Query, cfg: &EngineConfig) -> Vec<(PathBuf, u64)> {
+/// A regular file seen by the walk.
+#[derive(Debug, Clone)]
+struct Entry {
+    path: PathBuf,
+    size: u64,
+    modified: Option<SystemTime>,
+}
+
+/// Smallest file the shared index records. Queries below it walk on their own.
+const INDEX_MIN_BYTES: u64 = 1 << 20;
+/// How long a shared index may be reused (one scan, however long the cleaners take).
+const INDEX_TTL: Duration = Duration::from_secs(60);
+
+type Shared = std::sync::Arc<Vec<Entry>>;
+
+type Cache = std::collections::HashMap<Vec<PathBuf>, (std::time::Instant, Shared)>;
+
+fn index_cache() -> &'static std::sync::Mutex<Cache> {
+    static CACHE: std::sync::OnceLock<std::sync::Mutex<Cache>> = std::sync::OnceLock::new();
+    CACHE.get_or_init(Default::default)
+}
+
+/// Forget the shared file index (a scan is about to start, or files were removed).
+pub fn clear_index() {
+    if let Ok(mut g) = index_cache().lock() {
+        g.clear();
+    }
+}
+
+/// Walk `roots` once, recording every file of at least `min_bytes`.
+fn walk(roots: &[PathBuf], q: &Query) -> Vec<Entry> {
     use rayon::prelude::*;
-    let mut hits: Vec<(PathBuf, u64)> = Vec::new();
-    let mut frontier: Vec<PathBuf> = q.roots.clone();
+    let mut out: Vec<Entry> = Vec::new();
+    let mut frontier: Vec<PathBuf> = roots.to_vec();
     let mut depth = 0usize;
     let mut visited = 0usize;
     while !frontier.is_empty() && depth <= MAX_DEPTH {
@@ -86,22 +113,68 @@ pub fn find_files(q: &Query, cfg: &EngineConfig) -> Vec<(PathBuf, u64)> {
             warn!("deep scan stopped: too many directories");
             break;
         }
-        let level: Vec<(Hits, Vec<PathBuf>)> =
+        let level: Vec<(Vec<Entry>, Vec<PathBuf>)> =
             frontier.par_iter().map(|d| scan_dir(d, q)).collect();
         frontier = Vec::new();
         for (found, children) in level {
-            hits.extend(found);
+            out.extend(found);
             frontier.extend(children);
         }
         depth += 1;
     }
+    out
+}
+
+/// One walk shared by every large-file / duplicate cleaner of a scan, instead of one
+/// walk of the whole home folder each. Builds are serialised on a helper thread (like the
+/// project index) so a waiting scan worker never runs a nested parallel walk itself.
+fn shared_index(roots: &[PathBuf]) -> Shared {
+    static BUILD: std::sync::Mutex<()> = std::sync::Mutex::new(());
+    let _build = BUILD.lock().unwrap_or_else(|e| e.into_inner());
+    if let Ok(g) = index_cache().lock()
+        && let Some((at, idx)) = g.get(roots)
+        && at.elapsed() < INDEX_TTL
+    {
+        return idx.clone();
+    }
+    let q = Query {
+        roots: roots.to_vec(),
+        min_bytes: INDEX_MIN_BYTES,
+        min_age: Duration::ZERO,
+        extensions: Vec::new(),
+    };
+    let entries = std::thread::scope(|sc| sc.spawn(|| walk(roots, &q)).join().unwrap_or_default());
+    let idx: Shared = std::sync::Arc::new(entries);
+    if let Ok(mut g) = index_cache().lock() {
+        g.insert(roots.to_vec(), (std::time::Instant::now(), idx.clone()));
+    }
+    idx
+}
+
+/// `(path, bytes)` of every matching file, biggest first.
+pub fn find_files(q: &Query, cfg: &EngineConfig) -> Vec<(PathBuf, u64)> {
+    let mut hits: Vec<(PathBuf, u64)> = if q.min_bytes >= INDEX_MIN_BYTES {
+        shared_index(&q.roots)
+            .iter()
+            .filter(|e| {
+                let name = e.path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                q.accepts(name, e.size, e.modified)
+            })
+            .map(|e| (e.path.clone(), e.size))
+            .collect()
+    } else {
+        walk(&q.roots, q)
+            .into_iter()
+            .map(|e| (e.path, e.size))
+            .collect()
+    };
     hits.retain(|(p, _)| !is_protected(p) && !is_excluded(p, &cfg.exclude));
     hits.sort_by(|a, b| b.1.cmp(&a.1).then_with(|| a.0.cmp(&b.0)));
     hits.truncate(MAX_MATCHES);
     hits
 }
 
-fn scan_dir(dir: &Path, q: &Query) -> (Hits, Vec<PathBuf>) {
+fn scan_dir(dir: &Path, q: &Query) -> (Vec<Entry>, Vec<PathBuf>) {
     let Ok(rd) = fs::read_dir(dir) else {
         return (Vec::new(), Vec::new());
     };
@@ -119,7 +192,11 @@ fn scan_dir(dir: &Path, q: &Query) -> (Hits, Vec<PathBuf>) {
             if let Ok(m) = e.metadata()
                 && q.accepts(name, m.len(), m.modified().ok())
             {
-                found.push((e.path(), m.len()));
+                found.push(Entry {
+                    path: e.path(),
+                    size: m.len(),
+                    modified: m.modified().ok(),
+                });
             }
         } else if ft.is_dir()
             && !name.starts_with('.')
@@ -298,6 +375,29 @@ mod tests {
             .map(|(p, _)| p.file_name().unwrap().to_string_lossy().into_owned())
             .collect();
         assert_eq!(names, ["bigger.bin", "big.bin"]);
+    }
+
+    #[test]
+    fn queries_share_one_walk_and_still_filter_on_their_own() {
+        let tmp = tempfile::tempdir().unwrap();
+        write(&tmp.path().join("a.iso"), 3 << 20);
+        write(&tmp.path().join("b.zip"), 3 << 20);
+        let cfg = EngineConfig::default();
+        let mut q = query(tmp.path());
+        q.min_bytes = 2 << 20;
+        q.extensions = vec!["iso".into()];
+        let iso = find_files(&q, &cfg);
+        // Delete the files: a second query inside the TTL is answered from the index.
+        std::fs::remove_file(tmp.path().join("b.zip")).unwrap();
+        q.extensions = vec!["zip".into()];
+        let zip = find_files(&q, &cfg);
+        assert_eq!(iso.len(), 1);
+        assert_eq!(zip.len(), 1, "second query reused the first walk");
+        clear_index();
+        assert!(
+            find_files(&q, &cfg).is_empty(),
+            "a cleared index walks again"
+        );
     }
 
     #[test]

@@ -553,6 +553,7 @@ where
     let jobs: VecDeque<_> = list.into_iter().collect();
     let total = jobs.len();
     crate::utils::clear_size_cache();
+    crate::engine::deep::clear_index();
     let times = Arc::new(Mutex::new(std::collections::HashMap::<String, u64>::new()));
     let remaining = Arc::new(std::sync::atomic::AtomicUsize::new(total));
     let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
