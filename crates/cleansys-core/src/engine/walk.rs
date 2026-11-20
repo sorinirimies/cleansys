@@ -86,8 +86,8 @@ mod tests {
         });
         assert_eq!(
             shallow.len(),
-            4,
-            "root, a, z, then a's children are level 2"
+            3,
+            "root plus its two children; a/b is level 2"
         );
         let capped = walk_levels(vec![d.path().to_path_buf()], 10, 2, "t", |p, _| children(p));
         assert_eq!(capped.len(), 1, "only the root fits under the cap");
