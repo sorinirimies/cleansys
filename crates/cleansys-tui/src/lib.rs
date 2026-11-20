@@ -13,6 +13,7 @@
 
 /// Application state and key-handling logic for the TUI.
 pub mod app;
+pub(crate) mod dialog;
 
 /// Graphical dashboard, per-cleaner detail and clean report (tui-chart / tui-piechart).
 pub mod charts;

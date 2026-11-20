@@ -1821,55 +1821,16 @@ fn render_help(f: &mut Frame, area: Rect, scroll: u16) -> u16 {
 /// Wipe `rect` and paint the theme background, so a dialog is opaque even on terminals
 /// where the reset colour is transparent.
 pub(crate) fn clear_popup(f: &mut Frame, rect: Rect) {
-    f.render_widget(Clear, rect);
-    f.render_widget(
-        Block::default().style(
-            Style::default()
-                .bg(crate::theme::bg(&crate::theme::th()))
-                .fg(crate::theme::th().foreground),
-        ),
-        rect,
-    );
-}
-
-/// A popup `width` columns wide and just tall enough for `lines` rows plus the border
-/// (wrapped text may need a little more, so one spare row), centred in `area`.
-fn fit_popup(area: Rect, width: u16, lines: usize) -> Rect {
-    let w = width.min(area.width);
-    let h = u16::try_from(lines + 3)
-        .unwrap_or(u16::MAX)
-        .min(area.height);
-    Rect::new(
-        area.x + (area.width - w) / 2,
-        area.y + (area.height - h) / 2,
-        w,
-        h,
-    )
+    crate::dialog::paint_background(&crate::theme::th(), rect, f.buffer_mut());
 }
 
 /// Widest a dialog gets, however large the terminal.
 const MAX_POPUP_WIDTH: u16 = 100;
 
-/// Compute a centered popup `Rect` covering roughly `width_pct`/`height_pct`
-/// of `area`, clamped to a sensible minimum/maximum size.
+/// Compute a centered popup `Rect` covering roughly `width_pct`/`height_pct` of `area`,
+/// clamped to a sensible minimum/maximum size.
 fn centered_popup(area: Rect, width_pct: u16, height_pct: u16) -> Rect {
-    // Never larger than the area itself, even on a tiny terminal.
-    let (min_w, min_h) = (30.min(area.width), 10.min(area.height));
-    let width = (area.width * width_pct / 100)
-        .clamp(min_w, area.width.saturating_sub(2).max(min_w))
-        .min(area.width)
-        .min(MAX_POPUP_WIDTH);
-    let height = (area.height * height_pct / 100)
-        .clamp(min_h, area.height.saturating_sub(2).max(min_h))
-        .min(area.height);
-    let x = area.x + (area.width.saturating_sub(width)) / 2;
-    let y = area.y + (area.height.saturating_sub(height)) / 2;
-    Rect {
-        x,
-        y,
-        width,
-        height,
-    }
+    crate::dialog::centered(area, width_pct, height_pct, MAX_POPUP_WIDTH)
 }
 
 /// Overlay shown before actually cleaning: lists exactly what's selected and
@@ -1909,18 +1870,13 @@ fn render_confirm_run(f: &mut Frame, app: &App, area: Rect) {
             .add_modifier(Modifier::BOLD),
     )]));
 
-    let popup = fit_popup(area, 60, lines.len());
-    let popup_widget = Paragraph::new(lines)
-        .block(
-            Block::default()
-                .title("Confirm")
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(crate::theme::th().warning)),
-        )
-        .wrap(Wrap { trim: true });
-
-    clear_popup(f, popup);
-    f.render_widget(popup_widget, popup);
+    // The key hint is the last body line; the dialog draws it itself.
+    lines.truncate(lines.len() - 2);
+    crate::dialog::Dialog::new(&crate::theme::th(), "Confirm")
+        .tone(crate::dialog::DialogTone::Warning)
+        .lines(lines)
+        .hint("Enter/y: Run now    Esc/n: Cancel")
+        .render_centered(area, f.buffer_mut());
 }
 
 /// Overlay shown for a preview (dry-run): lists what *would* be cleaned and
@@ -2564,14 +2520,6 @@ mod popup_tests {
         assert!(centered_popup(wide, 82, 88).width <= MAX_POPUP_WIDTH);
         let small = Rect::new(0, 0, 60, 20);
         assert!(centered_popup(small, 82, 88).width <= 60);
-    }
-
-    #[test]
-    fn fitted_popup_hugs_its_content() {
-        let area = Rect::new(0, 0, 200, 60);
-        let r = fit_popup(area, 60, 8);
-        assert_eq!((r.width, r.height), (60, 11));
-        assert_eq!(fit_popup(Rect::new(0, 0, 40, 5), 60, 30).height, 5);
     }
 
     #[test]
