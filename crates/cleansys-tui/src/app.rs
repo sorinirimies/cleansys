@@ -34,6 +34,7 @@ pub enum InfoTab {
 pub enum SettingsRow {
     IdleDays,
     ScanDepth,
+    DetectApps,
     HideEmpty,
     Confirm,
     Root(usize),
@@ -202,6 +203,8 @@ pub struct App {
     pub disabled_cleaners: Vec<String>,
     /// Hide cleaners that were scanned and have nothing to clean.
     pub hide_empty: bool,
+    /// Offer a cleaner per installed app's cache (applies from the next start).
+    pub detect_apps: bool,
     /// Live filter text for the cleaner list ("" = none).
     pub filter: String,
     /// Whether keystrokes currently go to the filter box.
@@ -302,6 +305,7 @@ impl App {
             scan_handle: None,
             disabled_cleaners: Vec::new(),
             hide_empty: true,
+            detect_apps: true,
             filter: String::new(),
             filter_active: false,
             dashboard_open: false,
@@ -598,6 +602,7 @@ impl App {
         self.hide_empty = s.hide_empty();
         self.confirmation_mode = s.confirm_before_run();
         self.disabled_cleaners = s.disabled_cleaners.clone();
+        self.detect_apps = s.detect_app_caches();
     }
 
     // ── settings / about overlay ───────────────────────────────────────
@@ -632,6 +637,7 @@ impl App {
         let mut rows = vec![
             SettingsRow::IdleDays,
             SettingsRow::ScanDepth,
+            SettingsRow::DetectApps,
             SettingsRow::HideEmpty,
             SettingsRow::Confirm,
         ];
@@ -685,6 +691,7 @@ impl App {
                 self.toggle_hide_empty();
             }
             Some(SettingsRow::Confirm) => self.toggle_confirmation_mode(),
+            Some(SettingsRow::DetectApps) => self.toggle_detect_apps(),
             _ => {}
         }
     }
@@ -694,6 +701,7 @@ impl App {
         match self.current_settings_row() {
             Some(SettingsRow::HideEmpty) => self.toggle_hide_empty(),
             Some(SettingsRow::Confirm) => self.toggle_confirmation_mode(),
+            Some(SettingsRow::DetectApps) => self.toggle_detect_apps(),
             Some(SettingsRow::AddRoot) => {
                 self.settings_message.clear();
                 self.settings_input = Some(SettingsInput {
@@ -2051,6 +2059,18 @@ impl App {
     pub fn handle_resize(&mut self, width: u16, height: u16) {
         self.terminal_width = width;
         self.terminal_height = height;
+    }
+
+    pub fn toggle_detect_apps(&mut self) {
+        self.detect_apps = !self.detect_apps;
+        let on = self.detect_apps;
+        if self.persist
+            && let Err(e) = cleansys_core::update_settings(|s| s.detect_app_caches = Some(on))
+        {
+            self.settings_message = format!("Could not save: {e}");
+            return;
+        }
+        self.settings_message = "Detected app caches change on the next start".into();
     }
 
     pub fn toggle_confirmation_mode(&mut self) {

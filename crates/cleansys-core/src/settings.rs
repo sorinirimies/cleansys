@@ -43,6 +43,10 @@ pub struct Settings {
     /// Empty = everything is scanned.
     #[serde(default)]
     pub disabled_cleaners: Vec<String>,
+    /// Offer a cleaner for every installed app's cache folder (`None` = default: on).
+    /// Applies from the next start.
+    #[serde(default)]
+    pub detect_app_caches: Option<bool>,
 }
 
 impl Settings {
@@ -73,6 +77,11 @@ impl Settings {
     /// Whether a clean asks for confirmation first (default: yes).
     pub fn confirm_before_run(&self) -> bool {
         self.confirm_before_run.unwrap_or(true)
+    }
+
+    /// Whether installed apps' caches are detected and offered (default: yes).
+    pub fn detect_app_caches(&self) -> bool {
+        self.detect_app_caches.unwrap_or(true)
     }
 
     /// Is this cleaner scanned (default: yes)?
@@ -287,6 +296,7 @@ mod tests {
             log_height: Some(240),
             scan_threads: None,
             disabled_cleaners: vec![],
+            detect_app_caches: Some(false),
         };
         save_to(&path, &settings).unwrap();
 

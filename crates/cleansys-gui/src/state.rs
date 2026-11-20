@@ -93,6 +93,8 @@ pub struct CleanSysGui {
     pub disabled_cleaners: Vec<String>,
     /// Whether cleaners with nothing to clean are hidden (after a scan).
     pub hide_empty: bool,
+    /// Offer a cleaner per installed app's cache (applies from the next start).
+    pub detect_apps: bool,
     /// Whether the activity log drawer is open.
     pub show_log: bool,
     /// Cleaners whose details (per-path list) are expanded: `(category, item)`.
@@ -195,6 +197,7 @@ impl CleanSysGui {
             scan_gen: 0,
             disabled_cleaners: settings.disabled_cleaners.clone(),
             hide_empty: settings.hide_empty(),
+            detect_apps: settings.detect_app_caches(),
             confirm_before_run: settings.confirm_before_run(),
             log_height: settings
                 .log_height
@@ -492,6 +495,7 @@ impl CleanSysGui {
                 .ok()
                 .and_then(|s| s.scan_threads),
             disabled_cleaners: self.disabled_cleaners.clone(),
+            detect_app_caches: Some(self.detect_apps),
         }
     }
 

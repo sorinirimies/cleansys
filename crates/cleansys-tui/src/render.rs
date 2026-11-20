@@ -2282,7 +2282,7 @@ fn render_settings_tab(f: &mut Frame, app: &mut App, area: Rect) {
     let mut last_group = "";
     for (idx, row) in rows.iter().enumerate() {
         let group = match row {
-            SettingsRow::IdleDays | SettingsRow::ScanDepth => "Scanning",
+            SettingsRow::IdleDays | SettingsRow::ScanDepth | SettingsRow::DetectApps => "Scanning",
             SettingsRow::HideEmpty | SettingsRow::Confirm => "Behaviour",
             SettingsRow::Root(_) | SettingsRow::AddRoot => {
                 "Project folders scanned for build output"
@@ -2318,6 +2318,13 @@ fn render_settings_tab(f: &mut Frame, app: &mut App, area: Rect) {
             SettingsRow::HideEmpty => row_line(
                 vec![Span::raw(label("Hide cleaners with nothing to clean"))],
                 switch_span(app.hide_empty),
+                width,
+            ),
+            SettingsRow::DetectApps => row_line(
+                vec![Span::raw(label(
+                    "Detect installed apps' caches (next start)",
+                ))],
+                switch_span(app.detect_apps),
                 width,
             ),
             SettingsRow::Confirm => row_line(

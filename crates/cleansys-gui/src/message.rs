@@ -69,6 +69,7 @@ pub enum Message {
     ToggleScan(usize, usize),
     /// Toggle hiding cleaners that have nothing to clean.
     ToggleHideEmpty,
+    ToggleDetectApps,
     /// The user grabbed the activity panel's top edge.
     LogDragStart,
     /// The cursor moved (window y) during a panel drag.

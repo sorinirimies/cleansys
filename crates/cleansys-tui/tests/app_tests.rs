@@ -757,6 +757,7 @@ fn settings_rows_follow_the_config() {
         vec![
             SettingsRow::IdleDays,
             SettingsRow::ScanDepth,
+            SettingsRow::DetectApps,
             SettingsRow::HideEmpty,
             SettingsRow::Confirm,
             SettingsRow::Root(0),
@@ -783,6 +784,12 @@ fn values_adjust_with_left_right_and_switches_toggle() {
     key(&mut app, KeyCode::Right);
     assert_eq!(app.engine_cfg.max_depth, 8);
 
+    key(&mut app, KeyCode::Down); // detect apps' caches
+    assert!(app.detect_apps);
+    key(&mut app, KeyCode::Char(' '));
+    assert!(!app.detect_apps);
+    assert!(app.settings_message.contains("next start"));
+
     key(&mut app, KeyCode::Down); // hide empty
     let hide = app.hide_empty;
     key(&mut app, KeyCode::Char(' '));
@@ -800,7 +807,7 @@ fn adding_and_removing_folders_and_patterns() {
     let mut app = settings_app();
 
     // Move to "＋ Add a folder…" and type a real directory.
-    app.settings_cursor = 5;
+    app.settings_cursor = 6;
     key(&mut app, KeyCode::Enter);
     assert!(matches!(&app.settings_input, Some(i) if i.kind == InputKind::Root));
     type_text(&mut app, "/definitely/not/here");
@@ -819,7 +826,7 @@ fn adding_and_removing_folders_and_patterns() {
     assert_eq!(app.engine_cfg.scan_roots, vec!["/work/a".to_string(), path]);
 
     // Remove the first folder (d).
-    app.settings_cursor = 4;
+    app.settings_cursor = 5;
     key(&mut app, KeyCode::Char('d'));
     assert_eq!(app.engine_cfg.scan_roots.len(), 1);
 

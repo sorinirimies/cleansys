@@ -168,7 +168,9 @@ pub fn build_specs(mut found: Vec<PathBuf>, covered: &[PathBuf]) -> Vec<CleanerS
 
 /// Cleaners for cache folders found on this machine that `known` does not cover.
 pub fn discover(known: &[CleanerSpec]) -> Vec<CleanerSpec> {
-    if std::env::var_os("CLEANSYS_NO_DISCOVER").is_some() {
+    if std::env::var_os("CLEANSYS_NO_DISCOVER").is_some()
+        || !crate::settings::load_settings().map_or(true, |s| s.detect_app_caches())
+    {
         return Vec::new();
     }
     build_specs(candidates(), &covered_paths(known))

@@ -2185,6 +2185,11 @@ fn settings_tab_body<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a,
             .size(15)
             .text_size(13)
             .on_toggle(|_| Message::ToggleHideEmpty),
+        checkbox(state.detect_apps)
+            .label("Detect installed apps' caches (applies from the next start)")
+            .size(15)
+            .text_size(13)
+            .on_toggle(|_| Message::ToggleDetectApps),
         checkbox(state.confirm_before_run)
             .label("Ask before cleaning")
             .size(15)

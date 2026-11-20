@@ -87,6 +87,11 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             state.save_selections(); // also persists the preference
             Task::none()
         }
+        Message::ToggleDetectApps => {
+            state.detect_apps = !state.detect_apps;
+            state.save_selections(); // also persists the preference
+            Task::none()
+        }
         Message::LogDragStart => {
             state.log_drag = Some(crate::state::LogDrag {
                 anchor_y: None,
@@ -1034,8 +1039,9 @@ mod tests {
         let mut state = CleanSysGui::new();
         state.hide_empty = false;
         state.confirm_before_run = false;
+        state.detect_apps = false;
         let s = state.current_settings();
-        assert!(!s.hide_empty() && !s.confirm_before_run());
+        assert!(!s.hide_empty() && !s.confirm_before_run() && !s.detect_app_caches());
     }
 
     #[test]

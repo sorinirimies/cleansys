@@ -573,6 +573,7 @@ async fn settings_page(cx: &Cx) -> Result<impl View> {
                 <h2>"Behaviour"</h2>
                 <form class="switch" method="post" action="/settings/prefs">
                     <label><input type="checkbox" name="hide_empty" value="1" checked=(prefs.hide_empty()) onchange="this.form.submit()"> " Hide cleaners with nothing to clean"</label>
+                    <label><input type="checkbox" name="detect" value="1" checked=(prefs.detect_app_caches()) onchange="this.form.submit()"> " Detect installed apps' caches (applies from the next start)"</label>
                     <label><input type="checkbox" name="confirm" value="1" checked=(prefs.confirm_before_run()) onchange="this.form.submit()"> " Ask before cleaning (the confirmation page)"</label>
                     <noscript><button type="submit">"Save"</button></noscript>
                 </form>
@@ -659,6 +660,7 @@ async fn settings_depth(cx: &Cx, Form(f): Form<DepthForm>) -> Result<SeeOther> {
 struct PrefsForm {
     hide_empty: Option<String>,
     confirm: Option<String>,
+    detect: Option<String>,
 }
 
 #[route(POST "/settings/prefs")]
@@ -666,10 +668,12 @@ async fn settings_prefs(cx: &Cx, Form(f): Form<PrefsForm>) -> Result<SeeOther> {
     let _ = shared(cx); // (state is untouched: preferences live in settings.json)
     let hide = f.hide_empty.is_some();
     let ask = f.confirm.is_some();
+    let detect = f.detect.is_some();
     Ok(
         match cleansys_core::update_settings(|s| {
             s.hide_empty = Some(hide);
             s.confirm_before_run = Some(ask);
+            s.detect_app_caches = Some(detect);
         }) {
             Ok(_) => settings_back("Saved."),
             Err(e) => settings_back(&format!("Could not save: {e}")),
