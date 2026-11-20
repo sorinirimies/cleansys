@@ -618,6 +618,16 @@ fn main() -> Result<()> {
                     return Ok(());
                 }
             }
+            let opts = if yes {
+                cleansys_core::RunOptions::execute()
+            } else {
+                cleansys_core::RunOptions::execute_with_confirmation()
+            };
+            let sel = cleansys_core::engine::headless::Selection {
+                categories: vec!["system".into()],
+                ..Default::default()
+            };
+            cleansys_core::engine::headless::run_selection(&sel, opts, false)?;
             system_cleaners::run_all(yes)?;
         }
         Some(Commands::List) => {

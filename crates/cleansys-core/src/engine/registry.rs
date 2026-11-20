@@ -30,6 +30,7 @@ const BUILTIN: &[(&str, &str)] = &[
     ("games.toml", include_str!("builtin/games.toml")),
     ("system.toml", include_str!("builtin/system.toml")),
     ("system_more.toml", include_str!("builtin/system_more.toml")),
+    ("system_core.toml", include_str!("builtin/system_core.toml")),
     ("containers.toml", include_str!("builtin/containers.toml")),
     ("privacy.toml", include_str!("builtin/privacy.toml")),
     (

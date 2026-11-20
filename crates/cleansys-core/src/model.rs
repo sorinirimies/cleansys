@@ -178,11 +178,7 @@ fn sort_by_order(categories: &mut [CleanerCategory], order: &[&str]) {
 fn builtin_category(cleaner: &str, root: bool) -> &'static str {
     match (root, cleaner) {
         (_, "Browser Caches") => "Web Browsers",
-        (_, "Homebrew Cache" | "Xcode Derived Data" | "iOS Simulator Caches")
-        | (false, "Package Manager Caches") => "Developer Caches",
-        (true, "Package Manager Caches" | "Old Kernels") => "Package Managers",
-        (true, "System Logs" | "Crash Reports") => "System Logs & Dumps",
-        (true, "Windows Update Cache") => "Updates & Snapshots",
+        (false, "Package Manager Caches") => "Developer Caches",
         (true, _) => "Maintenance & Tuning",
         (false, _) => "Everyday Junk",
     }
@@ -290,11 +286,7 @@ fn slug(name: &str) -> String {
 /// ones are `Moderate`, everything else is a regenerating cache (`Safe`).
 fn builtin_risk(name: &str) -> Risk {
     match name {
-        "Trash"
-        | "Recycle Bin"
-        | "Old Kernels"
-        | "Windows Update Cache"
-        | "Package Manager Caches" => Risk::Moderate,
+        "Trash" | "Recycle Bin" | "Package Manager Caches" => Risk::Moderate,
         _ => Risk::Safe,
     }
 }
@@ -432,15 +424,10 @@ mod tests {
     #[test]
     fn builtin_category_mapping() {
         assert_eq!(builtin_category("Trash", false), "Everyday Junk");
+        assert_eq!(builtin_category("Browser Caches", false), "Web Browsers");
         assert_eq!(
-            builtin_category("Xcode Derived Data", false),
+            builtin_category("Package Manager Caches", false),
             "Developer Caches"
-        );
-        assert_eq!(builtin_category("System Logs", true), "System Logs & Dumps");
-        assert_eq!(builtin_category("Old Kernels", true), "Package Managers");
-        assert_eq!(
-            builtin_category("Windows Update Cache", true),
-            "Updates & Snapshots"
         );
         assert_eq!(
             builtin_category("System Caches", true),

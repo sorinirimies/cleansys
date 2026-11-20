@@ -58,13 +58,16 @@ fn test_list_shows_system_cleaners() {
     let mut cmd = Command::cargo_bin("cleansys").unwrap();
     cmd.arg("list");
 
-    // Each platform has its own system cleaners (Windows has no "System Logs"),
-    // so the expected names come from the core rather than a fixed list.
-    let cleaners = cleansys_core::cleaners::system_cleaners::get_cleaners();
-    assert!(!cleaners.is_empty(), "this platform lists system cleaners");
+    // Each platform has its own system cleaners, so the expected names come from the core.
+    let root: Vec<String> = cleansys_core::load_categories()
+        .into_iter()
+        .filter(|c| cleansys_core::model::is_system_category(&c.name))
+        .flat_map(|c| c.items.into_iter().map(|i| i.name))
+        .collect();
+    assert!(!root.is_empty(), "this platform lists system cleaners");
     let mut assert = cmd.assert().success();
-    for cleaner in cleaners {
-        assert = assert.stdout(predicate::str::contains(cleaner.name));
+    for name in root {
+        assert = assert.stdout(predicate::str::contains(name));
     }
 }
 

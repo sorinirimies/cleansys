@@ -48,6 +48,7 @@ pub fn run_spec_with(
                 not_name_regex,
                 path_regex,
                 not_path_regex,
+                min_age_days,
                 ..
             } => {
                 let label = label.as_deref().unwrap_or(&spec.name);
@@ -61,6 +62,7 @@ pub fn run_spec_with(
                     warn!("{}: invalid regex in cleaner; skipping action", spec.id);
                     continue;
                 };
+                let filter = filter.older_than_days(*min_age_days);
                 for template in action.delete_templates() {
                     for path in paths::resolve(template, &paths::lookup_env) {
                         let targets: Vec<PathBuf> = if *files_only {
@@ -189,6 +191,8 @@ struct PathFilter {
     not_name: Option<regex::Regex>,
     path: Option<regex::Regex>,
     not_path: Option<regex::Regex>,
+    /// Newest of modified/accessed must be before this moment.
+    cutoff: Option<std::time::SystemTime>,
 }
 
 impl PathFilter {
@@ -206,7 +210,29 @@ impl PathFilter {
             not_name: c(not_name).ok()?,
             path: c(path).ok()?,
             not_path: c(not_path).ok()?,
+            cutoff: None,
         })
+    }
+
+    /// Only accept items untouched (neither written nor read) for `days` (0 = no limit).
+    fn older_than_days(mut self, days: u64) -> Self {
+        self.cutoff =
+            (days > 0).then(|| std::time::SystemTime::now() - Duration::from_secs(days * 86_400));
+        self
+    }
+
+    fn is_old_enough(&self, p: &Path) -> bool {
+        let Some(cutoff) = self.cutoff else {
+            return true;
+        };
+        let Ok(meta) = fs::symlink_metadata(p) else {
+            return false;
+        };
+        let newest = [meta.modified(), meta.accessed()]
+            .into_iter()
+            .flatten()
+            .max();
+        newest.is_some_and(|t| t < cutoff)
     }
 
     fn accepts(&self, p: &Path) -> bool {
@@ -219,6 +245,7 @@ impl PathFilter {
             && self.not_name.as_ref().is_none_or(|r| !r.is_match(&name))
             && self.path.as_ref().is_none_or(|r| r.is_match(&full))
             && self.not_path.as_ref().is_none_or(|r| !r.is_match(&full))
+            && self.is_old_enough(p)
     }
 }
 
@@ -729,6 +756,34 @@ mod tests {
             );
         }
         assert_eq!(names.len(), 3);
+    }
+
+    #[test]
+    fn min_age_keeps_recently_touched_files() {
+        let d = tempfile::tempdir().unwrap();
+        let old = d.path().join("old.tmp");
+        let fresh = d.path().join("fresh.tmp");
+        write(&old, 10);
+        write(&fresh, 10);
+        let three_days_ago = SystemTime::now() - Duration::from_secs(3 * 86_400);
+        fs::File::options()
+            .write(true)
+            .open(&old)
+            .unwrap()
+            .set_times(
+                fs::FileTimes::new()
+                    .set_modified(three_days_ago)
+                    .set_accessed(three_days_ago),
+            )
+            .unwrap();
+
+        let any = PathFilter::new(None, None, None, None).unwrap();
+        assert!(any.accepts(&fresh), "no age limit accepts everything");
+
+        let aged = any.older_than_days(1);
+        assert!(aged.accepts(&old));
+        assert!(!aged.accepts(&fresh));
+        assert_eq!(files_below(d.path(), &aged), vec![old]);
     }
 
     #[test]

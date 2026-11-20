@@ -155,7 +155,7 @@ pub fn execute_with_sudo(command: &str, args: &[&str]) -> Result<std::process::O
     Command::new(command)
         .args(args)
         .output()
-        .context(format!("Failed to execute command: {}", command))
+        .context(format!("Failed to execute command: {command}"))
 }
 
 static QUIET: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
@@ -279,9 +279,12 @@ pub fn disk_usage() -> Option<DiskUsage> {
             return None;
         }
         let frag = st.f_frsize as u64;
+        // `f_blocks`/`f_bavail` are u32 on macOS and u64 on Linux.
+        #[allow(clippy::useless_conversion)]
+        let (blocks, avail) = (u64::from(st.f_blocks), u64::from(st.f_bavail));
         Some(DiskUsage {
-            total: u64::from(st.f_blocks).saturating_mul(frag),
-            free: u64::from(st.f_bavail).saturating_mul(frag),
+            total: blocks.saturating_mul(frag),
+            free: avail.saturating_mul(frag),
         })
     }
     #[cfg(not(unix))]

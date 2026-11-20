@@ -1,0 +1,155 @@
+# The classic system cleaners (package caches, temp files, crash reports ...), declared
+# like every other cleaner. Only the Windows Recycle Bin stays in Rust: it needs a Shell API.
+
+# ───────────────────────────── Linux ─────────────────────────────
+
+[[cleaner]]
+id = "sys-lin-apt-cache"
+name = "APT Package Cache"
+description = "Downloaded .deb files (apt-get clean)"
+category = "Package Managers"
+os = ["linux"]
+requires_root = true
+[[cleaner.action]]
+type = "command"
+program = "apt-get"
+args = ["clean"]
+sudo = true
+measure = ["/var/cache/apt/archives"]
+label = "APT cache"
+
+[[cleaner]]
+id = "sys-lin-dnf-cache"
+name = "DNF Package Cache"
+description = "Downloaded metadata and packages (dnf clean all)"
+category = "Package Managers"
+os = ["linux"]
+requires_root = true
+[[cleaner.action]]
+type = "command"
+program = "dnf"
+args = ["clean", "all"]
+sudo = true
+measure = ["/var/cache/dnf"]
+label = "DNF cache"
+
+[[cleaner]]
+id = "sys-lin-old-kernels"
+name = "Old Kernels"
+description = "Remove old unused kernels, keeping the newest (needs purge-old-kernels)"
+category = "Package Managers"
+os = ["linux"]
+requires_root = true
+risk = "moderate"
+[[cleaner.action]]
+type = "command"
+program = "purge-old-kernels"
+args = ["--keep", "1"]
+sudo = true
+measure = ["/boot"]
+label = "old kernels"
+
+[[cleaner]]
+id = "sys-lin-system-caches"
+name = "System Caches"
+description = "Font and man-page caches (rebuilt on demand)"
+category = "Maintenance & Tuning"
+os = ["linux"]
+requires_root = true
+[[cleaner.action]]
+type = "delete"
+paths = ["/var/cache/fontconfig/*", "/var/cache/man/*"]
+label = "System cache"
+
+[[cleaner]]
+id = "sys-lin-old-temp"
+name = "Old Temporary Files"
+description = "Files in /tmp and /var/tmp that nothing touched for a day"
+category = "Maintenance & Tuning"
+os = ["linux"]
+requires_root = true
+[[cleaner.action]]
+type = "delete"
+paths = ["/tmp", "/var/tmp"]
+files_only = true
+min_age_days = 1
+not_path_regex = "/(systemd-private-|\\.X11-unix|\\.ICE-unix|\\.font-unix)"
+label = "Temporary file"
+
+# ───────────────────────────── macOS ─────────────────────────────
+
+[[cleaner]]
+id = "sys-mac-brew-cleanup"
+name = "Homebrew Cache"
+description = "Old downloads and outdated versions (brew cleanup -s)"
+category = "Developer Caches"
+os = ["macos"]
+[[cleaner.action]]
+type = "command"
+program = "brew"
+args = ["cleanup", "-s"]
+measure = ["~/Library/Caches/Homebrew"]
+label = "Homebrew cache"
+
+[[cleaner]]
+id = "sys-mac-xcode-derived-data"
+name = "Xcode Derived Data"
+description = "Xcode build caches, rebuilt on the next build (often tens of GB)"
+category = "Developer Caches"
+os = ["macos"]
+[[cleaner.action]]
+type = "delete"
+paths = ["~/Library/Developer/Xcode/DerivedData/*"]
+label = "Xcode DerivedData"
+
+[[cleaner]]
+id = "sys-mac-sim-unavailable"
+name = "iOS Simulator Unavailable Devices"
+description = "Simulator devices whose runtime is gone (xcrun simctl delete unavailable)"
+category = "Developer Caches"
+os = ["macos"]
+[[cleaner.action]]
+type = "command"
+program = "xcrun"
+args = ["simctl", "delete", "unavailable"]
+measure = ["~/Library/Developer/CoreSimulator/Devices"]
+label = "unavailable simulators"
+
+[[cleaner]]
+id = "sys-mac-crash-reports"
+name = "System Crash Reports"
+description = "System-wide diagnostic and crash reports (yours are in Log Files)"
+category = "System Logs & Dumps"
+os = ["macos"]
+requires_root = true
+[[cleaner.action]]
+type = "delete"
+paths = ["/Library/Logs/DiagnosticReports/*"]
+label = "Crash report"
+
+# ───────────────────────────── Windows ─────────────────────────────
+
+[[cleaner]]
+id = "sys-win-update-cache"
+name = "Windows Update Cache"
+description = "Downloaded update files (SoftwareDistribution\\Download); Windows fetches them again if needed"
+category = "Updates & Snapshots"
+os = ["windows"]
+requires_root = true
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["$SystemRoot/SoftwareDistribution/Download/*"]
+label = "Windows Update cache"
+
+[[cleaner]]
+id = "sys-win-system-temp"
+name = "Windows System Temp"
+description = "C:\\Windows\\Temp (files in use are skipped)"
+category = "Maintenance & Tuning"
+os = ["windows"]
+requires_root = true
+[[cleaner.action]]
+type = "delete"
+paths = ["$SystemRoot/Temp/*"]
+label = "System temp"

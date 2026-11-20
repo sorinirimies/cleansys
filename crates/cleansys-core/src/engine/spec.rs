@@ -93,6 +93,9 @@ pub enum Action {
         /// Skip items whose full path matches this regex.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         not_path_regex: Option<String>,
+        /// Only items neither modified nor read for this many days (0 = any age).
+        #[serde(default)]
+        min_age_days: u64,
         /// Remove via `sudo rm -rf` when not already root. Defaults to the
         /// cleaner's `requires_root`.
         #[serde(default)]
