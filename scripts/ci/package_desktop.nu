@@ -61,7 +61,7 @@ export def deb-deps [kind: string]: nothing -> record<depends: string, recommend
 # A binary's package name. Debian allows only lowercase letters, digits and `+-.`, so a
 # binary like `app_cli` ships as the package `app-cli` (the command keeps its name).
 export def deb-name [bin: string]: nothing -> string {
-    $bin | str downcase | str replace --all '_' '-'
+    $bin | str lowercase | str replace --all '_' '-'
 }
 
 # DEBIAN/control of one binary's package.

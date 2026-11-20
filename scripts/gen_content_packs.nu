@@ -111,7 +111,7 @@ def chromium_per_os [name: string, row: list, items: list, include_cache_dirs: b
     per $linux $macos $windows
 }
 
-def slug [s: string] { $s | str downcase | str replace --all " " "-" }
+def slug [s: string] { $s | str lowercase | str replace --all " " "-" }
 
 def chromium_pack [] {
     mut out = []
