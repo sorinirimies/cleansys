@@ -180,6 +180,7 @@ Cleaners are grouped by theme; the UIs list a **User land** section first (every
 | **Developer Caches** | Gradle (caches, wrapper), Android SDK & Studio, Maven, Cargo git/src, sccache, npm/yarn/pnpm/bun, Go, uv/Poetry, Bazel, Playwright/Cypress, node-gyp/Expo, ESLint/Nx/Turbo, rustup temp, Hex, opam, Zed, VS Code/Cursor/Windsurf, Xcode, Ruby, NuGet, ccache… |
 | **Project Build Artifacts** | Rust `target/`, Gradle/Android `build/` + `.gradle/` + `.cxx`, Maven, `node_modules`, Next/Nuxt/Vite caches, Python caches & venvs, SwiftPM, CocoaPods, .NET `bin/obj`, Flutter, Zig, CMake, Terraform |
 | **AI & LLM Caches** | Hugging Face, PyTorch/Keras, Ollama, LM Studio/GPT4All/Jan, Claude Code, Codex/Gemini CLI, agent session histories, code-index caches |
+| **Detected App Caches** | Cache folders of apps installed here that have no dedicated cleaner (`~/.cache/*`, `~/Library/Caches/*`, `%LOCALAPPDATA%\*\Cache`): found automatically, one cleaner per app, moderate risk. `CLEANSYS_NO_DISCOVER=1` turns it off. |
 | **Web Browsers** | Cache, cookies & site data, history, sessions — Chrome, Chromium, Brave, Edge, Vivaldi, Opera, Arc, Firefox, LibreWolf, Zen, Safari |
 | **Applications / Games** | Slack, Discord, Teams, Signal, Spotify, Zoom, Telegram, Office, Adobe, JetBrains logs · Steam shader cache, Epic, Lutris/Heroic, Wine, GPU shader caches |
 | **Installers & Backups** | Installer files in `~/Downloads`, old *Install macOS* apps, iOS/iPadOS firmware & device backups, Mail downloads |
