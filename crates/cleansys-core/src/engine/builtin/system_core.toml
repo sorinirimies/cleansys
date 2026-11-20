@@ -70,7 +70,7 @@ os = ["linux"]
 requires_root = true
 [[cleaner.action]]
 type = "delete"
-paths = ["/tmp", "/var/tmp"]
+paths = ["/tmp/*", "/var/tmp/*"]
 files_only = true
 min_age_days = 1
 not_path_regex = "/(systemd-private-|\\.X11-unix|\\.ICE-unix|\\.font-unix)"
