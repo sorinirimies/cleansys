@@ -248,20 +248,12 @@ impl CleanSysGui {
 
     /// Number of ticked cleaners in a menu entry.
     pub fn selected_count_in_scope(&self, scope: cleansys_core::Scope) -> usize {
-        scope
-            .categories(&self.categories)
-            .into_iter()
-            .map(|c| self.selected_count_in(c))
-            .sum()
+        scope.selected_count(&self.categories)
     }
 
     /// Tick or untick every cleaner of a menu entry.
     pub fn set_scope_selected(&mut self, scope: cleansys_core::Scope, on: bool) {
-        for ci in scope.categories(&self.categories) {
-            for item in &mut self.categories[ci].items {
-                item.selected = on;
-            }
-        }
+        scope.set_selected(&mut self.categories, on, true);
         self.board.sync_all_entries_to_items(&self.categories);
     }
 

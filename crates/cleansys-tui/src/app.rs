@@ -992,21 +992,13 @@ impl App {
 
     /// Select every item across every category (not just the active tab).
     pub fn select_all_everywhere(&mut self) {
-        for category in &mut self.categories {
-            for item in &mut category.items {
-                item.selected = true;
-            }
-        }
+        cleansys_core::scope::set_all_selected(&mut self.categories, true, true);
         self.board.sync_all_entries_to_items(&self.categories);
     }
 
     /// Deselect every item across every category (not just the active tab).
     pub fn deselect_all_everywhere(&mut self) {
-        for category in &mut self.categories {
-            for item in &mut category.items {
-                item.selected = false;
-            }
-        }
+        cleansys_core::scope::set_all_selected(&mut self.categories, false, true);
         self.board.sync_all_entries_to_items(&self.categories);
     }
 

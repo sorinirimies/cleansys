@@ -65,6 +65,35 @@ impl Scope {
         }
     }
 
+    /// Number of ticked cleaners in this entry.
+    pub fn selected_count(self, categories: &[CleanerCategory]) -> usize {
+        self.categories(categories)
+            .into_iter()
+            .map(|ci| categories[ci].items.iter().filter(|i| i.selected).count())
+            .sum()
+    }
+
+    /// Tick or untick every cleaner of this entry. Root cleaners are left alone unless
+    /// `can_root` (a front-end that asks for the password later passes `true`).
+    /// Returns how many cleaners changed.
+    pub fn set_selected(
+        self,
+        categories: &mut [CleanerCategory],
+        on: bool,
+        can_root: bool,
+    ) -> usize {
+        let mut changed = 0;
+        for ci in self.categories(categories) {
+            for item in &mut categories[ci].items {
+                if (can_root || !item.requires_root) && item.selected != on {
+                    item.selected = on;
+                    changed += 1;
+                }
+            }
+        }
+        changed
+    }
+
     /// Is this entry on the system (root) side?
     pub fn is_system(self, categories: &[CleanerCategory]) -> bool {
         match self {
@@ -118,6 +147,14 @@ impl ScanBoard {
             sum += self.category_bytes_when_done(ci)?;
         }
         Some(sum)
+    }
+}
+
+/// Tick or untick every cleaner of every category (same root rule as
+/// [`Scope::set_selected`]).
+pub fn set_all_selected(categories: &mut [CleanerCategory], on: bool, can_root: bool) {
+    for system in [false, true] {
+        Scope::All { system }.set_selected(categories, on, can_root);
     }
 }
 
@@ -239,5 +276,28 @@ mod tests {
             b.scope_bytes_when_done(&c, Scope::All { system: true }),
             None
         );
+    }
+
+    #[test]
+    fn selection_counts_and_sets_per_scope_and_respects_root() {
+        let mut cats = vec![
+            cat("A", &["a1", "a2"]),
+            cat("B", &["b1"]),
+            cat("Sys", &["s1"]),
+        ];
+        cats[2].items[0].requires_root = true;
+        let all_user = Scope::All { system: false };
+        assert_eq!(all_user.selected_count(&cats), 0);
+        assert_eq!(all_user.set_selected(&mut cats, true, false), 3);
+        assert_eq!(all_user.selected_count(&cats), 3);
+        // Setting again changes nothing.
+        assert_eq!(all_user.set_selected(&mut cats, true, false), 0);
+        // Root cleaners need `can_root`.
+        let sys = Scope::Category(2);
+        assert_eq!(sys.set_selected(&mut cats, true, false), 0);
+        assert_eq!(sys.set_selected(&mut cats, true, true), 1);
+        set_all_selected(&mut cats, false, true);
+        assert_eq!(Scope::Category(0).selected_count(&cats), 0);
+        assert_eq!(sys.selected_count(&cats), 0);
     }
 }

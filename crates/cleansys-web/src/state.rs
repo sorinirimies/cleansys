@@ -422,10 +422,8 @@ impl Shared {
     /// Untick everything.
     pub fn select_none(&self) {
         let mut g = self.lock();
-        for item in g.categories.iter_mut().flat_map(|c| c.items.iter_mut()) {
-            item.selected = false;
-        }
         let g = &mut *g;
+        cleansys_core::scope::set_all_selected(&mut g.categories, false, true);
         g.board.sync_all_entries_to_items(&g.categories);
     }
 
@@ -433,16 +431,8 @@ impl Shared {
     pub fn set_category(&self, category: usize, on: bool) {
         let mut g = self.lock();
         let can_root = g.is_root || g.elevation_allowed;
-        let scope = scope_for(&g.categories, category);
-        for ci in scope
-            .map(|s| s.categories(&g.categories))
-            .unwrap_or_default()
-        {
-            for item in &mut g.categories[ci].items {
-                if !item.requires_root || can_root {
-                    item.selected = on;
-                }
-            }
+        if let Some(scope) = scope_for(&g.categories, category) {
+            scope.set_selected(&mut g.categories, on, can_root);
         }
         let g = &mut *g;
         g.board.sync_all_entries_to_items(&g.categories);
