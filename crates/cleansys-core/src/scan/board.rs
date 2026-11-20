@@ -1,6 +1,6 @@
 use std::collections::HashSet;
 
-use super::*;
+use super::{EntryState, ScanBoard, ScanInfo};
 use crate::model::CleanerCategory;
 
 impl ScanBoard {
@@ -143,7 +143,9 @@ impl ScanBoard {
         self.interrupted = false;
         self.skipped.clear();
         for row in &mut self.info {
-            row.iter_mut().for_each(|s| *s = None);
+            for s in row.iter_mut() {
+                *s = None;
+            }
         }
         self.total = total;
         self.pending = total;

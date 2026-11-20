@@ -30,7 +30,7 @@ pub fn clamp_log_height(height: f32, window_height: f32) -> f32 {
     height.clamp(LOG_MIN_HEIGHT, max).round()
 }
 
-/// Top-level state for the CleanSys GUI application.
+/// Top-level state for the `CleanSys` GUI application.
 #[derive(Debug)]
 pub struct CleanSysGui {
     /// Cleaner categories and items (shared domain model from `cleansys-core`).
@@ -368,8 +368,7 @@ impl CleanSysGui {
     pub fn selected_count_in(&self, cat_idx: usize) -> usize {
         self.categories
             .get(cat_idx)
-            .map(|c| c.items.iter().filter(|i| i.selected).count())
-            .unwrap_or(0)
+            .map_or(0, |c| c.items.iter().filter(|i| i.selected).count())
     }
 
     /// Can root cleaners run right now: the process is root, or sudo was authenticated.
@@ -570,7 +569,7 @@ mod tests {
         assert!(state.categories.len() >= 2);
         assert_eq!(state.active_tab, 0);
         assert_eq!(state.selected_count(), 0);
-        assert!(state.logs.is_empty());
+        assert_eq!(state.logs, [] as [std::string::String; 0]);
         assert_eq!(state.total_bytes_cleaned, 0);
         assert!(!state.is_running);
         assert!(!state.needs_password);

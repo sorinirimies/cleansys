@@ -655,8 +655,7 @@ fn clean_homebrew_cache(opts: RunOptions) -> Result<CleaningResult> {
     if Command::new("which")
         .arg("brew")
         .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+        .is_ok_and(|o| o.status.success())
     {
         let cache_dir_output = Command::new("brew").arg("--cache").output()?;
         let cache_dir = String::from_utf8_lossy(&cache_dir_output.stdout)
@@ -757,8 +756,7 @@ fn clean_ios_simulator_caches(opts: RunOptions) -> Result<CleaningResult> {
     if !Command::new("which")
         .arg("xcrun")
         .output()
-        .map(|o| o.status.success())
-        .unwrap_or(false)
+        .is_ok_and(|o| o.status.success())
     {
         debug!("xcrun not found — skipping iOS Simulator cache cleaner");
         return Ok(result);
@@ -819,7 +817,7 @@ fn clean_system_logs(opts: RunOptions) -> Result<CleaningResult> {
                 let file_path = entry.path();
                 let filename = file_path.file_name().unwrap_or_default().to_string_lossy();
                 if file_path.is_file() && (filename.ends_with(".gz") || filename.contains(".0")) {
-                    size_to_clean += std::fs::metadata(&file_path).map(|m| m.len()).unwrap_or(0);
+                    size_to_clean += std::fs::metadata(&file_path).map_or(0, |m| m.len());
                 }
             }
         }

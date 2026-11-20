@@ -79,7 +79,7 @@ pub struct RunSummary {
 /// Cap on activity-log lines kept in memory.
 const MAX_LOG_LINES: usize = 500;
 
-/// Type alias for pending operations: (category_index, item_index, name, function, requires_root)
+/// Type alias for pending operations: (`category_index`, `item_index`, name, function, `requires_root`)
 pub type PendingOperation = (usize, usize, String, CleanerFn, bool);
 
 // `Status`, `CleanerItem`, and `CleanerCategory` now live in `cleansys-core`
@@ -601,7 +601,7 @@ impl App {
         self.apply_theme_index(s.theme_index());
         self.hide_empty = s.hide_empty();
         self.confirmation_mode = s.confirm_before_run();
-        self.disabled_cleaners = s.disabled_cleaners.clone();
+        self.disabled_cleaners.clone_from(&s.disabled_cleaners);
         self.detect_apps = s.detect_app_caches();
     }
 

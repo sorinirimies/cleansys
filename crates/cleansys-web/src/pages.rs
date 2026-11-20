@@ -354,7 +354,7 @@ async fn confirm(cx: &Cx) -> Result<impl View> {
                                     if i.risk == cleansys_core::Risk::Moderate { " " <span class="badge mod">"MODERATE"</span> }
                                     if i.risk == cleansys_core::Risk::Caution { " " <span class="badge caut">"CAUTION"</span> }
                                 </td>
-                                <td class="num">(i.scan.as_ref().map(|s| fmt(s.bytes)).unwrap_or_default())</td>
+                                <td class="num">(i.scan.as_ref().map_or_default(|s| fmt(s.bytes)))</td>
                             </tr>
                         }
                     </table>
@@ -468,7 +468,7 @@ async fn progress(cx: &Cx) -> Result<impl View> {
     let running = run.phase == Phase::Running;
     let pct = (run.done * 100).checked_div(run.total).unwrap_or(0);
     Ok(view! {
-        document(refresh: if running { 1 } else { 0 }, theme: theme_idx, title: "Cleaning — CleanSys".to_string(),
+        document(refresh: u32::from(running), theme: theme_idx, title: "Cleaning — CleanSys".to_string(),
             <header class="top">
                 <h1>if running { "⏳ Cleaning…" } else if run.phase == Phase::Done { "✓ Done" } else { "Nothing running" }</h1>
                 <span class="grow"></span>

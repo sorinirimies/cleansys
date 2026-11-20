@@ -1,4 +1,4 @@
-//! CleanSys web — the same cleaners, sizes, scheduler and safety rules as the TUI and
+//! `CleanSys` web — the same cleaners, sizes, scheduler and safety rules as the TUI and
 //! GUI, as a server-rendered local web UI built with
 //! [Topcoat](https://github.com/tokio-rs/topcoat).
 //!

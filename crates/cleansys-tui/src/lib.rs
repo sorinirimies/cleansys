@@ -1,9 +1,9 @@
 //! # cleansys
 //!
-//! Ratatui-based terminal user interface and CLI for CleanSys. Published to
+//! Ratatui-based terminal user interface and CLI for `CleanSys`. Published to
 //! crates.io as `cleansys` (crate directory: `cleansys-tui`).
 //!
-//! Ratatui-based terminal user interface and CLI for CleanSys.
+//! Ratatui-based terminal user interface and CLI for `CleanSys`.
 //!
 //! Shared domain logic (cleaners, permission checks, formatting) lives in
 //! [`cleansys_core`]; this crate is only responsible for rendering and

@@ -178,8 +178,8 @@ fn sort_by_order(categories: &mut [CleanerCategory], order: &[&str]) {
 fn builtin_category(cleaner: &str, root: bool) -> &'static str {
     match (root, cleaner) {
         (_, "Browser Caches") => "Web Browsers",
-        (_, "Homebrew Cache" | "Xcode Derived Data" | "iOS Simulator Caches") => "Developer Caches",
-        (false, "Package Manager Caches") => "Developer Caches",
+        (_, "Homebrew Cache" | "Xcode Derived Data" | "iOS Simulator Caches")
+        | (false, "Package Manager Caches") => "Developer Caches",
         (true, "Package Manager Caches" | "Old Kernels") => "Package Managers",
         (true, "System Logs" | "Crash Reports") => "System Logs & Dumps",
         (true, "Windows Update Cache") => "Updates & Snapshots",

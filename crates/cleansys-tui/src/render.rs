@@ -300,7 +300,7 @@ fn render_options(f: &mut Frame, app: &App, area: Rect) {
                 option_row(
                     "[ ]",
                     "idle days",
-                    val(cleansys_core::engine::config::min_age_label(app.min_age_days).to_string()),
+                    val(cleansys_core::engine::config::min_age_label(app.min_age_days).clone()),
                     w,
                 ),
                 option_row("r", "recommended", val("›".into()), w),
@@ -698,7 +698,7 @@ fn clip_str(s: &str, max: usize) -> String {
 }
 
 /// Spans cut to at most `max` columns in total; the span that does not fit ends in `…`.
-fn clip_spans<'a>(spans: Vec<Span<'a>>, max: usize) -> Vec<Span<'a>> {
+fn clip_spans(spans: Vec<Span<'_>>, max: usize) -> Vec<Span<'_>> {
     let total: usize = spans.iter().map(Span::width).sum();
     if total <= max {
         return spans;
@@ -1035,8 +1035,7 @@ fn render_cleaner_pane(f: &mut Frame, app: &mut App, area: Rect, show_category_b
         let pos = visible
             .iter()
             .position(|i| *i == app.category_index)
-            .map(|p| p + 1)
-            .unwrap_or(1);
+            .map_or(1, |p| p + 1);
         let size = cur
             .and_then(|s| app.board.scope_bytes_when_done(&app.categories, s))
             .filter(|b| *b > 0)
@@ -1291,7 +1290,7 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
     {
         let rows = entry_rows(app, ec, ei, inner_w);
         let n = rows.len();
-        items.splice(p + 1..p + 1, rows);
+        items.splice((p + 1)..=p, rows);
         display_sel = match (app.entry_cursor, display_sel) {
             (Some(k), _) => Some(p + 1 + k.min(n.saturating_sub(1))),
             (None, Some(s)) if s > p => Some(s + n),
@@ -2375,10 +2374,10 @@ fn render_settings_tab(f: &mut Frame, app: &mut App, area: Rect) {
                         ),
                     ]),
                     _ => Line::from(Span::styled(
-                        if kind != InputKind::Exclude {
-                            "  ＋ Add a folder…"
-                        } else {
+                        if kind == InputKind::Exclude {
                             "  ＋ Add a pattern…"
+                        } else {
+                            "  ＋ Add a folder…"
                         },
                         Style::default().fg(crate::theme::th().success),
                     )),

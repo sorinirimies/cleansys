@@ -156,13 +156,13 @@ mod tests {
     fn drain(h: &RunHandle) -> Vec<RunMsg> {
         let mut out = Vec::new();
         loop {
-            match h.rx.recv_timeout(Duration::from_secs(5)) {
-                Ok(RunMsg::Done) => {
-                    out.push(RunMsg::Done);
-                    return out;
-                }
-                Ok(m) => out.push(m),
-                Err(_) => panic!("worker did not finish"),
+            let m =
+                h.rx.recv_timeout(Duration::from_secs(5))
+                    .expect("worker did not finish");
+            let done = matches!(m, RunMsg::Done);
+            out.push(m);
+            if done {
+                return out;
             }
         }
     }

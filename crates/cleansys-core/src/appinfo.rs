@@ -54,15 +54,13 @@ pub fn platform() -> String {
 /// Where the engine settings (`engine.json`) live.
 pub fn engine_config_path() -> String {
     crate::engine::EngineConfig::path()
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| "(unknown)".into())
+        .map_or_else(|_| "(unknown)".into(), |p| p.display().to_string())
 }
 
 /// Where the UI settings (`settings.json`) live.
 pub fn settings_path() -> String {
     crate::settings::settings_json_path()
-        .map(|p| p.display().to_string())
-        .unwrap_or_else(|_| "(unknown)".into())
+        .map_or_else(|_| "(unknown)".into(), |p| p.display().to_string())
 }
 
 /// Label/value rows for the About page. Values that are links are listed in [`is_link`].

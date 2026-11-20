@@ -62,7 +62,7 @@ fn walk(path: &Path, depth: usize, top: usize, visited: &AtomicUsize) -> Node {
     };
     let entries: Vec<fs::DirEntry> = rd
         .flatten()
-        .filter(|e| e.file_type().map(|t| !t.is_dir()).unwrap_or(true) || same_device(here, e))
+        .filter(|e| e.file_type().map_or(true, |t| !t.is_dir()) || same_device(here, e))
         .collect();
     let mut kids: Vec<Node> = entries
         .par_iter()

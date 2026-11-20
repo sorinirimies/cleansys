@@ -1,5 +1,5 @@
 use anyhow::{Context, Result};
-use colored::*;
+use colored::Colorize;
 use std::io::{self, Write};
 use std::process::Command;
 
@@ -268,19 +268,20 @@ pub fn disk_usage() -> Option<DiskUsage> {
     {
         use std::ffi::CString;
         use std::os::unix::ffi::OsStrExt;
-        let path = directories::UserDirs::new()
-            .map(|d| d.home_dir().to_path_buf())
-            .unwrap_or_else(|| std::path::PathBuf::from("/"));
+        let path = directories::UserDirs::new().map_or_else(
+            || std::path::PathBuf::from("/"),
+            |d| d.home_dir().to_path_buf(),
+        );
         let c = CString::new(path.as_os_str().as_bytes()).ok()?;
         // SAFETY: `c` is a valid NUL-terminated path and `st` is a properly sized out-buffer.
         let mut st: libc::statvfs = unsafe { std::mem::zeroed() };
-        if unsafe { libc::statvfs(c.as_ptr(), &mut st) } != 0 {
+        if unsafe { libc::statvfs(c.as_ptr(), &raw mut st) } != 0 {
             return None;
         }
         let frag = st.f_frsize as u64;
         Some(DiskUsage {
-            total: (st.f_blocks as u64).saturating_mul(frag),
-            free: (st.f_bavail as u64).saturating_mul(frag),
+            total: u64::from(st.f_blocks).saturating_mul(frag),
+            free: u64::from(st.f_bavail).saturating_mul(frag),
         })
     }
     #[cfg(not(unix))]
@@ -383,12 +384,10 @@ pub fn scan_thread_count() -> usize {
                 .and_then(|s| s.scan_threads)
         })
         .filter(|n| *n > 0)
-        .map(|n| n.min(256))
-        .unwrap_or_else(|| {
-            std::thread::available_parallelism()
-                .map(|n| (n.get() * 2).clamp(4, 32))
-                .unwrap_or(8)
-        })
+        .map_or_else(
+            || std::thread::available_parallelism().map_or(8, |n| (n.get() * 2).clamp(4, 32)),
+            |n| n.min(256),
+        )
 }
 
 /// The single pool every scan runs on: cleaner jobs *and* the directory walks inside
@@ -467,9 +466,8 @@ fn remove_tree(path: &std::path::Path, depth: u32) -> std::io::Result<()> {
 }
 
 fn dir_size(path: &std::path::Path, depth: u32, max_depth: u32) -> u64 {
-    let metadata = match std::fs::symlink_metadata(path) {
-        Ok(m) => m,
-        Err(_) => return 0,
+    let Ok(metadata) = std::fs::symlink_metadata(path) else {
+        return 0;
     };
 
     if metadata.file_type().is_symlink() {
@@ -510,7 +508,7 @@ fn dir_total(path: &std::path::Path, depth: u32, max_depth: u32) -> u64 {
         if ft.is_symlink() {
             0
         } else if ft.is_file() {
-            entry.metadata().map(|m| m.len()).unwrap_or(0)
+            entry.metadata().map_or(0, |m| m.len())
         } else if ft.is_dir() {
             dir_total(&entry.path(), depth + 1, max_depth)
         } else {

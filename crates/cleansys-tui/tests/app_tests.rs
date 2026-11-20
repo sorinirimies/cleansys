@@ -560,7 +560,7 @@ fn run_marks_success_and_failure_and_builds_a_summary() {
 fn starting_a_run_clears_the_previous_summary_and_log() {
     let mut app = app_with_categories();
     app.confirmation_mode = false;
-    app.run_summary = Some(Default::default());
+    app.run_summary = Some(cleansys_tui::app::RunSummary::default());
     app.log("old line");
     app.categories[0].items[0].selected = true;
     app.request_run().unwrap();
@@ -620,7 +620,7 @@ fn q_cancels_a_running_clean_instead_of_quitting() {
 #[test]
 fn esc_dismisses_the_summary_and_l_toggles_the_log() {
     let mut app = app_with_categories();
-    app.run_summary = Some(Default::default());
+    app.run_summary = Some(cleansys_tui::app::RunSummary::default());
     key(&mut app, KeyCode::Esc);
     assert!(app.run_summary.is_none());
 
@@ -816,7 +816,7 @@ fn adding_and_removing_folders_and_patterns() {
         app.settings_input.is_some(),
         "invalid input keeps the field open"
     );
-    assert!(!app.settings_message.is_empty());
+    assert_ne!(app.settings_message, "");
     for _ in 0.."/definitely/not/here".len() {
         key(&mut app, KeyCode::Backspace);
     }

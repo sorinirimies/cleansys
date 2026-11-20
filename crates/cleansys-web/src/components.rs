@@ -238,7 +238,7 @@ pub(crate) async fn item_row(
                 if let Some(top) = size.and_then(|s| s.top_path.clone()) {
                     <span class="path">"📁 " (top)</span>
                 }
-                <span class=(format!("size {}", match size { Some(s) if s.bytes > 0 => size_class(s.bytes), Some(_) => "none", None => "none" }))>
+                <span class=(format!("size {}", match size { Some(s) if s.bytes > 0 => size_class(s.bytes), _ => "none" }))>
                     if let Some(s) = size {
                         if s.error.is_some() {
                             <span class="err">"scan failed"</span>

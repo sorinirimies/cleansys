@@ -193,8 +193,8 @@ fn scan_dir(dir: &Path, q: &Query) -> (Vec<Entry>, Vec<PathBuf>) {
             && !name.starts_with('.')
             && !SKIP_DESCENT.contains(&name)
             && !APP_TREES.contains(&name)
-            && !name.ends_with(".app")
-            && !(name == "mod" && dir.file_name().is_some_and(|d| d == "pkg")) // Go module cache
+            && !name.to_ascii_lowercase().ends_with(".app")
+            && (name != "mod" || dir.file_name().is_none_or(|d| d != "pkg")) // Go module cache
             && same_device(here, &e)
         {
             children.push(e.path());
@@ -272,11 +272,7 @@ fn unique_inodes(paths: Vec<PathBuf>) -> Vec<PathBuf> {
     let mut seen = std::collections::HashSet::new();
     paths
         .into_iter()
-        .filter(|p| {
-            fs::symlink_metadata(p)
-                .map(|m| seen.insert((m.dev(), m.ino())))
-                .unwrap_or(false)
-        })
+        .filter(|p| fs::symlink_metadata(p).is_ok_and(|m| seen.insert((m.dev(), m.ino()))))
         .collect()
 }
 

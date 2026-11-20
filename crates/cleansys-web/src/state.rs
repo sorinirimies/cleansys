@@ -468,16 +468,12 @@ impl Shared {
                     selected: it.selected,
                     scan: g.board.get(ci, ii).cloned(),
                     scan_off: g.disabled.contains(&it.id),
-                    entry_on: g
-                        .board
-                        .get(ci, ii)
-                        .map(|s| {
-                            s.entries
-                                .iter()
-                                .map(|e| g.board.entry_selected(&e.path))
-                                .collect()
-                        })
-                        .unwrap_or_default(),
+                    entry_on: g.board.get(ci, ii).map_or_default(|s| {
+                        s.entries
+                            .iter()
+                            .map(|e| g.board.entry_selected(&e.path))
+                            .collect()
+                    }),
                     entry_state: g.board.entry_state(ci, ii),
                     sel_bytes: g.board.item_selected_bytes(ci, ii),
                     selectable: !it.requires_root || g.is_root || g.elevation_allowed,
@@ -965,7 +961,7 @@ mod tests {
         // `?cat=3` lists the whole user side, `?cat=4` the system side.
         assert_eq!(s.visible(3, "", false), vec![(0, 0), (1, 0), (1, 1)]);
         assert_eq!(s.visible(4, "", false), vec![(2, 0)]);
-        assert!(s.visible(9, "", false).is_empty());
+        assert_eq!(s.visible(9, "", false), [] as [(usize, usize); 0]);
         s.set_category(3, true);
         let snap = s.snapshot();
         assert_eq!(snap.areas[0].ticked, 3);

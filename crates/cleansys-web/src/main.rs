@@ -43,16 +43,14 @@ async fn main() -> std::io::Result<()> {
     if let Some(name) = args.theme {
         if cleansys_core::is_system_name(&name) {
             cleansys_web::theme::save_index(cleansys_web::theme::SYSTEM_INDEX);
+        } else if let Some(i) = cleansys_web::theme::names()
+            .iter()
+            .position(|n| n.eq_ignore_ascii_case(&name))
+        {
+            cleansys_web::theme::save_index(i);
         } else {
-            if let Some(i) = cleansys_web::theme::names()
-                .iter()
-                .position(|n| n.eq_ignore_ascii_case(&name))
-            {
-                cleansys_web::theme::save_index(i)
-            } else {
-                eprintln!("unknown theme '{name}' (try --list-themes)");
-                std::process::exit(2);
-            }
+            eprintln!("unknown theme '{name}' (try --list-themes)");
+            std::process::exit(2);
         }
     }
     serve(ServerOptions {

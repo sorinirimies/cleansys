@@ -349,9 +349,7 @@ pub(super) fn normalize_roots(mut roots: Vec<PathBuf>) -> Vec<PathBuf> {
 #[cfg(unix)]
 fn dir_identity(p: &std::path::Path) -> (u64, u64) {
     use std::os::unix::fs::MetadataExt;
-    std::fs::metadata(p)
-        .map(|m| (m.dev(), m.ino()))
-        .unwrap_or((0, 0))
+    std::fs::metadata(p).map_or((0, 0), |m| (m.dev(), m.ino()))
 }
 
 #[cfg(not(unix))]

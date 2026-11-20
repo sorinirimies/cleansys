@@ -167,7 +167,7 @@ enum ScheduleCmd {
 enum ConfigCmd {
     /// Print the current engine configuration
     Show,
-    /// Add a directory to scan for projects (target/, build/, node_modules/ ...)
+    /// Add a directory to scan for projects (target/, build/, `node_modules`/ ...)
     AddRoot { path: String },
     /// Stop scanning a directory
     RemoveRoot { path: String },

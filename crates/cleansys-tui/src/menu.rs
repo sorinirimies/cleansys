@@ -1,5 +1,5 @@
 use anyhow::Result;
-use colored::*;
+use colored::Colorize;
 use std::collections::HashMap;
 use std::io::{self, Write};
 
@@ -70,10 +70,10 @@ impl Menu {
         println!(
             "0: [{}] Select all{}",
             "ALL".green(),
-            if !self.is_root {
-                " (user cleaners only)"
-            } else {
+            if self.is_root {
                 ""
+            } else {
+                " (user cleaners only)"
             }
         );
 

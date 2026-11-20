@@ -115,7 +115,7 @@ pub fn select(categories: Vec<CleanerCategory>, sel: &Selection) -> Result<Vec<J
     let settings = if sel.saved {
         crate::load_settings().unwrap_or_default()
     } else {
-        Default::default()
+        crate::Settings::default()
     };
     select_with(categories, sel, &settings)
 }
@@ -335,8 +335,7 @@ fn totals(outcomes: &[Outcome]) -> LastRun {
     LastRun {
         at: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0),
+            .map_or(0, |d| d.as_secs()),
         bytes_freed: outcomes.iter().map(|o| o.bytes).sum(),
         items: outcomes.iter().map(|o| o.items.len()).sum(),
         cleaners_run: outcomes
@@ -499,7 +498,7 @@ pub fn run_scheduled() -> Result<u64> {
             OutcomeStatus::Failed(w) => {
                 print_error(&format!("{}: {w}", o.name));
             }
-            _ => {}
+            OutcomeStatus::Ok => {}
         }
     }
     let mut last = totals(&outcomes);

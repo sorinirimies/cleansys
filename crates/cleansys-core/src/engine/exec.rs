@@ -633,9 +633,7 @@ pub fn find_project_artifacts(
         .flat_map_iter(|d| {
             artifacts.iter().filter_map(move |art| {
                 let candidate = d.path.join(art);
-                let is_real_dir = fs::symlink_metadata(&candidate)
-                    .map(|m| m.is_dir())
-                    .unwrap_or(false);
+                let is_real_dir = fs::symlink_metadata(&candidate).is_ok_and(|m| m.is_dir());
                 (is_real_dir && is_stale(d, &candidate, min_age))
                     .then(|| (d.path.clone(), candidate))
             })
@@ -671,8 +669,7 @@ fn is_stale(project: &DirFiles, artifact: &Path, min_age: Duration) -> bool {
     }
     SystemTime::now()
         .duration_since(newest)
-        .map(|age| age >= min_age)
-        .unwrap_or(false)
+        .is_ok_and(|age| age >= min_age)
 }
 
 #[cfg(test)]

@@ -222,8 +222,7 @@ impl LastRun {
     pub fn ago(&self) -> String {
         let now = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
-            .map(|d| d.as_secs())
-            .unwrap_or(0);
+            .map_or(0, |d| d.as_secs());
         let s = now.saturating_sub(self.at);
         match s {
             0..=59 => "just now".into(),

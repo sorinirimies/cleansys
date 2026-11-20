@@ -1,7 +1,7 @@
 //! # cleansys-core
 //!
 //! Shared, framework-free logic reused by both the `cleansys-tui` (Ratatui)
-//! and `cleansys-gui` (Iced) front-ends of CleanSys.
+//! and `cleansys-gui` (Iced) front-ends of `CleanSys`.
 //!
 //! | Module | What lives here |
 //! |--------|-----------------|

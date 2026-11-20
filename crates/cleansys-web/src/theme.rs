@@ -40,10 +40,11 @@ fn css_for(index: usize) -> String {
         ("warn", t.warning),
         ("err", t.error),
     ];
-    let body: String = vars
-        .iter()
-        .map(|(k, c)| format!("--{k}:{};", hex(*c)))
-        .collect();
+    let body: String = vars.iter().fold(String::new(), |mut acc, (k, c)| {
+        use std::fmt::Write;
+        let _ = write!(acc, "--{k}:{};", hex(*c));
+        acc
+    });
     format!(
         ":root{{color-scheme:{};{body}}}",
         if t.is_dark { "dark" } else { "light" }

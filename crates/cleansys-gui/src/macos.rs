@@ -64,7 +64,7 @@ pub fn install_window_menu() -> bool {
 /// Set the Dock and app-switcher icon from `png`. A `.app` bundle shows its `.icns`
 /// before launch already; a bare binary (`cargo install`, `cargo run`) only shows an
 /// icon once this ran. Returns `false` when it could not (not on the main thread, or
-/// `png` is no image AppKit can read).
+/// `png` is no image `AppKit` can read).
 #[allow(unsafe_code, reason = "AppKit calls from the main thread")]
 pub fn set_dock_icon(png: &[u8]) -> bool {
     let Some(mtm) = MainThreadMarker::new() else {

@@ -63,7 +63,7 @@ impl UsageView {
 
     fn measure(&mut self, path: PathBuf) {
         let (tx, rx) = channel();
-        self.path = path.clone();
+        self.path.clone_from(&path);
         self.node = None;
         self.cursor = 0;
         self.rx = Some(rx);
@@ -192,7 +192,7 @@ impl UsageView {
     /// Back to the folder above.
     pub fn ascend(&mut self) {
         if let Some((node, cursor)) = self.stack.pop() {
-            self.path = node.path.clone();
+            self.path.clone_from(&node.path);
             self.node = Some(node);
             self.cursor = cursor;
             self.rx = None;

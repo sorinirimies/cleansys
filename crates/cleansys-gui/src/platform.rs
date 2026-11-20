@@ -23,8 +23,8 @@ pub fn notify_completion(summary: &str) {
 /// macOS: pick the sending application explicitly, exactly once.
 ///
 /// If no application is set, `mac-notification-sys` resolves one by running
-/// the AppleScript `get id of application "use_default"`. No such app exists,
-/// so macOS pops up a "Where is use_default? / Choose Application" file
+/// the `AppleScript` `get id of application "use_default"`. No such app exists,
+/// so macOS pops up a "Where is `use_default`? / Choose Application" file
 /// picker after every cleaning run. Setting a real bundle id up front skips
 /// that lookup entirely.
 #[cfg(target_os = "macos")]

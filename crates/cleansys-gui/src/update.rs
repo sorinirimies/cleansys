@@ -924,7 +924,7 @@ mod tests {
         let _ = update(&mut state, Message::ToggleExpand(0, 0));
         assert_eq!(state.expanded, vec![(0, 0)]);
         let _ = update(&mut state, Message::ToggleExpand(0, 0));
-        assert!(state.expanded.is_empty());
+        assert_eq!(state.expanded, [] as [(usize, usize); 0]);
 
         assert!(state.board.entry_selected("/x/y"));
         let _ = update(&mut state, Message::ToggleEntry("/x/y".into()));
@@ -986,7 +986,7 @@ mod tests {
         );
         let _ = update(&mut state, Message::AddRoot);
         assert_eq!(state.engine_cfg.scan_roots.len(), 1);
-        assert!(!state.settings_message.is_empty());
+        assert_ne!(state.settings_message, "");
 
         let _ = update(&mut state, Message::NewRootChanged(path.clone()));
         let _ = update(&mut state, Message::AddRoot);
@@ -1005,7 +1005,7 @@ mod tests {
         let _ = update(&mut state, Message::AddExclude);
         assert_eq!(state.engine_cfg.exclude.len(), 1, "invalid glob refused");
         let _ = update(&mut state, Message::RemoveExclude(0));
-        assert!(state.engine_cfg.exclude.is_empty());
+        assert_eq!(state.engine_cfg.exclude, [] as [std::string::String; 0]);
     }
 
     #[test]
@@ -1167,9 +1167,9 @@ mod tests {
     fn clear_log_empties_the_activity_log() {
         let mut state = CleanSysGui::new();
         state.push_log("something happened");
-        assert!(!state.logs.is_empty());
+        assert_ne!(state.logs, [] as [std::string::String; 0]);
         let _ = update(&mut state, Message::ClearLog);
-        assert!(state.logs.is_empty());
+        assert_eq!(state.logs, [] as [std::string::String; 0]);
     }
 
     fn first_index(state: &CleanSysGui, root: bool) -> usize {
@@ -1359,7 +1359,7 @@ mod tests {
         let mut state = CleanSysGui::new();
         state.push_log("hello");
         let _ = update(&mut state, Message::ClearLog);
-        assert!(state.logs.is_empty());
+        assert_eq!(state.logs, [] as [std::string::String; 0]);
     }
 
     #[test]
@@ -1457,7 +1457,7 @@ mod tests {
         let _ = update(&mut state, Message::AdminNoticeAcknowledged);
 
         assert!(!state.needs_admin_notice);
-        assert!(state.pending_root_ops.is_empty());
+        assert_eq!(state.pending_root_ops, [] as [(usize, usize); 0]);
     }
 
     #[test]
@@ -1471,9 +1471,9 @@ mod tests {
         let _ = update(&mut state, Message::PasswordCancel);
 
         assert!(!state.needs_password);
-        assert!(state.password_input.is_empty());
+        assert_eq!(state.password_input, "");
         assert!(state.password_error.is_none());
-        assert!(state.pending_root_ops.is_empty());
+        assert_eq!(state.pending_root_ops, [] as [(usize, usize); 0]);
     }
 
     #[test]
@@ -1491,7 +1491,7 @@ mod tests {
         let _ = update(&mut state, Message::AuthenticationResult(false));
 
         assert!(state.password_error.is_some());
-        assert!(state.password_input.is_empty());
+        assert_eq!(state.password_input, "");
         assert!(state.needs_password);
     }
 

@@ -1346,7 +1346,7 @@ fn password_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, M
 
 /// A generic centered modal wrapper: card content on top of a full-window
 /// backdrop tinted with the theme's background colour.
-fn modal_backdrop<'a>(card: Element<'a, Message>, c: ThemeColors) -> Element<'a, Message> {
+fn modal_backdrop(card: Element<'_, Message>, c: ThemeColors) -> Element<'_, Message> {
     // The card fills the window up to a comfortable maximum and is centred,
     // so dialogs adapt to narrow windows instead of overflowing.
     container(container(card).width(Length::Fill).max_width(620))

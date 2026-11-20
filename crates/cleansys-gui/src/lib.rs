@@ -1,6 +1,6 @@
 //! # cleansys-gui
 //!
-//! Iced-based desktop GUI for CleanSys.
+//! Iced-based desktop GUI for `CleanSys`.
 //!
 //! Domain logic (cleaners, permission checks, formatting) lives in
 //! [`cleansys_core`]; this crate only owns presentation state and rendering.

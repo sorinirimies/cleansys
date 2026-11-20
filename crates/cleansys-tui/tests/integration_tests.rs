@@ -1,7 +1,7 @@
-//! Integration tests for CleanSys
+//! Integration tests for `CleanSys`
 //!
 //! These tests verify the integration between different components
-//! of the CleanSys application.
+//! of the `CleanSys` application.
 
 use assert_cmd::Command;
 use predicates::prelude::*;
