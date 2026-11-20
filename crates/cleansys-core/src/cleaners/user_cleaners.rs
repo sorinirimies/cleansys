@@ -219,8 +219,8 @@ fn clean_app_caches(opts: RunOptions) -> Result<CleaningResult> {
                 debug!("Skipping critical cache directory: {path:?}");
                 continue;
             }
-            // Apps with their own "Detected App Caches" cleaner are cleaned there.
-            if crate::engine::discover::is_discovered(&path) {
+            // Folders another cleaner owns (detected apps, browsers…) are cleaned there.
+            if crate::engine::discover::is_claimed(&path) {
                 debug!("Left to its detected cleaner: {path:?}");
                 continue;
             }

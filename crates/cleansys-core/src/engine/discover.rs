@@ -184,6 +184,18 @@ pub fn is_discovered(dir: &Path) -> bool {
         .contains(dir)
 }
 
+/// Folders the "Application Caches" sweeper must leave alone: those with a detected
+/// cleaner, and those that hold a path a declared cleaner (e.g. a browser) already
+/// deletes. Computed once per process.
+pub fn is_claimed(dir: &Path) -> bool {
+    static COVERED: std::sync::OnceLock<Vec<PathBuf>> = std::sync::OnceLock::new();
+    is_discovered(dir)
+        || COVERED
+            .get_or_init(|| covered_paths(&super::registry::load_declared()))
+            .iter()
+            .any(|p| p.starts_with(dir))
+}
+
 /// The folders the given (detected) cleaners delete.
 fn dirs_of(specs: &[CleanerSpec]) -> HashSet<PathBuf> {
     specs

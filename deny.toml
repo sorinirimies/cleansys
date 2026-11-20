@@ -7,7 +7,6 @@ ignore = [
     { id = "RUSTSEC-2026-0370", reason = "zvariant: via iced_winit → mundy and notify-rust → zbus" },
     { id = "RUSTSEC-2026-0371", reason = "zbus_names: via iced_winit → mundy and notify-rust → zbus" },
     { id = "RUSTSEC-2026-0372", reason = "zvariant_derive: via iced_winit → mundy and notify-rust → zbus" },
-    { id = "RUSTSEC-2026-0441", reason = "pin-utils: via iced → iced_futures → wasmtimer (web timers); its latest release still depends on it" },
 ]
 
 [licenses]
