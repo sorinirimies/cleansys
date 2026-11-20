@@ -88,7 +88,16 @@ pub struct Outcome {
 /// The system/root side of the UI: the built-in "System Cleaners" category
 /// and every engine category that needs root.
 fn category_is_root(c: &CleanerCategory) -> bool {
-    c.name == "System Cleaners" || c.name.ends_with(ROOT_SUFFIX)
+    crate::model::is_system_category(&c.name)
+}
+
+/// Name of the flat UI area a category belongs to.
+fn area_of(c: &CleanerCategory) -> &'static str {
+    if category_is_root(c) {
+        crate::model::SYSTEM_AREA
+    } else {
+        crate::model::USER_AREA
+    }
 }
 
 fn category_matches(c: &CleanerCategory, wanted: &str) -> bool {
@@ -133,10 +142,14 @@ fn select_with(
     }
     let mut jobs = Vec::new();
     for cat in categories {
+        let area = area_of(&cat);
         let cat_hit = sel.categories.iter().any(|w| category_matches(&cat, w));
         for item in cat.items {
             let explicit = sel.ids.contains(&item.id)
-                || (sel.saved && saved_settings.is_selected(&cat.name, &item.name));
+                // The UIs save under their flat area names, older versions under the groups.
+                || (sel.saved
+                    && (saved_settings.is_selected(&cat.name, &item.name)
+                        || saved_settings.is_selected(area, &item.name)));
             let by_cat = cat_hit && (sel.include_caution || item.risk != Risk::Caution);
             let by_all = sel.all && (sel.include_caution || item.risk != Risk::Caution);
             let by_recommended = sel.recommended

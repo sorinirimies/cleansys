@@ -227,6 +227,8 @@ pub(crate) async fn item_row(
                         } else {
                             "nothing to clean"
                         }
+                    } else if item.scan_off {
+                        "scan off"
                     } else if scanning_now {
                         spinner() " measuring…"
                     } else {
@@ -235,6 +237,11 @@ pub(crate) async fn item_row(
                 </span>
                 <noscript><button type="submit">"Toggle"</button></noscript>
             </label>
+        </form>
+        <form class="bulk" method="post" action="/toggle-scan">
+            <input type="hidden" name="id" value=(item.id.clone())>
+            <input type="hidden" name="back" value=(back_url.clone())>
+            <button type="submit" title="Include this cleaner when scanning for sizes">(if item.scan_off { "Scan: off" } else { "Scan: on" })</button>
         </form>
         if has_entries {
             <a class="more" href=(more_href) aria-expanded=(if open { "true" } else { "false" })>
@@ -291,15 +298,23 @@ pub(crate) async fn action_bar(
         <div class="bar">
             <div class="inner">
                 <div class="sum">
-                    if snap.scanning {
+                    if snap.scanning && snap.selected_count == 0 {
                         <b>spinner() " Scanning your system… " (snap.scan_done) "/" (snap.scan_total) " · " (cleansys_core::anim::percent(snap.scan_done, snap.scan_total)) "%"</b>
                         <div class="progress"><span style=(format!("width:{}%", (snap.scan_done * 100).checked_div(snap.scan_total).unwrap_or(0)))></span></div>
                     } else if snap.selected_count == 0 {
                         <b>(fmt(snap.total_bytes)) " can be freed"</b>
                         <small>"tick cleaners or press Recommended"</small>
                     } else {
-                        <b>(snap.selected_count) " selected · " (fmt(reclaim)) " to free"</b>
-                        <small>(fmt(snap.total_bytes)) " reclaimable in total"</small>
+                        if snap.scanning {
+                            <b>(snap.selected_count) " selected"</b>
+                        } else {
+                            <b>(snap.selected_count) " selected · " (fmt(reclaim)) " to free"</b>
+                        }
+                        if snap.scanning {
+                            <small>spinner() " still scanning " (snap.scan_done) "/" (snap.scan_total) " — you can clean now"</small>
+                        } else {
+                            <small>(fmt(snap.total_bytes)) " reclaimable in total"</small>
+                        }
                     }
                 </div>
                 <form method="post" action="/select">
@@ -308,11 +323,7 @@ pub(crate) async fn action_bar(
                     if !hide { <input type="hidden" name="hide" value="0"> }
                     <button name="op" value="recommended" title="Tick only the safe, user-land cleaners that have something to free"><span class="ico">"✨"</span><span class="lbl">"✨ Recommended"</span></button>
                     <button name="op" value="none" title="Untick everything"><span class="ico">"☐"</span><span class="lbl">"Select none"</span></button>
-                    if snap.scanning {
-                        <button name="op" value="rescan" disabled=("disabled") title="Scanning…"><span class="ico">spinner()</span><span class="lbl">spinner() " Rescan"</span></button>
-                    } else {
-                        <button name="op" value="rescan" title="Measure what every cleaner can free again"><span class="ico">"⟳"</span><span class="lbl">"⟳ Rescan"</span></button>
-                    }
+                    <button name="op" value="rescan" title="Measure what every cleaner can free again"><span class="ico">"⟳"</span><span class="lbl">"⟳ Rescan"</span></button>
                 </form>
                 <form method="post" action="/min-age" class="age" title="Project build output (target/, node_modules, …) is only offered when its project was untouched this long">
                     <input type="hidden" name="back" value=(back.clone())>
@@ -336,9 +347,7 @@ pub(crate) async fn action_bar(
                     </form>
                 } else {
                 <a class="btn primary" href=(if can_run { "/confirm" } else { "#" }) aria-disabled=(if can_run { "false" } else { "true" })>
-                    if can_run && snap.scanning {
-                        "🧹 Clean " (snap.selected_count) " · " spinner() " measuring…"
-                    } else if can_run {
+                    if can_run {
                         "🧹 Clean " (snap.selected_count) " · " (fmt(reclaim))
                     } else {
                         "Select cleaners"

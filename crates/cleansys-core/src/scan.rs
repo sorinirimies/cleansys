@@ -85,6 +85,10 @@ pub struct ScanBoard {
     pub total: usize,
     /// Entry paths the user unticked in the details view.
     skipped: HashSet<String>,
+    /// Cleaners the user opted out of scanning (they stay unmeasured, which is final).
+    off: HashSet<(usize, usize)>,
+    /// The scan was stopped (e.g. a clean started) before every cleaner reported.
+    interrupted: bool,
 }
 
 /// Tick state of a cleaner's entries.
@@ -107,6 +111,8 @@ impl ScanBoard {
             pending: 0,
             total: 0,
             skipped: HashSet::new(),
+            off: HashSet::new(),
+            interrupted: false,
         }
     }
 
@@ -226,6 +232,13 @@ impl ScanBoard {
 
     /// Forget all results and mark `total` jobs as pending.
     pub fn start(&mut self, total: usize) {
+        self.start_with(total, HashSet::new());
+    }
+
+    /// [`Self::start`] for a scan that leaves the cleaners in `off` (category, item) alone.
+    pub fn start_with(&mut self, total: usize, off: HashSet<(usize, usize)>) {
+        self.off = off;
+        self.interrupted = false;
         self.skipped.clear();
         for row in &mut self.info {
             row.iter_mut().for_each(|s| *s = None);
@@ -234,8 +247,12 @@ impl ScanBoard {
         self.pending = total;
     }
 
-    /// Store one result; returns `true` when it was the last pending one.
+    /// Store one result; returns `true` when it was the last pending one. A result that
+    /// arrives with no scan running (it was cancelled) is dropped and returns `false`.
     pub fn record(&mut self, cat: usize, item: usize, info: ScanInfo) -> bool {
+        if self.pending == 0 {
+            return false;
+        }
         if let Some(slot) = self.info.get_mut(cat).and_then(|r| r.get_mut(item)) {
             *slot = Some(info);
         }
@@ -261,9 +278,34 @@ impl ScanBoard {
         self.pending > 0
     }
 
-    /// A scan has run and finished.
+    /// Stop counting a running scan (its remaining results will be ignored). What was
+    /// measured so far stays usable; the board is not [`Self::complete`].
+    pub fn cancel(&mut self) {
+        if self.pending > 0 {
+            self.interrupted = true;
+        }
+        self.pending = 0;
+    }
+
+    /// A scan has run and finished (not cancelled).
     pub fn complete(&self) -> bool {
-        self.total > 0 && self.pending == 0
+        self.total > 0 && self.pending == 0 && !self.interrupted
+    }
+
+    /// The last scan was stopped before it finished.
+    pub fn was_interrupted(&self) -> bool {
+        self.interrupted
+    }
+
+    /// Is this cleaner excluded from scanning by the user's opt-out?
+    pub fn is_off(&self, cat: usize, item: usize) -> bool {
+        self.off.contains(&(cat, item))
+    }
+
+    /// Has a size to show (or failed) — i.e. it may be cleaned without waiting for the
+    /// rest of the scan.
+    pub fn is_measured(&self, cat: usize, item: usize) -> bool {
+        self.get(cat, item).is_some()
     }
 
     pub fn get(&self, cat: usize, item: usize) -> Option<&ScanInfo> {
@@ -280,9 +322,13 @@ impl ScanBoard {
 
     /// Every cleaner of the category has been measured (a partial sum would mislead).
     pub fn category_done(&self, cat: usize) -> bool {
-        self.info
-            .get(cat)
-            .is_some_and(|row| !row.is_empty() && row.iter().all(Option::is_some))
+        self.info.get(cat).is_some_and(|row| {
+            !row.is_empty()
+                && row
+                    .iter()
+                    .enumerate()
+                    .all(|(i, s)| s.is_some() || self.off.contains(&(cat, i)))
+        })
     }
 
     /// Category total, only once the whole category is measured.
@@ -428,6 +474,50 @@ where
     spawn_scan_timeout(categories, scan_timeout(), sink)
 }
 
+/// A running scan that can be stopped, e.g. when the user starts a clean.
+#[derive(Debug, Clone)]
+pub struct ScanHandle {
+    /// Scan jobs started.
+    pub total: usize,
+    cancelled: Arc<std::sync::atomic::AtomicBool>,
+}
+
+impl ScanHandle {
+    /// Jobs that have not started are skipped and results still in flight are dropped.
+    pub fn cancel(&self) {
+        self.cancelled
+            .store(true, std::sync::atomic::Ordering::SeqCst);
+    }
+}
+
+/// [`spawn_scan_with`] that leaves out cleaners `include(category, item, cleaner)` rejects
+/// (the user's opt-outs) and returns a [`ScanHandle`] to stop it.
+pub fn spawn_scan_filtered<F, I>(categories: &[CleanerCategory], include: I, sink: F) -> ScanHandle
+where
+    F: Fn(usize, usize, ScanInfo) -> bool + Send + Sync + 'static,
+    I: Fn(usize, usize, &crate::model::CleanerItem) -> bool,
+{
+    spawn_inner(categories, scan_timeout(), include, sink)
+}
+
+/// The `(category, item)` pairs of cleaners that scans leave out, per `disabled` ids.
+pub fn disabled_positions(
+    categories: &[CleanerCategory],
+    disabled: &[String],
+) -> HashSet<(usize, usize)> {
+    categories
+        .iter()
+        .enumerate()
+        .flat_map(|(ci, c)| {
+            c.items
+                .iter()
+                .enumerate()
+                .filter(|(_, i)| disabled.contains(&i.id))
+                .map(move |(ii, _)| (ci, ii))
+        })
+        .collect()
+}
+
 fn spawn_scan_timeout<F>(
     categories: &[CleanerCategory],
     timeout: std::time::Duration,
@@ -436,18 +526,28 @@ fn spawn_scan_timeout<F>(
 where
     F: Fn(usize, usize, ScanInfo) -> bool + Send + Sync + 'static,
 {
+    spawn_inner(categories, timeout, |_, _, _| true, sink).total
+}
+
+fn spawn_inner<F, I>(
+    categories: &[CleanerCategory],
+    timeout: std::time::Duration,
+    include: I,
+    sink: F,
+) -> ScanHandle
+where
+    F: Fn(usize, usize, ScanInfo) -> bool + Send + Sync + 'static,
+    I: Fn(usize, usize, &crate::model::CleanerItem) -> bool,
+{
     // Slowest cleaners (as measured by the previous scan) go first: they are the long
     // pole, so starting them early keeps every worker busy until the end.
     let history = load_scan_times();
     let mut list: Vec<_> = categories
         .iter()
         .enumerate()
-        .flat_map(|(ci, c)| {
-            c.items
-                .iter()
-                .enumerate()
-                .map(move |(ii, i)| (ci, ii, i.id.clone(), i.function.clone()))
-        })
+        .flat_map(|(ci, c)| c.items.iter().enumerate().map(move |(ii, i)| (ci, ii, i)))
+        .filter(|(ci, ii, i)| include(*ci, *ii, i))
+        .map(|(ci, ii, i)| (ci, ii, i.id.clone(), i.function.clone()))
         .collect();
     list.sort_by_key(|(_, _, id, _)| std::cmp::Reverse(history.get(id).copied().unwrap_or(0)));
     let jobs: VecDeque<_> = list.into_iter().collect();
@@ -456,6 +556,10 @@ where
     let times = Arc::new(Mutex::new(std::collections::HashMap::<String, u64>::new()));
     let remaining = Arc::new(std::sync::atomic::AtomicUsize::new(total));
     let cancelled = Arc::new(std::sync::atomic::AtomicBool::new(false));
+    let handle = ScanHandle {
+        total,
+        cancelled: Arc::clone(&cancelled),
+    };
     let sink = Arc::new(sink);
     let timing = std::env::var_os("CLEANSYS_SCAN_TIMING").is_some();
     // One shared pool: cleaner jobs and the directory walks inside them use the same
@@ -482,6 +586,10 @@ where
         let sink = Arc::clone(&sink);
         Arc::new(
             move |n: usize, ci: usize, ii: usize, id: String, ms: u64, info: ScanInfo| {
+                // Cancelled (a clean started, or the app closed): nobody wants this result.
+                if cancelled.load(std::sync::atomic::Ordering::SeqCst) {
+                    return;
+                }
                 if slots[n]
                     .reported
                     .swap(true, std::sync::atomic::Ordering::SeqCst)
@@ -559,7 +667,7 @@ where
             }
         });
     }
-    total
+    handle
 }
 
 struct ScanSlot {
@@ -911,5 +1019,88 @@ mod tests {
             EntryState::Nothing
         };
         assert_eq!(b.entry_state(0, 0), want, "paths mirror the cleaner");
+    }
+
+    #[test]
+    fn opted_out_cleaners_are_not_scanned_and_do_not_block_completion() {
+        let c = cats();
+        let off = disabled_positions(&c, &["a2".to_string()]);
+        assert_eq!(off, HashSet::from([(0, 1)]));
+        let (tx, rx) = channel();
+        let handle = spawn_scan_filtered(
+            &c,
+            |ci, ii, _| !off.contains(&(ci, ii)),
+            move |ci, ii, info| tx.send((ci, ii, info)).is_ok(),
+        );
+        assert_eq!(handle.total, 2);
+        let mut board = ScanBoard::new(&c);
+        board.start_with(handle.total, off);
+        while board.is_scanning() {
+            let (ci, ii, info) = rx.recv_timeout(std::time::Duration::from_secs(10)).unwrap();
+            board.record(ci, ii, info);
+        }
+        assert!(board.complete());
+        assert!(board.is_off(0, 1) && board.get(0, 1).is_none());
+        // Category A is "done" although a2 was never measured.
+        assert_eq!(board.category_bytes_when_done(0), Some(100));
+    }
+
+    #[test]
+    fn cancel_keeps_results_so_far_and_drops_late_ones() {
+        let c = cats();
+        let mut board = ScanBoard::new(&c);
+        board.start(3);
+        board.record(
+            0,
+            0,
+            ScanInfo {
+                bytes: 100,
+                ..Default::default()
+            },
+        );
+        board.cancel();
+        assert!(!board.is_scanning() && !board.complete() && board.was_interrupted());
+        // A result still in flight when the scan was stopped is ignored.
+        assert!(!board.record(
+            0,
+            1,
+            ScanInfo {
+                bytes: 5,
+                ..Default::default()
+            }
+        ));
+        assert!(board.get(0, 1).is_none());
+        // What was measured before the stop is still usable (clean can use it).
+        assert_eq!(board.get(0, 0).map(|i| i.bytes), Some(100));
+        // A fresh scan clears the interruption.
+        board.start(1);
+        assert!(board.is_scanning() && !board.was_interrupted());
+    }
+
+    #[test]
+    fn cancelled_scan_delivers_nothing_more() {
+        let slow = |id: &str| {
+            let mut i = item(id, 1);
+            i.function = cleaner_fn(|_| {
+                std::thread::sleep(std::time::Duration::from_millis(300));
+                Ok(CleaningResult::new())
+            });
+            i
+        };
+        let c = vec![CleanerCategory {
+            name: "A".into(),
+            description: "".into(),
+            items: (0..40).map(|n| slow(&format!("s{n}"))).collect(),
+        }];
+        let (tx, rx) = channel();
+        let handle = spawn_scan_filtered(
+            &c,
+            |_, _, _| true,
+            move |ci, ii, info| tx.send((ci, ii, info)).is_ok(),
+        );
+        handle.cancel();
+        std::thread::sleep(std::time::Duration::from_millis(1200));
+        let got = std::iter::from_fn(|| rx.try_recv().ok()).count();
+        assert_eq!(got, 0, "no result after cancel");
     }
 }

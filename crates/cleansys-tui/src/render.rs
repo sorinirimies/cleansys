@@ -793,6 +793,11 @@ fn scan_line(app: &App) -> Line<'static> {
             format!("{} can be freed", format_size(app.board.total_bytes())),
             Style::default().fg(crate::theme::th().success),
         ))
+    } else if app.board.was_interrupted() {
+        Line::from(Span::styled(
+            "scan stopped",
+            Style::default().fg(crate::theme::th().muted),
+        ))
     } else {
         Line::default()
     }
@@ -1175,6 +1180,9 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
                         Span::styled(format_size(s.bytes), size_style(s.bytes))
                     }
                     Some(_) => Span::styled("—", Style::default().fg(crate::theme::th().muted)),
+                    None if app.board.is_off(ci, ii) => {
+                        Span::styled("scan off", Style::default().fg(crate::theme::th().muted))
+                    }
                     None if app.board.is_scanning() => spinner_spans(app)
                         .into_iter()
                         .next()

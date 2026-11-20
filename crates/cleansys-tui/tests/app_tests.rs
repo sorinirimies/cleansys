@@ -986,3 +986,41 @@ fn shift_o_toggles_the_options_panel() {
     key(&mut app, KeyCode::Char('O'));
     assert!(!app.options_open);
 }
+
+#[test]
+fn starting_a_clean_stops_the_running_scan_without_waiting_for_it() {
+    let mut app = app_with_two_categories();
+    app.persist = false;
+    app.start_scan();
+    assert!(app.board.is_scanning() && app.scan_handle.is_some());
+    let item = &app.categories[0].items[0];
+    let op = (0, 0, item.name.clone(), item.function.clone(), false);
+    app.start_operations_for_tests(&[op]);
+    assert!(app.is_running);
+    // The scan is stopped, its channel is gone, and the board says it was cut short.
+    assert!(!app.board.is_scanning() && app.board.was_interrupted());
+    assert!(app.scan_rx.is_none() && app.scan_handle.is_none());
+}
+
+#[test]
+fn a_running_scan_does_not_block_the_run_request() {
+    let mut app = app_with_two_categories();
+    app.persist = false;
+    app.confirmation_mode = false;
+    app.start_scan();
+    app.categories[0].items[0].selected = true;
+    app.request_run().unwrap();
+    assert!(app.is_running, "clean started while the scan was running");
+}
+
+#[test]
+fn s_key_opts_the_cleaner_out_of_scanning_and_back_in() {
+    let mut app = app_with_two_categories();
+    app.persist = false;
+    app.item_list_state.select(Some(0));
+    key(&mut app, KeyCode::Char('s'));
+    assert_eq!(app.disabled_cleaners, vec!["Browser Caches".to_string()]);
+    assert!(app.board.is_off(0, 0) && app.board.get(0, 0).is_none());
+    key(&mut app, KeyCode::Char('s'));
+    assert!(app.disabled_cleaners.is_empty() && !app.board.is_off(0, 0));
+}

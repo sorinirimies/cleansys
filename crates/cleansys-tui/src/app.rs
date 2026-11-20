@@ -122,8 +122,6 @@ pub struct App {
     pub about_cursor: usize,
     /// Render-side list state of the overlay (keeps the scroll offset).
     pub list_info_state: ListState,
-    /// A setting changed while a scan was running: scan again when it finishes.
-    pub rescan_pending: bool,
     /// Text field being edited in the Settings tab, if any.
     pub settings_input: Option<SettingsInput>,
     /// Feedback line in the overlay (errors, confirmations).
@@ -196,6 +194,10 @@ pub struct App {
     pub board: cleansys_core::ScanBoard,
     /// Channel delivering background scan results (drained by [`App::poll_scan`]).
     pub scan_rx: Option<std::sync::mpsc::Receiver<(usize, usize, cleansys_core::ScanInfo)>>,
+    /// Stops the running scan (a clean started, or a setting changed).
+    pub scan_handle: Option<cleansys_core::ScanHandle>,
+    /// Ids of cleaners the user opted out of scanning (saved in the settings).
+    pub disabled_cleaners: Vec<String>,
     /// Hide cleaners that were scanned and have nothing to clean.
     pub hide_empty: bool,
     /// Live filter text for the cleaner list ("" = none).
@@ -255,7 +257,6 @@ impl App {
             about_cursor: 0,
             list_info_state: ListState::default(),
             settings_input: None,
-            rescan_pending: false,
             settings_message: String::new(),
             is_root: check_root(),
             is_running: false,
@@ -296,6 +297,8 @@ impl App {
             pending_run_selection: Vec::new(),
             board: cleansys_core::ScanBoard::default(),
             scan_rx: None,
+            scan_handle: None,
+            disabled_cleaners: Vec::new(),
             hide_empty: true,
             filter: String::new(),
             filter_active: false,
@@ -319,18 +322,59 @@ impl App {
 
     // ── scanning, filtering, list navigation ──────────────────────────
 
-    /// Start measuring every cleaner in the background (read-only).
+    /// Start measuring every cleaner the user did not opt out of, in the background
+    /// (read-only). A scan already running is replaced: its results are stale.
     pub fn start_scan(&mut self) {
-        if self.board.is_scanning() {
-            // A setting changed mid-scan: measure again as soon as this one finishes.
-            self.rescan_pending = true;
-            return;
-        }
+        self.stop_scan();
         self.collapse_details();
         self.board = cleansys_core::ScanBoard::new(&self.categories);
-        let (rx, total) = cleansys_core::spawn_scan(&self.categories);
-        self.board.start(total);
+        let off = cleansys_core::disabled_positions(&self.categories, &self.disabled_cleaners);
+        let (tx, rx) = std::sync::mpsc::channel();
+        let handle = cleansys_core::spawn_scan_filtered(
+            &self.categories,
+            |ci, ii, _| !off.contains(&(ci, ii)),
+            move |ci, ii, info| tx.send((ci, ii, info)).is_ok(),
+        );
+        self.board.start_with(handle.total, off);
+        self.scan_handle = Some(handle);
         self.scan_rx = Some(rx);
+    }
+
+    /// Stop the running scan (if any) and keep what it measured so far, so a clean can
+    /// start right away without waiting for the slow cleaners.
+    pub fn stop_scan(&mut self) {
+        if let Some(h) = self.scan_handle.take() {
+            h.cancel();
+        }
+        self.scan_rx = None;
+        self.board.cancel();
+    }
+
+    /// Opt the highlighted cleaner in or out of scanning, remember it and re-measure.
+    pub fn toggle_scan_enabled(&mut self) {
+        let Some((ci, ii)) = self.current_item() else {
+            return;
+        };
+        let id = self.categories[ci].items[ii].id.clone();
+        let enabled = self.disabled_cleaners.contains(&id);
+        if enabled {
+            self.disabled_cleaners.retain(|d| d != &id);
+        } else {
+            self.disabled_cleaners.push(id.clone());
+        }
+        if self.persist
+            && let Err(e) = cleansys_core::update_settings(|s| s.set_scan_enabled(&id, enabled))
+        {
+            self.log(format!("✗ Could not save preferences: {e}"));
+        }
+        let name = self.categories[ci].items[ii].name.clone();
+        self.set_notice(format!(
+            "{name}: scan {}",
+            if enabled { "on" } else { "off" }
+        ));
+        if !self.is_running {
+            self.start_scan();
+        }
     }
 
     /// Drain finished scan results (call every tick). Returns `true` if
@@ -349,9 +393,7 @@ impl App {
         }
         if finished {
             self.scan_rx = None;
-            if std::mem::take(&mut self.rescan_pending) {
-                self.start_scan();
-            }
+            self.scan_handle = None;
             self.ensure_category_visible();
         }
         changed
@@ -553,6 +595,7 @@ impl App {
         self.apply_theme_index(s.theme_index());
         self.hide_empty = s.hide_empty();
         self.confirmation_mode = s.confirm_before_run();
+        self.disabled_cleaners = s.disabled_cleaners.clone();
     }
 
     // ── settings / about overlay ───────────────────────────────────────
@@ -1240,6 +1283,9 @@ impl App {
     /// Shared by the direct (already-elevated) path in [`Self::begin_execution`] and
     /// the post-password-authentication path in [`Self::handle_key`].
     fn start_operations(&mut self, selected_cleaners: &[PendingOperation]) {
+        // Don't wait for the scan: stop it, keep the sizes found so far, and re-scan
+        // automatically once the clean is done.
+        self.stop_scan();
         self.is_running = true;
         self.run_planned = self.board.selected_bytes(&self.categories);
         self.disk_before = cleansys_core::utils::disk_usage();
@@ -1895,6 +1941,12 @@ impl App {
             (KeyCode::Char('e'), _) => {
                 if !self.show_help && !self.is_running {
                     self.toggle_hide_empty();
+                }
+            }
+            // Opt the highlighted cleaner in / out of scanning
+            (KeyCode::Char('s'), _) => {
+                if !self.show_help && !self.is_running {
+                    self.toggle_scan_enabled();
                 }
             }
             // Re-measure everything

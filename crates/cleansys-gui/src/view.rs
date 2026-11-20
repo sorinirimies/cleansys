@@ -598,6 +598,9 @@ fn item_row<'a>(
                 col.into()
             }
             Some(_) => text("nothing to clean").size(12).color(c.muted).into(),
+            None if state.board.is_off(cat_idx, item_idx) => {
+                text("scan off").size(12).color(c.muted).into()
+            }
             // Still being measured: a round progress ring, like the web UI's.
             None if state.board.is_scanning() => row![
                 ring(&c, state.anim_tick, 16.0),
@@ -615,6 +618,19 @@ fn item_row<'a>(
     let mut name_row = row![name_check, badges]
         .spacing(10)
         .align_y(Alignment::Center);
+    let scan_on = !state
+        .disabled_cleaners
+        .contains(&state.categories[cat_idx].items[item_idx].id);
+    name_row = name_row.push(tooltip(
+        button(text(if scan_on { "Scan: on" } else { "Scan: off" }).size(11))
+            .padding([2, 8])
+            .style(button::text)
+            .on_press(Message::ToggleScan(cat_idx, item_idx)),
+        container(text("Include this cleaner when scanning for sizes").size(12))
+            .padding(6)
+            .style(container::rounded_box),
+        tooltip::Position::Top,
+    ));
     if has_entries {
         name_row = name_row.push(
             button(text(if open { "▾ Details" } else { "▸ Details" }).size(11))
@@ -785,7 +801,7 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
         .spacing(4)
         .width(Length::Fill)
         .into()
-    } else if scanning {
+    } else if scanning && selected == 0 {
         let done = state.board.total - state.board.pending;
         column![
             progress_label(
@@ -814,6 +830,8 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
                 "{} can be freed — tick cleaners or press Recommended",
                 format_size(state.total_reclaimable())
             )
+        } else if scanning {
+            format!("{selected} selected")
         } else {
             format!("{selected} selected · {} to free", format_size(reclaim))
         };
@@ -825,10 +843,18 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
                 } else {
                     c.text_primary
                 }),
-            text(format!(
-                "{} reclaimable in total",
-                format_size(state.total_reclaimable())
-            ))
+            text(if scanning {
+                format!(
+                    "still scanning {}/{} \u{2014} you can clean now",
+                    state.board.total - state.board.pending,
+                    state.board.total
+                )
+            } else {
+                format!(
+                    "{} reclaimable in total",
+                    format_size(state.total_reclaimable())
+                )
+            })
             .size(11)
             .color(c.muted),
         ]
@@ -841,9 +867,6 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
         "⏳ Cleaning…".to_string()
     } else if selected == 0 {
         "Select cleaners".to_string()
-    } else if scanning {
-        // A partial sum would mislead: say we are still measuring.
-        format!("🧹 Clean {selected} · measuring…")
     } else if reclaim > 0 {
         format!("🧹 Clean {selected} · {}", format_size(reclaim))
     } else {

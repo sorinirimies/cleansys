@@ -448,6 +448,14 @@ async fn totals_show_a_spinner_while_the_scan_is_running_and_numbers_after() {
         "no partial total while scanning"
     );
     assert!(
+        during.body.contains("you can clean now"),
+        "cleaning is not blocked by the scan"
+    );
+    assert!(
+        during.body.contains("href=\"/confirm\""),
+        "clean button is live while scanning"
+    );
+    assert!(
         during.body.contains("http-equiv=\"refresh\""),
         "page refreshes itself"
     );

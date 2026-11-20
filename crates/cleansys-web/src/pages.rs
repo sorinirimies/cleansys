@@ -206,6 +206,12 @@ async fn toggle(cx: &Cx, Form(f): Form<ToggleForm>) -> Result<SeeOther> {
     Ok(see_other(safe_back(f.back.as_deref().unwrap_or("/"))))
 }
 
+#[route(POST "/toggle-scan")]
+async fn toggle_scan(cx: &Cx, Form(f): Form<ToggleForm>) -> Result<SeeOther> {
+    shared(cx).toggle_scan(&f.id);
+    Ok(see_other(safe_back(f.back.as_deref().unwrap_or("/"))))
+}
+
 #[derive(Deserialize)]
 struct EntryForm {
     path: String,

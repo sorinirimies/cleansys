@@ -39,6 +39,10 @@ pub struct Settings {
     /// Lower it on spinning disks or network mounts. `CLEANSYS_SCAN_THREADS` overrides.
     #[serde(default)]
     pub scan_threads: Option<usize>,
+    /// Ids of cleaners the user opted out of scanning (and so out of showing a size).
+    /// Empty = everything is scanned.
+    #[serde(default)]
+    pub disabled_cleaners: Vec<String>,
 }
 
 impl Settings {
@@ -69,6 +73,20 @@ impl Settings {
     /// Whether a clean asks for confirmation first (default: yes).
     pub fn confirm_before_run(&self) -> bool {
         self.confirm_before_run.unwrap_or(true)
+    }
+
+    /// Is this cleaner scanned (default: yes)?
+    pub fn scan_enabled(&self, id: &str) -> bool {
+        !self.disabled_cleaners.iter().any(|d| d == id)
+    }
+
+    /// Opt a cleaner in or out of scanning.
+    pub fn set_scan_enabled(&mut self, id: &str, enabled: bool) {
+        self.disabled_cleaners.retain(|d| d != id);
+        if !enabled {
+            self.disabled_cleaners.push(id.to_string());
+            self.disabled_cleaners.sort();
+        }
     }
 
     /// The saved GUI window size, if it looks sane (a corrupt or absurd value is ignored).
@@ -174,6 +192,19 @@ mod tests {
     }
 
     #[test]
+    fn scan_opt_out_round_trips_and_defaults_to_on() {
+        let mut s = Settings::default();
+        assert!(s.scan_enabled("proj-rust"));
+        s.set_scan_enabled("proj-rust", false);
+        s.set_scan_enabled("proj-rust", false);
+        assert!(!s.scan_enabled("proj-rust") && s.disabled_cleaners.len() == 1);
+        let back: Settings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
+        assert!(!back.scan_enabled("proj-rust") && back.scan_enabled("other"));
+        s.set_scan_enabled("proj-rust", true);
+        assert!(s.scan_enabled("proj-rust") && s.disabled_cleaners.is_empty());
+    }
+
+    #[test]
     fn absurd_window_sizes_are_ignored() {
         for bad in [(0, 0), (50, 700), (900, 99_999), (u32::MAX, 700)] {
             let s = Settings {
@@ -255,6 +286,7 @@ mod tests {
             window_size: Some((900, 700)),
             log_height: Some(240),
             scan_threads: None,
+            disabled_cleaners: vec![],
         };
         save_to(&path, &settings).unwrap();
 

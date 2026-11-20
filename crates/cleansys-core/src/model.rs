@@ -148,6 +148,45 @@ pub fn load_categories() -> Vec<CleanerCategory> {
     categories
 }
 
+/// Name of the flat user-land list shown by the front-ends.
+pub const USER_AREA: &str = "User Land Cleaners";
+/// Name of the flat system (root) list shown by the front-ends.
+pub const SYSTEM_AREA: &str = "System Cleaners";
+
+/// Does a [`load_categories`] category belong to the system (root) side?
+pub fn is_system_category(name: &str) -> bool {
+    name == SYSTEM_AREA || name.ends_with(ROOT_SUFFIX)
+}
+
+/// The lists the front-ends show: exactly two flat areas, user land then system, holding
+/// every cleaner (built-in and declarative) instead of nesting them in sub-categories.
+/// [`load_categories`] keeps the grouped layout for the CLI (`--category`).
+pub fn load_areas() -> Vec<CleanerCategory> {
+    flatten_areas(load_categories())
+}
+
+/// Merge grouped categories into the two flat user / system areas (order preserved).
+pub fn flatten_areas(categories: Vec<CleanerCategory>) -> Vec<CleanerCategory> {
+    let mut user = CleanerCategory {
+        name: USER_AREA.to_string(),
+        description: "Clean user-specific files and caches".to_string(),
+        items: Vec::new(),
+    };
+    let mut system = CleanerCategory {
+        name: SYSTEM_AREA.to_string(),
+        description: "Clean system files and caches (requires root)".to_string(),
+        items: Vec::new(),
+    };
+    for c in categories {
+        if is_system_category(&c.name) {
+            system.items.extend(c.items);
+        } else {
+            user.items.extend(c.items);
+        }
+    }
+    vec![user, system]
+}
+
 /// Suffix appended to the name of engine categories that need root, keeping
 /// them visibly (and structurally) separate from user-land ones.
 pub const ROOT_SUFFIX: &str = " (root)";
@@ -281,6 +320,25 @@ mod tests {
         // Homebrew on macOS must not run as root), so not every item in the
         // System category necessarily requires root — but user cleaners never do.
         assert!(categories[0].items.iter().all(|i| !i.requires_root));
+    }
+
+    #[test]
+    fn areas_are_two_flat_lists_with_every_cleaner() {
+        let grouped: usize = load_categories().iter().map(|c| c.items.len()).sum();
+        let areas = load_areas();
+        assert_eq!(areas.len(), 2);
+        assert_eq!(areas[0].name, USER_AREA);
+        assert_eq!(areas[1].name, SYSTEM_AREA);
+        assert_eq!(areas.iter().map(|c| c.items.len()).sum::<usize>(), grouped);
+        // Engine cleaners (e.g. project build artifacts) are in the flat user list.
+        assert!(areas[0].items.iter().any(|i| i.id == "proj-rust"));
+        assert!(
+            areas[1]
+                .items
+                .iter()
+                .all(|i| i.requires_root || i.id.starts_with("core-sys-"))
+        );
+        assert!(areas[0].items.iter().all(|i| !i.requires_root));
     }
 
     #[test]

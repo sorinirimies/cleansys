@@ -83,6 +83,12 @@ pub struct CleanSysGui {
     pub search: String,
     /// Background scan results (sizes per cleaner/category).
     pub board: cleansys_core::ScanBoard,
+    /// Stops the running scan (a clean started, or a setting changed).
+    pub scan_handle: Option<cleansys_core::ScanHandle>,
+    /// Counts scans, so results of a replaced one are recognised and dropped.
+    pub scan_gen: u64,
+    /// Ids of cleaners the user opted out of scanning (saved in the settings).
+    pub disabled_cleaners: Vec<String>,
     /// Whether cleaners with nothing to clean are hidden (after a scan).
     pub hide_empty: bool,
     /// Whether the activity log drawer is open.
@@ -152,7 +158,7 @@ impl CleanSysGui {
         } else {
             cleansys_core::load_settings().unwrap_or_default()
         };
-        let mut categories = cleansys_core::load_categories();
+        let mut categories = cleansys_core::load_areas();
         for category in &mut categories {
             for item in &mut category.items {
                 item.selected = settings.is_selected(&category.name, &item.name);
@@ -182,6 +188,9 @@ impl CleanSysGui {
             needs_admin_notice: false,
             search: String::new(),
             board,
+            scan_handle: None,
+            scan_gen: 0,
+            disabled_cleaners: settings.disabled_cleaners.clone(),
             hide_empty: settings.hide_empty(),
             confirm_before_run: settings.confirm_before_run(),
             log_height: settings
@@ -460,6 +469,7 @@ impl CleanSysGui {
             scan_threads: cleansys_core::load_settings()
                 .ok()
                 .and_then(|s| s.scan_threads),
+            disabled_cleaners: self.disabled_cleaners.clone(),
         }
     }
 

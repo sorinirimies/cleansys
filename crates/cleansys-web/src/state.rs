@@ -9,7 +9,7 @@ use std::sync::{Arc, Mutex, MutexGuard};
 
 use cleansys_core::engine::headless::{self, Job, Outcome, OutcomeStatus};
 use cleansys_core::{
-    CleanerCategory, Risk, RunOptions, ScanBoard, ScanInfo, check_root, spawn_scan,
+    CleanerCategory, Risk, RunOptions, ScanBoard, ScanInfo, check_root, spawn_scan_filtered,
 };
 
 /// Where a clean run is.
@@ -62,6 +62,8 @@ pub struct ItemView {
     pub requires_root: bool,
     pub selected: bool,
     pub scan: Option<ScanInfo>,
+    /// The user opted this cleaner out of scanning.
+    pub scan_off: bool,
     /// Can this cleaner be ticked here (root cleaners need a root server)?
     pub selectable: bool,
     /// Per-entry tick state, aligned with `scan.entries`.
@@ -120,6 +122,10 @@ pub struct Inner {
     categories: Vec<CleanerCategory>,
     board: ScanBoard,
     scan_rx: Option<Receiver<(usize, usize, ScanInfo)>>,
+    /// Stops the running scan (a clean started, or a setting changed).
+    scan_handle: Option<cleansys_core::ScanHandle>,
+    /// Ids of cleaners the user opted out of scanning (saved in the settings).
+    disabled: Vec<String>,
     run: RunState,
     is_root: bool,
     elevation_allowed: bool,
@@ -145,6 +151,8 @@ impl Shared {
             categories,
             board,
             scan_rx: None,
+            scan_handle: None,
+            disabled: Vec::new(),
             run: RunState::default(),
             is_root: check_root(),
             elevation_allowed: false,
@@ -156,7 +164,37 @@ impl Shared {
 
     /// Load the real cleaners (restoring nothing: the web UI starts unticked).
     pub fn load() -> Self {
-        Self::new(cleansys_core::load_categories())
+        let s = Self::new(cleansys_core::load_areas());
+        s.lock().disabled = cleansys_core::load_settings()
+            .unwrap_or_default()
+            .disabled_cleaners;
+        s
+    }
+
+    /// Opt a cleaner in or out of scanning, remember it and measure again.
+    /// `false` = unknown id.
+    pub fn toggle_scan(&self, id: &str) -> bool {
+        let mut g = self.lock();
+        if !g
+            .categories
+            .iter()
+            .flat_map(|c| &c.items)
+            .any(|i| i.id == id)
+        {
+            return false;
+        }
+        let enable = g.disabled.iter().any(|d| d == id);
+        g.disabled.retain(|d| d != id);
+        if !enable {
+            g.disabled.push(id.to_string());
+        }
+        if cfg!(not(test)) {
+            let _ = cleansys_core::update_settings(|s| s.set_scan_enabled(id, enable));
+        }
+        if g.run.phase != Phase::Running {
+            start_scan_locked(&mut g);
+        }
+        true
     }
 
     fn lock(&self) -> MutexGuard<'_, Inner> {
@@ -282,7 +320,8 @@ impl Shared {
 
     // ── scanning ───────────────────────────────────────────────────
 
-    /// Start measuring every cleaner in the background (no-op while scanning/running).
+    /// Start measuring every cleaner that is not opted out, in the background. A scan
+    /// already running is replaced.
     pub fn start_scan(&self) {
         let mut g = self.lock();
         start_scan_locked(&mut g);
@@ -294,6 +333,7 @@ impl Shared {
         let Inner {
             board,
             scan_rx,
+            scan_handle,
             categories,
             ..
         } = &mut *g;
@@ -305,6 +345,7 @@ impl Shared {
         }
         if finished {
             *scan_rx = None;
+            *scan_handle = None;
         }
     }
 
@@ -395,6 +436,7 @@ impl Shared {
                     requires_root: it.requires_root,
                     selected: it.selected,
                     scan: g.board.get(ci, ii).cloned(),
+                    scan_off: g.disabled.contains(&it.id),
                     entry_on: g
                         .board
                         .get(ci, ii)
@@ -493,6 +535,9 @@ impl Shared {
             if jobs.is_empty() {
                 return Err("nothing selected");
             }
+            // Don't wait for the scan: stop it, keep the sizes found so far; it starts
+            // again by itself when the clean is done.
+            stop_scan_locked(&mut g);
             cleansys_core::engine::skip::set_skipped(g.board.skipped_paths());
             g.run = RunState {
                 phase: Phase::Running,
@@ -588,13 +633,26 @@ fn jobs_locked(g: &Inner, include_root: bool) -> Vec<Job> {
     jobs
 }
 
-fn start_scan_locked(g: &mut Inner) {
-    if g.board.is_scanning() {
-        return;
+fn stop_scan_locked(g: &mut Inner) {
+    if let Some(h) = g.scan_handle.take() {
+        h.cancel();
     }
+    g.scan_rx = None;
+    g.board.cancel();
+}
+
+fn start_scan_locked(g: &mut Inner) {
+    stop_scan_locked(g);
     g.board = ScanBoard::new(&g.categories);
-    let (rx, total) = spawn_scan(&g.categories);
-    g.board.start(total);
+    let off = cleansys_core::disabled_positions(&g.categories, &g.disabled);
+    let (tx, rx) = std::sync::mpsc::channel();
+    let handle = spawn_scan_filtered(
+        &g.categories,
+        |ci, ii, _| !off.contains(&(ci, ii)),
+        move |ci, ii, info| tx.send((ci, ii, info)).is_ok(),
+    );
+    g.board.start_with(handle.total, off);
+    g.scan_handle = Some(handle);
     g.scan_rx = Some(rx);
 }
 
@@ -751,5 +809,59 @@ mod tests {
         let s = shared();
         assert_eq!(s.visible(0, "s1", true), vec![(1, 0)]);
         assert_eq!(s.visible(0, "", true).len(), 3);
+    }
+
+    #[test]
+    fn scan_opt_out_skips_the_cleaner_and_toggles_back() {
+        let s = Shared::new(vec![CleanerCategory {
+            name: "User Land Cleaners".into(),
+            description: "u".into(),
+            items: vec![
+                item("a", 10, false, Risk::Safe),
+                item("b", 20, false, Risk::Safe),
+            ],
+        }]);
+        assert!(!s.toggle_scan("nope"));
+        assert!(s.toggle_scan("b"));
+        assert!(s.snapshot().items[1].scan_off);
+        assert_eq!(s.snapshot().scan_total, 1);
+        for _ in 0..200 {
+            s.poll();
+            if !s.snapshot().scanning {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        let snap = s.snapshot();
+        assert!(snap.items[0].scan.is_some() && snap.items[1].scan.is_none());
+        assert!(s.toggle_scan("b"));
+        assert!(!s.snapshot().items[1].scan_off);
+        assert_eq!(s.snapshot().scan_total, 2);
+    }
+
+    #[test]
+    fn starting_a_clean_stops_the_scan() {
+        let slow = {
+            let mut i = item("slow", 1, false, Risk::Safe);
+            i.function = cleaner_fn(|_| {
+                std::thread::sleep(std::time::Duration::from_millis(1500));
+                Ok(CleaningResult::new())
+            });
+            i.selected = true;
+            i
+        };
+        let s = Shared::new(vec![CleanerCategory {
+            name: "User Land Cleaners".into(),
+            description: "u".into(),
+            items: vec![slow],
+        }]);
+        s.set_root(false);
+        s.start_scan();
+        assert!(s.snapshot().scanning);
+        s.start_run().unwrap();
+        // Cleaning started without waiting for the 1.5 s scan.
+        let snap = s.snapshot();
+        assert!(!snap.scanning, "scan stopped by the clean");
+        assert!(!snap.complete);
     }
 }

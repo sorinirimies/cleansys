@@ -339,7 +339,31 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             }
         }
         Message::ScanAll => start_scan(state),
-        Message::ScanItemFinished(cat_idx, item_idx, info) => {
+        Message::ScanStopped => Task::none(),
+        Message::ToggleScan(cat_idx, item_idx) => {
+            let Some(id) = state
+                .categories
+                .get(cat_idx)
+                .and_then(|c| c.items.get(item_idx))
+                .map(|i| i.id.clone())
+            else {
+                return Task::none();
+            };
+            let enable = state.disabled_cleaners.contains(&id);
+            state.disabled_cleaners.retain(|d| d != &id);
+            if !enable {
+                state.disabled_cleaners.push(id);
+            }
+            state.save_theme();
+            if state.is_running {
+                Task::none() // measured again when the clean ends
+            } else {
+                start_scan(state)
+            }
+        }
+        // A result of a scan that was stopped or replaced.
+        Message::ScanItemFinished(gen_, ..) if gen_ != state.scan_gen => Task::none(),
+        Message::ScanItemFinished(_, cat_idx, item_idx, info) => {
             if state
                 .board
                 .record_synced(&state.categories, cat_idx, item_idx, info)
@@ -678,44 +702,65 @@ fn blocking(
     }
 }
 
-/// Measure every cleaner in the background (read-only previews), through the shared
-/// core scan so the GUI scans exactly like the TUI and web front-ends.
+/// Stop the running scan: not-yet-started cleaners are skipped, results in flight are
+/// dropped, what was measured stays on the board.
+fn stop_scan(state: &mut CleanSysGui) {
+    if let Some(h) = state.scan_handle.take() {
+        h.cancel();
+    }
+    state.scan_gen += 1;
+    state.board.cancel();
+}
+
+/// Measure every cleaner the user did not opt out of in the background (read-only
+/// previews), through the shared core scan so the GUI scans exactly like the TUI and web
+/// front-ends. A scan already running is replaced.
 fn start_scan(state: &mut CleanSysGui) -> Task<Message> {
-    if state.board.is_scanning() || state.is_running {
+    if state.is_running {
         return Task::none();
     }
+    stop_scan(state);
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
     type Tx = iced::futures::channel::oneshot::Sender<cleansys_core::ScanInfo>;
+    let gen_ = state.scan_gen;
+    let off = cleansys_core::disabled_positions(&state.categories, &state.disabled_cleaners);
     let mut tasks = Vec::new();
     let mut senders: HashMap<(usize, usize), Tx> = HashMap::new();
     for (cat_idx, cat) in state.categories.iter().enumerate() {
         for item_idx in 0..cat.items.len() {
+            if off.contains(&(cat_idx, item_idx)) {
+                continue;
+            }
             let (tx, rx) = iced::futures::channel::oneshot::channel();
             senders.insert((cat_idx, item_idx), tx);
             tasks.push(Task::perform(
-                async move {
-                    rx.await.unwrap_or_else(|_| cleansys_core::ScanInfo {
-                        error: Some("scan cancelled".to_string()),
-                        ..Default::default()
-                    })
+                // A dropped sender = the scan was stopped: report nothing.
+                async move { rx.await.ok() },
+                move |info| match info {
+                    Some(info) => Message::ScanItemFinished(gen_, cat_idx, item_idx, info),
+                    None => Message::ScanStopped,
                 },
-                move |info| Message::ScanItemFinished(cat_idx, item_idx, info),
             ));
         }
     }
     let senders = Arc::new(Mutex::new(senders));
-    let total = cleansys_core::spawn_scan_with(&state.categories, move |ci, ii, info| {
-        if let Some(tx) = senders
-            .lock()
-            .unwrap_or_else(|e| e.into_inner())
-            .remove(&(ci, ii))
-        {
-            let _ = tx.send(info);
-        }
-        true
-    });
-    state.board.start(total);
+    let handle = cleansys_core::spawn_scan_filtered(
+        &state.categories,
+        |ci, ii, _| !off.contains(&(ci, ii)),
+        move |ci, ii, info| {
+            if let Some(tx) = senders
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .remove(&(ci, ii))
+            {
+                let _ = tx.send(info);
+            }
+            true
+        },
+    );
+    state.board.start_with(handle.total, off);
+    state.scan_handle = Some(handle);
     Task::batch(tasks)
 }
 
@@ -726,6 +771,9 @@ fn start_pending_operations(state: &mut CleanSysGui) -> Task<Message> {
         return Task::none();
     }
 
+    // Don't wait for the scan: stop it, keep the sizes found so far, and measure again
+    // automatically when the clean is done.
+    stop_scan(state);
     state.is_running = true;
     state.show_log = true;
     state.total_bytes_cleaned = 0;
@@ -1606,5 +1654,78 @@ mod tests {
         let _ = update(&mut state, Message::ScheduleApply);
         assert!(state.schedule_installed.is_none());
         assert!(state.schedule_message.contains("needs ticked"));
+    }
+
+    /// A state with two cheap fake cleaners (no real disk scan).
+    fn tiny_state() -> CleanSysGui {
+        let item = |id: &str| cleansys_core::CleanerItem {
+            id: id.into(),
+            risk: cleansys_core::Risk::Safe,
+            name: id.into(),
+            description: "d".into(),
+            requires_root: false,
+            selected: false,
+            function: cleansys_core::cleaner_fn(|_| Ok(cleansys_core::CleaningResult::new())),
+            bytes_cleaned: 0,
+            last_result: None,
+            status: None,
+        };
+        let mut state = CleanSysGui::new();
+        state.categories = vec![cleansys_core::CleanerCategory {
+            name: "User Land Cleaners".into(),
+            description: "u".into(),
+            items: vec![item("one"), item("two")],
+        }];
+        state.board = cleansys_core::ScanBoard::new(&state.categories);
+        state.disabled_cleaners.clear();
+        state
+    }
+
+    #[test]
+    fn starting_a_clean_stops_the_scan_and_late_results_are_dropped() {
+        let mut state = tiny_state();
+        let _ = start_scan(&mut state);
+        let gen_ = state.scan_gen;
+        assert!(state.board.is_scanning());
+        state.categories[0].items[0].selected = true;
+        let _ = update(&mut state, Message::RequestRun);
+        let _ = update(&mut state, Message::ConfirmRun);
+        assert!(state.is_running, "the clean did not wait for the scan");
+        assert!(!state.board.is_scanning() && state.board.was_interrupted());
+        assert!(state.scan_handle.is_none());
+        // A result of the stopped scan arriving now is ignored.
+        let info = cleansys_core::ScanInfo {
+            bytes: 9,
+            ..Default::default()
+        };
+        let _ = update(&mut state, Message::ScanItemFinished(gen_, 0, 1, info));
+        assert!(state.board.get(0, 1).is_none());
+    }
+
+    #[test]
+    fn results_of_a_replaced_scan_are_ignored() {
+        let mut state = tiny_state();
+        let _ = start_scan(&mut state);
+        let old = state.scan_gen;
+        let _ = start_scan(&mut state);
+        assert_ne!(old, state.scan_gen);
+        let info = cleansys_core::ScanInfo {
+            bytes: 7,
+            ..Default::default()
+        };
+        let _ = update(&mut state, Message::ScanItemFinished(old, 0, 0, info));
+        assert!(state.board.get(0, 0).is_none());
+    }
+
+    #[test]
+    fn scan_toggle_opts_a_cleaner_out_and_back_in() {
+        let mut state = tiny_state();
+        let _ = update(&mut state, Message::ToggleScan(0, 1));
+        assert_eq!(state.disabled_cleaners, vec!["two".to_string()]);
+        assert!(state.board.is_off(0, 1));
+        assert_eq!(state.board.total, 1, "only the opted-in cleaner is scanned");
+        let _ = update(&mut state, Message::ToggleScan(0, 1));
+        assert!(state.disabled_cleaners.is_empty() && !state.board.is_off(0, 1));
+        assert_eq!(state.board.total, 2);
     }
 }
