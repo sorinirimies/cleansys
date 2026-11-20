@@ -4,6 +4,20 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.12.0](https://github.com/sorinirimies/cleansys/compare/v0.11.2...v0.12.0) — 2026-11-20
+
+### ✨ Features
+
+- Clean without waiting for the scan, per-cleaner scan opt-out, flat user/system lists ([`28cde1e`](https://github.com/sorinirimies/cleansys/commit/28cde1e19da4757e611bc684dc2b09cd2bb59176))
+
+### 🧪 Tests
+
+- **tui:** Render scan off / scan stopped, document s key in help ([`22b22ba`](https://github.com/sorinirimies/cleansys/commit/22b22ba9a5202ee4d79f11c2dd9ca0b64f6365d1))
+
+### 📦 Dependencies
+
+- Nightly cargo update 2026-11-18 ([`7077f8b`](https://github.com/sorinirimies/cleansys/commit/7077f8b46fd15929b31498931fcdda6d6500fd91))
+
 ## [0.11.2](https://github.com/sorinirimies/cleansys/compare/v0.11.1...v0.11.2) — 2026-11-17
 
 ### 🐛 Bug fixes
