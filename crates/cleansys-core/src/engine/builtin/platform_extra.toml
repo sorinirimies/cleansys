@@ -46,3 +46,66 @@ os = ["windows"]
 type = "delete"
 paths = ["$LOCALAPPDATA/*/EBWebView/Default/Cache/*", "$LOCALAPPDATA/*/EBWebView/Default/Code Cache/*", "$LOCALAPPDATA/*/EBWebView/Default/GPUCache/*"]
 label = "WebView2 cache"
+
+[[cleaner]]
+id = "win-battlenet"
+name = "Battle.net Cache & Logs"
+description = "Blizzard Battle.net launcher cache and logs (rebuilt on the next launch)"
+category = "Games"
+os = ["windows"]
+process = ["Battle.net.exe"]
+[[cleaner.action]]
+type = "delete"
+paths = ["$LOCALAPPDATA/Battle.net/Cache/*", "$LOCALAPPDATA/Battle.net/Logs/*", "$PROGRAMDATA/Battle.net/Logs/*"]
+label = "Battle.net cache"
+
+[[cleaner]]
+id = "win-ea-origin"
+name = "EA app / Origin Cache"
+description = "EA app and Origin launcher caches and logs (rebuilt on the next launch)"
+category = "Games"
+os = ["windows"]
+process = ["EADesktop.exe", "Origin.exe"]
+[[cleaner.action]]
+type = "delete"
+paths = ["$LOCALAPPDATA/Electronic Arts/EA Desktop/Cache/*", "$LOCALAPPDATA/Electronic Arts/EA Desktop/Logs/*", "$LOCALAPPDATA/Origin/Logs/*"]
+label = "EA / Origin cache"
+
+[[cleaner]]
+id = "win-ubisoft-connect"
+name = "Ubisoft Connect Cache & Logs"
+description = "Ubisoft Connect launcher cache and logs (rebuilt on the next launch)"
+category = "Games"
+os = ["windows"]
+process = ["UbisoftConnect.exe", "upc.exe"]
+[[cleaner.action]]
+type = "delete"
+paths = ["$LOCALAPPDATA/Ubisoft Game Launcher/cache/*", "$LOCALAPPDATA/Ubisoft Game Launcher/logs/*"]
+label = "Ubisoft Connect cache"
+
+[[cleaner]]
+id = "adobe-media-cache"
+name = "Adobe Media Cache"
+description = "Premiere / After Effects media cache and conformed audio (rebuilt when a project is reopened; can be many GB)"
+category = "Everyday Junk"
+risk = "moderate"
+os = ["macos", "windows"]
+process = ["Adobe Premiere Pro", "Adobe After Effects", "Adobe Media Encoder", "Adobe Premiere Pro.exe", "AfterFX.exe"]
+[[cleaner.action]]
+type = "delete"
+macos = ["~/Library/Application Support/Adobe/Common/Media Cache Files/*", "~/Library/Application Support/Adobe/Common/Media Cache/*"]
+windows = ["$APPDATA/Adobe/Common/Media Cache Files/*", "$APPDATA/Adobe/Common/Media Cache/*"]
+label = "Adobe media cache"
+
+[[cleaner]]
+id = "mac-audio-content"
+name = "GarageBand / Logic Sound Library"
+description = "Downloaded GarageBand and Logic Pro sound packs and Apple Loops. Many GB to download again; only clean if you no longer use them"
+category = "Maintenance & Tuning"
+risk = "caution"
+os = ["macos"]
+requires_root = true
+[[cleaner.action]]
+type = "delete"
+paths = ["/Library/Application Support/GarageBand/*", "/Library/Application Support/Logic/*", "/Library/Audio/Apple Loops/*"]
+label = "GarageBand / Logic content"
