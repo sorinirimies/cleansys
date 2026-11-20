@@ -340,22 +340,19 @@ fn run_schedule_cmd(action: ScheduleCmd) -> Result<()> {
     match action {
         ScheduleCmd::Show => {
             print_header("SCHEDULE");
-            match (Schedule::load(), sch::installed()) {
-                (Some(s), job) => {
-                    println!("  When:     {}", s.describe());
-                    println!("  Cleans:   {}", s.scope_label());
-                    match job {
-                        Some(j) => println!("  Active:   yes ({})", j.backend),
-                        None => println!(
-                            "  Active:   NO — saved but not installed; run `cleansys schedule install`"
-                        ),
-                    }
-                    println!("  Log:      {}", sch::log_path().display());
+            if let (Some(s), job) = (Schedule::load(), sch::installed()) {
+                println!("  When:     {}", s.describe());
+                println!("  Cleans:   {}", s.scope_label());
+                match job {
+                    Some(j) => println!("  Active:   yes ({})", j.backend),
+                    None => println!(
+                        "  Active:   NO — saved but not installed; run `cleansys schedule install`"
+                    ),
                 }
-                (None, _) => {
-                    println!("No schedule yet. Create one, e.g.:");
-                    println!("  cleansys schedule install --every weekly --day sun --at 03:30");
-                }
+                println!("  Log:      {}", sch::log_path().display());
+            } else {
+                println!("No schedule yet. Create one, e.g.:");
+                println!("  cleansys schedule install --every weekly --day sun --at 03:30");
             }
             if let Some(l) = LastRun::load() {
                 println!(
@@ -580,18 +577,15 @@ fn main() -> Result<()> {
         return Ok(());
     }
     if let Some(name) = &cli.theme {
-        match cleansys_tui::theme::find(name) {
-            Some(choice) => {
-                let saved = match choice {
-                    None => cleansys_core::SYSTEM_THEME_NAME.to_string(),
-                    Some(i) => cleansys_core::THEME_NAMES[i].to_string(),
-                };
-                let _ = cleansys_core::update_settings(|s| s.theme_name = Some(saved));
-            }
-            None => {
-                eprintln!("unknown theme '{name}' (try --list-themes)");
-                std::process::exit(2);
-            }
+        if let Some(choice) = cleansys_tui::theme::find(name) {
+            let saved = match choice {
+                None => cleansys_core::SYSTEM_THEME_NAME.to_string(),
+                Some(i) => cleansys_core::THEME_NAMES[i].to_string(),
+            };
+            let _ = cleansys_core::update_settings(|s| s.theme_name = Some(saved));
+        } else {
+            eprintln!("unknown theme '{name}' (try --list-themes)");
+            std::process::exit(2);
         }
     }
 
@@ -630,12 +624,12 @@ fn main() -> Result<()> {
             print_header("AVAILABLE CLEANERS");
             println!("\nUser cleaners (no root required):");
             for cleaner in user_cleaners::list_cleaners() {
-                println!("  • {}", cleaner);
+                println!("  • {cleaner}");
             }
 
             println!("\nSystem cleaners (some require root/admin):");
             for cleaner in system_cleaners::list_cleaners() {
-                println!("  • {}", cleaner);
+                println!("  • {cleaner}");
             }
 
             println!("\nAll cleaners (ids work with `scan`/`clean --id`, ~ moderate, ! caution):");

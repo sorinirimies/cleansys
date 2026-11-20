@@ -115,7 +115,7 @@ pub fn execute_with_sudo(command: &str, args: &[&str]) -> Result<std::process::O
         return Command::new(command)
             .args(args)
             .output()
-            .context(format!("Failed to execute command: {}", command));
+            .context(format!("Failed to execute command: {command}"));
     }
 
     if let Some(password) = crate::auth::cached_sudo_password() {
@@ -127,15 +127,15 @@ pub fn execute_with_sudo(command: &str, args: &[&str]) -> Result<std::process::O
             .stdout(Stdio::piped())
             .stderr(Stdio::piped())
             .spawn()
-            .context(format!("Failed to execute command with sudo: {}", command))?;
+            .context(format!("Failed to execute command with sudo: {command}"))?;
 
         if let Some(mut stdin) = child.stdin.take() {
-            let _ = writeln!(stdin, "{}", password);
+            let _ = writeln!(stdin, "{password}");
         }
 
         return child
             .wait_with_output()
-            .context(format!("Failed to execute command with sudo: {}", command));
+            .context(format!("Failed to execute command with sudo: {command}"));
     }
 
     // No cached password (TUI/CLI path) — rely on sudo's own ticket cache.
@@ -147,7 +147,7 @@ pub fn execute_with_sudo(command: &str, args: &[&str]) -> Result<std::process::O
         .args(sudo_args)
         .stdin(Stdio::null())
         .output()
-        .context(format!("Failed to execute command with sudo: {}", command))
+        .context(format!("Failed to execute command with sudo: {command}"))
 }
 
 #[cfg(not(unix))]
@@ -218,7 +218,7 @@ pub fn print_error(message: &str) {
 pub fn confirm(prompt: &str, default: bool) -> Result<bool> {
     let yes_no = if default { "[Y/n]" } else { "[y/N]" };
     loop {
-        print!("{} {} ", prompt, yes_no);
+        print!("{prompt} {yes_no} ");
         io::stdout().flush()?;
 
         let mut response = String::new();
@@ -302,7 +302,7 @@ pub fn format_size(bytes: u64) -> String {
     } else if bytes >= KB {
         format!("{:.2} KB", bytes as f64 / KB as f64)
     } else {
-        format!("{} bytes", bytes)
+        format!("{bytes} bytes")
     }
 }
 
@@ -393,6 +393,10 @@ pub fn scan_thread_count() -> usize {
 
 /// The single pool every scan runs on: cleaner jobs *and* the directory walks inside
 /// them share its workers (rayon work-stealing), so cores stay busy until the very end.
+#[allow(
+    clippy::expect_used,
+    reason = "a process that cannot start a thread pool cannot scan at all"
+)]
 pub fn scan_pool() -> &'static rayon::ThreadPool {
     static POOL: std::sync::OnceLock<rayon::ThreadPool> = std::sync::OnceLock::new();
     POOL.get_or_init(|| {

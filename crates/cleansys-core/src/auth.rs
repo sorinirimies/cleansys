@@ -84,7 +84,7 @@ pub fn authenticate_sudo(password: &str) -> Result<bool> {
         .spawn()?;
 
     if let Some(mut stdin) = child.stdin.take() {
-        writeln!(stdin, "{}", password)?;
+        writeln!(stdin, "{password}")?;
     }
 
     let status = child.wait()?;

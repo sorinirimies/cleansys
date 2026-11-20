@@ -144,12 +144,12 @@ mod tests {
         vec![
             CleanerCategory {
                 name: "A".into(),
-                description: "".into(),
+                description: String::new(),
                 items: vec![item("a1", 100), item("a2", 0)],
             },
             CleanerCategory {
                 name: "B".into(),
-                description: "".into(),
+                description: String::new(),
                 items: vec![item("b1", 0)],
             },
         ]
@@ -216,7 +216,7 @@ mod tests {
         };
         let c = vec![CleanerCategory {
             name: "A".into(),
-            description: "".into(),
+            description: String::new(),
             items: vec![hang, item("ok", 5)],
         }];
         let (tx, rx) = channel();
@@ -518,7 +518,7 @@ mod tests {
         };
         let c = vec![CleanerCategory {
             name: "A".into(),
-            description: "".into(),
+            description: String::new(),
             items: (0..40).map(|n| slow(&format!("s{n}"))).collect(),
         }];
         let (tx, rx) = channel();

@@ -154,10 +154,14 @@ where
                 }
                 times
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .insert(id, ms);
                 if remaining.fetch_sub(1, std::sync::atomic::Ordering::SeqCst) == 1 {
-                    save_scan_times(&times.lock().unwrap_or_else(|e| e.into_inner()));
+                    save_scan_times(
+                        &times
+                            .lock()
+                            .unwrap_or_else(std::sync::PoisonError::into_inner),
+                    );
                 }
                 if !sink(ci, ii, info) {
                     // receiver dropped (app closed): skip the rest
@@ -176,7 +180,10 @@ where
                 return;
             }
             let t0 = std::time::Instant::now();
-            *slots[n].started.lock().unwrap_or_else(|e| e.into_inner()) = Some(t0);
+            *slots[n]
+                .started
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(t0);
             // A panicking cleaner must not take the whole pool (rayon aborts on escaped panics) down.
             let info = ScanInfo::from_result(
                 std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| f(RunOptions::preview())))
@@ -200,7 +207,10 @@ where
                     return;
                 }
                 for (n, slot) in slots.iter().enumerate() {
-                    let started = *slot.started.lock().unwrap_or_else(|e| e.into_inner());
+                    let started = *slot
+                        .started
+                        .lock()
+                        .unwrap_or_else(std::sync::PoisonError::into_inner);
                     if let Some(t0) = started
                         && t0.elapsed() >= timeout
                         && !slot.reported.load(std::sync::atomic::Ordering::SeqCst)

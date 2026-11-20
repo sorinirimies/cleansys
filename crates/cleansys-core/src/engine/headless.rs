@@ -244,16 +244,25 @@ pub fn execute(jobs: &[Job], opts: RunOptions) -> Vec<Outcome> {
                 };
                 times
                     .lock()
-                    .unwrap_or_else(|e| e.into_inner())
+                    .unwrap_or_else(std::sync::PoisonError::into_inner)
                     .insert(jobs[i].id.clone(), t0.elapsed().as_millis() as u64);
-                *slots[i].lock().unwrap_or_else(|e| e.into_inner()) = Some(r);
+                *slots[i]
+                    .lock()
+                    .unwrap_or_else(std::sync::PoisonError::into_inner) = Some(r);
             });
         }
     });
-    crate::scan::save_scan_times(&times.into_inner().unwrap_or_else(|e| e.into_inner()));
+    crate::scan::save_scan_times(
+        &times
+            .into_inner()
+            .unwrap_or_else(std::sync::PoisonError::into_inner),
+    );
     slots
         .into_iter()
-        .filter_map(|m| m.into_inner().unwrap_or_else(|e| e.into_inner()))
+        .filter_map(|m| {
+            m.into_inner()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+        })
         .collect()
 }
 
@@ -309,7 +318,7 @@ pub fn print_outcomes(outcomes: &[Outcome], dry_run: bool, detail: bool) {
                     }
                 }
                 OutcomeStatus::Skipped(why) => {
-                    println!("  {:>10}  {} — skipped: {why}", "-", r.name)
+                    println!("  {:>10}  {} — skipped: {why}", "-", r.name);
                 }
                 OutcomeStatus::Failed(why) => println!("  {:>10}  {} — FAILED: {why}", "✗", r.name),
             }
@@ -484,7 +493,7 @@ pub fn run_scheduled() -> Result<u64> {
     for o in &outcomes {
         match &o.status {
             OutcomeStatus::Ok if o.bytes > 0 => {
-                println!("[cleansys] {}: freed {}", o.name, format_size(o.bytes))
+                println!("[cleansys] {}: freed {}", o.name, format_size(o.bytes));
             }
             OutcomeStatus::Skipped(w) => println!("[cleansys] {}: skipped ({w})", o.name),
             OutcomeStatus::Failed(w) => {

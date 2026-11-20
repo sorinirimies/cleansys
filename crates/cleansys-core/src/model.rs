@@ -190,21 +190,20 @@ fn builtin_category(cleaner: &str, root: bool) -> &'static str {
 
 /// Add `item` to the category called `name`, creating it when it does not exist yet.
 fn place(target: &mut Vec<CleanerCategory>, name: &str, item: CleanerItem) {
-    let idx = match target.iter().position(|c| c.name == name) {
-        Some(i) => i,
-        None => {
-            let base = name.trim_end_matches(ROOT_SUFFIX);
-            let mut description = category_description(base).to_string();
-            if name.ends_with(ROOT_SUFFIX) {
-                description.push_str(" (requires root)");
-            }
-            target.push(CleanerCategory {
-                name: name.to_string(),
-                description,
-                items: Vec::new(),
-            });
-            target.len() - 1
+    let idx = if let Some(i) = target.iter().position(|c| c.name == name) {
+        i
+    } else {
+        let base = name.trim_end_matches(ROOT_SUFFIX);
+        let mut description = category_description(base).to_string();
+        if name.ends_with(ROOT_SUFFIX) {
+            description.push_str(" (requires root)");
         }
+        target.push(CleanerCategory {
+            name: name.to_string(),
+            description,
+            items: Vec::new(),
+        });
+        target.len() - 1
     };
     target[idx].items.insert(0, item);
 }
@@ -243,20 +242,19 @@ pub fn spec_categories(
         } else {
             spec.category.clone()
         };
-        let idx = match target.iter().position(|c| c.name == display_name) {
-            Some(i) => i,
-            None => {
-                let mut description = category_description(&spec.category).to_string();
-                if spec.requires_root {
-                    description.push_str(" (requires root)");
-                }
-                target.push(CleanerCategory {
-                    name: display_name,
-                    description,
-                    items: Vec::new(),
-                });
-                target.len() - 1
+        let idx = if let Some(i) = target.iter().position(|c| c.name == display_name) {
+            i
+        } else {
+            let mut description = category_description(&spec.category).to_string();
+            if spec.requires_root {
+                description.push_str(" (requires root)");
             }
+            target.push(CleanerCategory {
+                name: display_name,
+                description,
+                items: Vec::new(),
+            });
+            target.len() - 1
         };
         let description = spec.display_description();
         let requires_root = spec.requires_root;

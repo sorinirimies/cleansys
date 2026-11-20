@@ -161,7 +161,7 @@ impl PasswordPrompt {
         // Add error message if present
         if let Some(error) = &self.error_message {
             lines.push(Line::from(vec![Span::styled(
-                format!("❌ {}", error),
+                format!("❌ {error}"),
                 Style::default().fg(crate::theme::th().error),
             )]));
             lines.push(Line::from(vec![Span::raw("")]));

@@ -52,7 +52,9 @@ fn process_names() -> HashSet<String> {
 
 fn cached_processes() -> HashSet<String> {
     static CACHE: Mutex<Option<(Instant, HashSet<String>)>> = Mutex::new(None);
-    let mut guard = CACHE.lock().unwrap_or_else(|e| e.into_inner());
+    let mut guard = CACHE
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Some((at, set)) = guard.as_ref()
         && at.elapsed() < TTL
     {

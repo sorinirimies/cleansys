@@ -148,7 +148,9 @@ mod tests {
     /// The skip set is process-wide, so tests that spawn workers must not overlap.
     static SERIAL: std::sync::Mutex<()> = std::sync::Mutex::new(());
     fn serial() -> std::sync::MutexGuard<'static, ()> {
-        SERIAL.lock().unwrap_or_else(|e| e.into_inner())
+        SERIAL
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     fn drain(h: &RunHandle) -> Vec<RunMsg> {

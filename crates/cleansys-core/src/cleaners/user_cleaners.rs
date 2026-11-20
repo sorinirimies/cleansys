@@ -202,7 +202,7 @@ fn clean_app_caches(opts: RunOptions) -> Result<CleaningResult> {
         return clean_windows_only_caches(opts);
     };
 
-    debug!("Cache directory: {:?}", cache_dir);
+    debug!("Cache directory: {cache_dir:?}");
 
     if cache_dir.exists()
         && let Ok(entries) = fs::read_dir(&cache_dir)
@@ -216,12 +216,12 @@ fn clean_app_caches(opts: RunOptions) -> Result<CleaningResult> {
                 .to_string_lossy()
                 .to_string();
             if protected.contains(&name.as_str()) {
-                debug!("Skipping critical cache directory: {:?}", path);
+                debug!("Skipping critical cache directory: {path:?}");
                 continue;
             }
             // Apps with their own "Detected App Caches" cleaner are cleaned there.
             if crate::engine::discover::is_discovered(&path) {
-                debug!("Left to its detected cleaner: {:?}", path);
+                debug!("Left to its detected cleaner: {path:?}");
                 continue;
             }
             if path.is_dir() {

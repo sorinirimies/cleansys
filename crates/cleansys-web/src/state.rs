@@ -233,7 +233,9 @@ impl Shared {
     }
 
     fn lock(&self) -> MutexGuard<'_, Inner> {
-        self.0.lock().unwrap_or_else(|e| e.into_inner())
+        self.0
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner)
     }
 
     /// Force the root flag (tests).
@@ -736,7 +738,7 @@ mod tests {
                 let mut r = CleaningResult::new();
                 if bytes > 0 {
                     r.add_item(CleanedItem::file(
-                        PathBuf::from(format!("/x/{id_len}", id_len = bytes)),
+                        PathBuf::from(format!("/x/{bytes}")),
                         bytes,
                         "t",
                     ));

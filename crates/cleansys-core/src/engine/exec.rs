@@ -482,7 +482,9 @@ fn project_index(cfg: &EngineConfig, needed: &[String]) -> Index {
     // steal other scan jobs, which would re-walk everything or queue behind the lock,
     // making the scan crawl or appear stuck. Here the waiting worker just blocks.
     static BUILD: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _build = BUILD.lock().unwrap_or_else(|e| e.into_inner());
+    let _build = BUILD
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     let roots = cfg.effective_roots();
     let key = format!("{roots:?}|{}", cfg.max_depth);
 

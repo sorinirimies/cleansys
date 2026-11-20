@@ -129,14 +129,14 @@ pub fn find_program(program: &str) -> Option<PathBuf> {
     }
     let exts: Vec<String> = if cfg!(windows) {
         vec![
-            "".into(),
+            String::new(),
             ".exe".into(),
             ".cmd".into(),
             ".bat".into(),
             ".com".into(),
         ]
     } else {
-        vec!["".into()]
+        vec![String::new()]
     };
     std::env::split_paths(&std::env::var_os("PATH")?).find_map(|dir| {
         exts.iter().find_map(|e| {

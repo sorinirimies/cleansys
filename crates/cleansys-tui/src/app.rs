@@ -1191,7 +1191,7 @@ impl App {
             ScheduleField::Day => match d.frequency {
                 Frequency::Weekly => d.weekday = wrap(i32::from(d.weekday) + delta, 0, 6) as u8,
                 Frequency::Monthly => {
-                    d.day_of_month = wrap(i32::from(d.day_of_month) + delta, 1, 28) as u8
+                    d.day_of_month = wrap(i32::from(d.day_of_month) + delta, 1, 28) as u8;
                 }
                 Frequency::Daily => {}
             },
@@ -1609,9 +1609,9 @@ impl App {
                 KeyCode::PageUp => self.cycle_theme(-10),
                 KeyCode::Home | KeyCode::Char('g') => self.select_picker(0),
                 KeyCode::End | KeyCode::Char('G') => {
-                    self.select_picker(crate::theme::PICKER_LEN - 1)
+                    self.select_picker(crate::theme::PICKER_LEN - 1);
                 }
-                KeyCode::Esc | KeyCode::Enter | KeyCode::Char('T') | KeyCode::Char('q') => {
+                KeyCode::Esc | KeyCode::Enter | KeyCode::Char('T' | 'q') => {
                     self.theme_picker_open = false;
                 }
                 _ => {}
@@ -1623,7 +1623,7 @@ impl App {
         if self.report_open {
             match key.code {
                 KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q' | 'P') => {
-                    self.report_open = false
+                    self.report_open = false;
                 }
                 _ => {}
             }
@@ -1686,11 +1686,11 @@ impl App {
         // Schedule overlay
         if self.schedule_open {
             match key.code {
-                KeyCode::Esc | KeyCode::Char('q') | KeyCode::Char('S') => self.close_schedule(),
+                KeyCode::Esc | KeyCode::Char('q' | 'S') => self.close_schedule(),
                 KeyCode::Down | KeyCode::Char('j') | KeyCode::Tab => self.schedule_next_field(),
                 KeyCode::Up | KeyCode::Char('k') | KeyCode::BackTab => self.schedule_prev_field(),
                 KeyCode::Left | KeyCode::Char('h') => self.schedule_adjust(-1),
-                KeyCode::Right | KeyCode::Char('l') | KeyCode::Char(' ') => self.schedule_adjust(1),
+                KeyCode::Right | KeyCode::Char('l' | ' ') => self.schedule_adjust(1),
                 KeyCode::Enter => self.schedule_apply(),
                 KeyCode::Char('d') | KeyCode::Delete => self.schedule_remove(),
                 _ => {}
@@ -2036,10 +2036,7 @@ impl App {
                     _ => {}
                 },
                 InfoTab::About => {
-                    if matches!(
-                        code,
-                        KeyCode::Enter | KeyCode::Char(' ') | KeyCode::Char('g')
-                    ) {
+                    if matches!(code, KeyCode::Enter | KeyCode::Char(' ' | 'g')) {
                         match self.about_selected_link() {
                             Some(url) => {
                                 self.settings_message = match cleansys_core::appinfo::open_url(&url)

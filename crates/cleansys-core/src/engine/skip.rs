@@ -11,7 +11,9 @@ use std::sync::Mutex;
 static SKIPPED: Mutex<Option<HashSet<PathBuf>>> = Mutex::new(None);
 
 fn lock() -> std::sync::MutexGuard<'static, Option<HashSet<PathBuf>>> {
-    SKIPPED.lock().unwrap_or_else(|e| e.into_inner())
+    SKIPPED
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner)
 }
 
 /// Replace the skip set.

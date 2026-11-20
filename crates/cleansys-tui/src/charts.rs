@@ -189,7 +189,10 @@ pub fn report_data(app: &App) -> ReportData {
                         r.cleaners.push((item.name.clone(), item.bytes_cleaned));
                         cat_sum += item.bytes_cleaned;
                     }
-                    let n = item.last_result.as_ref().map_or(0, |x| x.item_count());
+                    let n = item
+                        .last_result
+                        .as_ref()
+                        .map_or(0, cleansys_core::CleaningResult::item_count);
                     r.items += n;
                     let outcome = if item.bytes_cleaned == 0 {
                         Outcome::Nothing

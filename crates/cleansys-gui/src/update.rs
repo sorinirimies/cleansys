@@ -772,7 +772,7 @@ fn start_scan(state: &mut CleanSysGui) -> Task<Message> {
         move |ci, ii, info| {
             if let Some(tx) = senders
                 .lock()
-                .unwrap_or_else(|e| e.into_inner())
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
                 .remove(&(ci, ii))
             {
                 let _ = tx.send(info);
@@ -816,7 +816,7 @@ fn start_pending_operations(state: &mut CleanSysGui) -> Task<Message> {
         item.status = Some(Status::Running);
         let function = item.function.clone();
         let name = item.name.clone();
-        state.push_log(format!("\u{1f504} Running: {}", name));
+        state.push_log(format!("\u{1f504} Running: {name}"));
 
         tasks.push(Task::perform(
             blocking(move || function(RunOptions::execute().with_skips())),

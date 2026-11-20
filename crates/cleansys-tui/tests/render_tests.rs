@@ -143,7 +143,11 @@ fn screen_text(app: &mut App, width: u16, height: u16) -> String {
     buffer
         .content()
         .chunks(width as usize)
-        .map(|row| row.iter().map(|c| c.symbol()).collect::<String>())
+        .map(|row| {
+            row.iter()
+                .map(ratatui::buffer::Cell::symbol)
+                .collect::<String>()
+        })
         .collect::<Vec<_>>()
         .join("\n")
 }
@@ -237,7 +241,7 @@ fn expanded_details_render_paths_and_follow_the_cursor() {
         .buffer()
         .content()
         .iter()
-        .map(|c| c.symbol())
+        .map(ratatui::buffer::Cell::symbol)
         .collect();
     assert!(text.contains("/p/a/target"), "entry path not rendered");
     assert!(text.contains("/p/b/target"));

@@ -119,7 +119,9 @@ fn walk(roots: &[PathBuf], q: &Query) -> Vec<Entry> {
 /// project index) so a waiting scan worker never runs a nested parallel walk itself.
 fn shared_index(roots: &[PathBuf]) -> Shared {
     static BUILD: std::sync::Mutex<()> = std::sync::Mutex::new(());
-    let _build = BUILD.lock().unwrap_or_else(|e| e.into_inner());
+    let _build = BUILD
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
     if let Ok(g) = index_cache().lock()
         && let Some((at, idx)) = g.get(roots)
         && at.elapsed() < INDEX_TTL

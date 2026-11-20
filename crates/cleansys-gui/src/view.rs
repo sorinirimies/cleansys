@@ -1312,7 +1312,7 @@ fn password_dialog<'a>(state: &'a CleanSysGui, c: &ThemeColors) -> Element<'a, M
     .width(Length::Fill);
 
     if let Some(err) = &state.password_error {
-        content = content.push(text(format!("❌ {}", err)).size(13).color(c.red));
+        content = content.push(text(format!("❌ {err}")).size(13).color(c.red));
     }
 
     content = content.push(

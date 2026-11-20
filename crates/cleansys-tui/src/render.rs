@@ -1807,11 +1807,7 @@ fn render_help(f: &mut Frame, area: Rect, scroll: u16) -> u16 {
     let mut block = Block::default().title("Help").borders(Borders::ALL);
     if max_scroll > 0 {
         block = block.title_bottom(
-            Line::from(format!(
-                " ↑/↓ PgUp/PgDn scroll · {}/{} ",
-                scroll, max_scroll
-            ))
-            .right_aligned(),
+            Line::from(format!(" ↑/↓ PgUp/PgDn scroll · {scroll}/{max_scroll} ")).right_aligned(),
         );
     }
     let help = Paragraph::new(help_text)

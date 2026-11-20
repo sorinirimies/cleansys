@@ -189,7 +189,7 @@ mod format_tests {
         let stdout = String::from_utf8_lossy(&output.stdout);
 
         // Should contain bullet points or other formatting
-        assert!(stdout.contains("•") || stdout.contains("-") || stdout.contains("*"));
+        assert!(stdout.contains("•") || stdout.contains('-') || stdout.contains('*'));
     }
 }
 
@@ -229,8 +229,7 @@ mod comprehensive_tests {
         for subcommand in subcommands {
             assert!(
                 stdout.contains(subcommand),
-                "Help should document {} subcommand",
-                subcommand
+                "Help should document {subcommand} subcommand"
             );
         }
     }
