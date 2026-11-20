@@ -172,20 +172,24 @@ sudo cleansys            # also unlock the system (root) cleaners
 
 ## 🧹 What it cleans
 
-Cleaners are grouped into categories; the UIs list **user-land categories first, then a separate System · root section**.
+Cleaners are grouped by theme; the UIs list a **User land** section first (everything that needs no password), then a **System · root** section. Each section starts with an **All** entry that lists every cleaner of that side. Homebrew, Xcode and Simulator cleanups live under *Developer Caches*; Browser Caches under *Web Browsers*.
 
 | Category | Examples |
 |----------|----------|
-| **User Land Cleaners** | Browser/app/thumbnail caches, temp files, package-manager caches, Trash |
+| **Everyday Junk** | App/thumbnail caches, temp files, Trash, Quick Look & icon caches, Explorer/WER/Internet caches, desktop-environment caches, user core dumps |
 | **Developer Caches** | Gradle (caches, wrapper), Android SDK & Studio, Maven, Cargo git/src, sccache, npm/yarn/pnpm/bun, Go, uv/Poetry, Bazel, Playwright/Cypress, node-gyp/Expo, ESLint/Nx/Turbo, rustup temp, Hex, opam, Zed, VS Code/Cursor/Windsurf, Xcode, Ruby, NuGet, ccache… |
 | **Project Build Artifacts** | Rust `target/`, Gradle/Android `build/` + `.gradle/` + `.cxx`, Maven, `node_modules`, Next/Nuxt/Vite caches, Python caches & venvs, SwiftPM, CocoaPods, .NET `bin/obj`, Flutter, Zig, CMake, Terraform |
 | **AI & LLM Caches** | Hugging Face, PyTorch/Keras, Ollama, LM Studio/GPT4All/Jan, Claude Code, Codex/Gemini CLI, agent session histories, code-index caches |
 | **Web Browsers** | Cache, cookies & site data, history, sessions — Chrome, Chromium, Brave, Edge, Vivaldi, Opera, Arc, Firefox, LibreWolf, Zen, Safari |
 | **Applications / Games** | Slack, Discord, Teams, Signal, Spotify, Zoom, Telegram, Office, Adobe, JetBrains logs · Steam shader cache, Epic, Lutris/Heroic, Wine, GPU shader caches |
-| **System Maintenance** | Linux: APT/DNF/pacman/zypper cleanup, rotated logs, journal vacuum, core dumps, snap/flatpak (old revisions), print spool, `fstrim` · macOS: DNS flush, Quick Look, update leftovers, Time Machine snapshots, iOS backups & firmware, old *Install macOS* apps, Rosetta cache, periodic scripts · Windows: Prefetch, WER, CBS logs, Defender history, shader/Store caches, DISM cleanup, hibernation file · everywhere: installer files in `~/Downloads` |
+| **Installers & Backups** | Installer files in `~/Downloads`, old *Install macOS* apps, iOS/iPadOS firmware & device backups, Mail downloads |
+| **Large & Old Files** | Files over 500 MB, untouched for a year, old downloads, disk images, archives, dumps, duplicates (nothing ticked by default) |
 | **Containers & Virtualization** | Docker/Podman prune, Flatpak unused runtimes, Nix GC, Conda, Kubernetes/Helm caches, Vagrant boxes |
 | **Privacy Traces** | Recent-file lists, shell/REPL/editor histories |
-| **System Cleaners** *(root)* | Package-manager caches, logs, old kernels, crash reports, Homebrew/Xcode/Simulator (macOS), Windows Update cache, Recycle Bin |
+| **System Logs & Dumps** *(root)* | System logs, journal vacuum, rotated logs, crash reports, core dumps, ASL / setup / event logs, Defender history |
+| **Package Managers** *(root)* | APT/DNF/pacman/zypper caches & orphans, old kernels, snap revisions, AppStream, DISM component cleanup |
+| **Updates & Snapshots** *(root)* | Downloaded macOS updates, Time Machine local snapshots, Windows Update & Delivery Optimization caches |
+| **Maintenance & Tuning** *(root)* | DNS flush, purge memory, font caches, Rosetta cache, periodic scripts, `fstrim`, print spool, hibernation file, Prefetch |
 
 Run `cleansys list` for every cleaner and its id. Cleaners for software you don't have are hidden automatically.
 
@@ -357,7 +361,7 @@ long — set `0` to disable. Change it live from the TUI (`[` / `]`), GUI or web
 
 ### Deep clean (PC-wide, opt-in)
 
-The **Deep Clean** category finds big or forgotten files: files over 500 MB, large files untouched for a year, old downloads, disk images, archives, leftover installers and dumps. Every cleaner is `caution`/`moderate`, so nothing is ticked by default, never part of `--recommended`, and a scheduled run skips it unless you ask. Each file is listed and can be unticked (`→` / `v`), and `cleansys scan -c "Deep Clean" --include-caution` previews it.
+The **Large & Old Files** category finds big or forgotten files: files over 500 MB, large files untouched for a year, old downloads, disk images, archives, leftover installers and dumps. Every cleaner is `caution`/`moderate`, so nothing is ticked by default, never part of `--recommended`, and a scheduled run skips it unless you ask. Each file is listed and can be unticked (`→` / `v`), and `cleansys scan -c "Large & Old Files" --include-caution` previews it.
 
 **Duplicate Files** hashes same-size files (size, then first 64 KiB, then the whole file, then a byte-for-byte check), keeps the oldest copy of each group and lists the rest. Hard links are not duplicates.
 

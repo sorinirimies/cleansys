@@ -8,7 +8,7 @@ use cleansys_core::engine::schedule::{
 use serde::Deserialize;
 use topcoat::{
     Result,
-    context::{Cx, app_context},
+    context::{Cx, context},
     router::{
         content::Form,
         error::{SeeOther, see_other},
@@ -25,7 +25,7 @@ use crate::{
 };
 
 fn shared(cx: &Cx) -> Shared {
-    app_context::<Shared>(cx).clone()
+    context::<Shared>(cx).clone()
 }
 
 /// Resolve `?theme=` (remembered for the GUI too) against the saved one.
@@ -955,7 +955,7 @@ async fn schedule_install(cx: &Cx, Form(f): Form<ScheduleForm>) -> Result<SeeOth
 }
 
 #[route(POST "/schedule/remove")]
-async fn schedule_remove() -> Result<SeeOther> {
+async fn schedule_remove(cx: &Cx) -> Result<SeeOther> {
     let r = tokio::task::spawn_blocking(schedule::remove)
         .await
         .map_err(|e| e.to_string())

@@ -2,7 +2,7 @@
 
 use topcoat::{
     Result,
-    context::{Cx, app_context},
+    context::{Cx, context},
     router::{
         content::{Css, Js, Json},
         route,
@@ -17,7 +17,7 @@ use crate::{
 /// Every category and cleaner with its scan result: `/api/categories`.
 #[route(GET "/api/categories")]
 async fn categories(cx: &Cx) -> Result<Json<serde_json::Value>> {
-    let st = app_context::<Shared>(cx).clone();
+    let st = context::<Shared>(cx).clone();
     st.poll();
     let snap = st.snapshot();
     let cats: Vec<_> = snap
@@ -57,7 +57,7 @@ async fn categories(cx: &Cx) -> Result<Json<serde_json::Value>> {
 /// Scan / selection / run status: `/api/status`.
 #[route(GET "/api/status")]
 async fn status(cx: &Cx) -> Result<Json<serde_json::Value>> {
-    let st = app_context::<Shared>(cx).clone();
+    let st = context::<Shared>(cx).clone();
     st.poll();
     let s = st.snapshot();
     Ok(Json(serde_json::json!({
@@ -79,18 +79,18 @@ async fn status(cx: &Cx) -> Result<Json<serde_json::Value>> {
 
 /// Liveness probe.
 #[route(GET "/api/health")]
-async fn health() -> Result<Json<&'static str>> {
+async fn health(cx: &Cx) -> Result<Json<&'static str>> {
     Ok(Json("ok"))
 }
 
 /// Every colour theme with its palette (the same ones the TUI and GUI offer).
 #[route(GET "/api/themes")]
-async fn themes() -> Result<Json<serde_json::Value>> {
+async fn themes(cx: &Cx) -> Result<Json<serde_json::Value>> {
     Ok(Json(crate::theme::catalogue()))
 }
 
 #[route(GET "/style.css")]
-async fn style() -> Result<Css<&'static str>> {
+async fn style(cx: &Cx) -> Result<Css<&'static str>> {
     Ok(Css(CSS))
 }
 
@@ -116,18 +116,18 @@ else if(e.key==='R'){var r=document.querySelector('button[name=op][value=rescan]
 })();";
 
 #[route(GET "/app.js")]
-async fn app_js() -> Result<Js<&'static str>> {
+async fn app_js(cx: &Cx) -> Result<Js<&'static str>> {
     Ok(Js(PAGE_JS))
 }
 
 #[route(POST "/api/hello")]
-async fn hello() -> Result<Json<&'static str>> {
+async fn hello(cx: &Cx) -> Result<Json<&'static str>> {
     HELLOS.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
     Ok(Json("ok"))
 }
 
 #[route(POST "/api/bye")]
-async fn bye() -> Result<Json<&'static str>> {
+async fn bye(cx: &Cx) -> Result<Json<&'static str>> {
     let seen = HELLOS.load(std::sync::atomic::Ordering::SeqCst);
     tokio::spawn(async move {
         tokio::time::sleep(GRACE).await;

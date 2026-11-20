@@ -3,6 +3,7 @@
 use cleansys_core::Risk;
 use topcoat::{
     Result,
+    context::Cx,
     view::{Child, View, component, view},
 };
 
@@ -14,6 +15,7 @@ use crate::util::{fmt, nav_href, size_class};
 /// used while a scan or a clean is in progress.
 #[component]
 pub(crate) async fn document(
+    cx: &Cx,
     refresh: u32,
     theme: usize,
     title: String,
@@ -48,7 +50,7 @@ pub(crate) async fn document(
 
 /// Tab bar shared by the Settings and About pages.
 #[component]
-pub(crate) async fn info_tabs(active: String) -> Result<impl View> {
+pub(crate) async fn info_tabs(cx: &Cx, active: String) -> Result<impl View> {
     Ok(view! {
         <nav class="tabs" aria-label="Settings and About">
             <a class=(if active == "settings" { "tab active" } else { "tab" }) href="/settings">"⚙ Settings"</a>
@@ -60,6 +62,7 @@ pub(crate) async fn info_tabs(active: String) -> Result<impl View> {
 /// Logo, user/root badge, search box, schedule link and theme picker.
 #[component]
 pub(crate) async fn top_bar(
+    cx: &Cx,
     is_root: bool,
     q: String,
     cat: usize,
@@ -108,13 +111,14 @@ fn cat_size(c: &CatView) -> (String, &'static str) {
 
 /// A small CSS-animated spinner shown instead of numbers that are not ready yet.
 #[component]
-pub(crate) async fn spinner() -> Result<impl View> {
+pub(crate) async fn spinner(cx: &Cx) -> Result<impl View> {
     Ok(view! { <span class="spin" role="status" aria-label="measuring"></span> })
 }
 
 /// Sidebar: USER LAND above SYSTEM · ROOT, each starting with its "All" entry.
 #[component]
 pub(crate) async fn side_nav(
+    cx: &Cx,
     categories: &[CatView],
     areas: &[CatView],
     active: usize,
@@ -170,7 +174,12 @@ pub(crate) async fn side_nav(
 
 /// Drop-down navigation shown instead of the sidebar on narrow screens.
 #[component]
-pub(crate) async fn cat_pick(entries: &[CatView], active: usize, hide: bool) -> Result<impl View> {
+pub(crate) async fn cat_pick(
+    cx: &Cx,
+    entries: &[CatView],
+    active: usize,
+    hide: bool,
+) -> Result<impl View> {
     Ok(view! {
         <form class="catpick" method="get" action="/">
             if !hide { <input type="hidden" name="hide" value="0"> }
@@ -188,6 +197,7 @@ pub(crate) async fn cat_pick(entries: &[CatView], active: usize, hide: bool) -> 
 /// One cleaner: the whole row is a label, ticking it posts the change.
 #[component]
 pub(crate) async fn item_row(
+    cx: &Cx,
     item: &ItemView,
     back: String,
     show_category: Option<String>,
@@ -301,6 +311,7 @@ pub(crate) async fn item_row(
 /// Sticky bar: selection summary / progress and the action buttons.
 #[component]
 pub(crate) async fn action_bar(
+    cx: &Cx,
     snap: &Snapshot,
     back: String,
     cat: usize,

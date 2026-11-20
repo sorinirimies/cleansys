@@ -53,9 +53,7 @@ pub use cleaners::cleaned_item::{
     CleanedItem, CleanedItemType, CleanerFn, CleaningResult, RunOptions, cleaner_fn,
 };
 pub use cleaners::{system_cleaners, user_cleaners};
-pub use model::{
-    CleanerCategory, CleanerItem, Risk, Status, load_areas, load_categories, select_recommended,
-};
+pub use model::{CleanerCategory, CleanerItem, Risk, Status, load_categories, select_recommended};
 pub use scan::{
     EntryState, ScanBoard, ScanEntry, ScanHandle, ScanInfo, disabled_positions, spawn_scan,
     spawn_scan_filtered, spawn_scan_with,

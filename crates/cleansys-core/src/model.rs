@@ -96,9 +96,10 @@ pub struct CleanerCategory {
 /// This is shared between the TUI and GUI front-ends so both present the
 /// exact same list of cleaners.
 pub fn load_categories() -> Vec<CleanerCategory> {
-    let mut user_items = Vec::new();
+    let (mut user, mut root) = spec_categories(engine::load_specs());
+
     for cleaner in user_cleaners::get_cleaners() {
-        user_items.push(CleanerItem {
+        let item = CleanerItem {
             id: format!("core-user-{}", slug(cleaner.name)),
             risk: builtin_risk(cleaner.name),
             name: cleaner.name.to_string(),
@@ -109,12 +110,11 @@ pub fn load_categories() -> Vec<CleanerCategory> {
             bytes_cleaned: 0,
             last_result: None,
             status: None,
-        });
+        };
+        place(&mut user, builtin_category(cleaner.name, false), item);
     }
-
-    let mut system_items = Vec::new();
     for cleaner in system_cleaners::get_cleaners() {
-        system_items.push(CleanerItem {
+        let item = CleanerItem {
             id: format!("core-sys-{}", slug(cleaner.name)),
             risk: builtin_risk(cleaner.name),
             name: cleaner.name.to_string(),
@@ -125,27 +125,87 @@ pub fn load_categories() -> Vec<CleanerCategory> {
             bytes_cleaned: 0,
             last_result: None,
             status: None,
-        });
+        };
+        if cleaner.requires_root {
+            let name = format!("{}{ROOT_SUFFIX}", builtin_category(cleaner.name, true));
+            place(&mut root, &name, item);
+        } else {
+            place(&mut user, builtin_category(cleaner.name, false), item);
+        }
     }
 
-    let (spec_user, spec_root) = spec_categories(engine::load_specs());
+    // Layout: every user-land category first, then every root category, each side in the
+    // fixed order of `USER_ORDER` / `ROOT_ORDER` (unknown names last, first-seen order kept).
+    sort_by_order(&mut user, USER_ORDER);
+    sort_by_order(&mut root, ROOT_ORDER);
+    user.extend(root);
+    user
+}
 
-    // Layout (kept deliberately): every user-land category first, then every
-    // root/administrator category — so the UI's "user land vs system" split
-    // is preserved no matter how many cleaners the engine adds.
-    let mut categories = vec![CleanerCategory {
-        name: "User Land Cleaners".to_string(),
-        description: "Clean user-specific files and caches".to_string(),
-        items: user_items,
-    }];
-    categories.extend(spec_user);
-    categories.push(CleanerCategory {
-        name: "System Cleaners".to_string(),
-        description: "Clean system files and caches (requires root)".to_string(),
-        items: system_items,
+/// Display order of the user-land categories.
+pub const USER_ORDER: &[&str] = &[
+    "Everyday Junk",
+    "Web Browsers",
+    "Developer Caches",
+    "Project Build Artifacts",
+    "Containers & Virtualization",
+    "AI & LLM Caches",
+    "Applications",
+    "Games",
+    "Installers & Backups",
+    "Large & Old Files",
+    "Privacy Traces",
+];
+
+/// Display order of the system (root) categories (names without [`ROOT_SUFFIX`]).
+pub const ROOT_ORDER: &[&str] = &[
+    "System Logs & Dumps",
+    "Package Managers",
+    "Updates & Snapshots",
+    "Maintenance & Tuning",
+];
+
+fn sort_by_order(categories: &mut [CleanerCategory], order: &[&str]) {
+    categories.sort_by_key(|c| {
+        let base = c.name.trim_end_matches(ROOT_SUFFIX);
+        order.iter().position(|o| *o == base).unwrap_or(order.len())
     });
-    categories.extend(spec_root);
-    categories
+}
+
+/// Which category a hard-coded cleaner belongs to (the name is the display name, root
+/// categories get [`ROOT_SUFFIX`] added by the caller).
+fn builtin_category(cleaner: &str, root: bool) -> &'static str {
+    match (root, cleaner) {
+        (_, "Browser Caches") => "Web Browsers",
+        (_, "Homebrew Cache" | "Xcode Derived Data" | "iOS Simulator Caches") => "Developer Caches",
+        (false, "Package Manager Caches") => "Developer Caches",
+        (true, "Package Manager Caches" | "Old Kernels") => "Package Managers",
+        (true, "System Logs" | "Crash Reports") => "System Logs & Dumps",
+        (true, "Windows Update Cache") => "Updates & Snapshots",
+        (true, _) => "Maintenance & Tuning",
+        (false, _) => "Everyday Junk",
+    }
+}
+
+/// Add `item` to the category called `name`, creating it when it does not exist yet.
+fn place(target: &mut Vec<CleanerCategory>, name: &str, item: CleanerItem) {
+    let idx = match target.iter().position(|c| c.name == name) {
+        Some(i) => i,
+        None => {
+            let base = name.trim_end_matches(ROOT_SUFFIX);
+            let mut description = category_description(base).to_string();
+            if name.ends_with(ROOT_SUFFIX) {
+                description.push_str(" (requires root)");
+            }
+            target.push(CleanerCategory {
+                name: name.to_string(),
+                description,
+                items: Vec::new(),
+            });
+            target.len() - 1
+        }
+    };
+    target[idx].items.insert(0, item);
 }
 
 /// Name of the flat user-land list shown by the front-ends.
@@ -156,35 +216,6 @@ pub const SYSTEM_AREA: &str = "System Cleaners";
 /// Does a [`load_categories`] category belong to the system (root) side?
 pub fn is_system_category(name: &str) -> bool {
     name == SYSTEM_AREA || name.ends_with(ROOT_SUFFIX)
-}
-
-/// The lists the front-ends show: exactly two flat areas, user land then system, holding
-/// every cleaner (built-in and declarative) instead of nesting them in sub-categories.
-/// [`load_categories`] keeps the grouped layout for the CLI (`--category`).
-pub fn load_areas() -> Vec<CleanerCategory> {
-    flatten_areas(load_categories())
-}
-
-/// Merge grouped categories into the two flat user / system areas (order preserved).
-pub fn flatten_areas(categories: Vec<CleanerCategory>) -> Vec<CleanerCategory> {
-    let mut user = CleanerCategory {
-        name: USER_AREA.to_string(),
-        description: "Clean user-specific files and caches".to_string(),
-        items: Vec::new(),
-    };
-    let mut system = CleanerCategory {
-        name: SYSTEM_AREA.to_string(),
-        description: "Clean system files and caches (requires root)".to_string(),
-        items: Vec::new(),
-    };
-    for c in categories {
-        if is_system_category(&c.name) {
-            system.items.extend(c.items);
-        } else {
-            user.items.extend(c.items);
-        }
-    }
-    vec![user, system]
 }
 
 /// Suffix appended to the name of engine categories that need root, keeping
@@ -291,9 +322,15 @@ fn category_description(name: &str) -> &'static str {
         "Web Browsers" => "Cache, cookies, sessions and history of installed browsers",
         "Applications" => "Caches and logs of chat, media, productivity and creative apps",
         "Games" => "Shader caches, launcher caches and logs of game platforms",
-        "System Maintenance" => {
-            "OS-level caches, logs, crash dumps and update leftovers (often needs root)"
+        "Everyday Junk" => "Caches, temporary files, thumbnails and the trash",
+        "Installers & Backups" => "Downloaded installers, OS update files and device backups",
+        "Large & Old Files" => {
+            "Big, forgotten files: old downloads, disk images, archives, duplicates"
         }
+        "System Logs & Dumps" => "System logs, journals, crash reports and memory dumps",
+        "Package Managers" => "System package caches, orphans and old revisions",
+        "Updates & Snapshots" => "Downloaded OS updates, local snapshots and delivery caches",
+        "Maintenance & Tuning" => "DNS, memory, font and system caches; routine maintenance tasks",
         "Containers & Virtualization" => "Docker, Podman, Flatpak, Snap and Nix garbage",
         "Privacy Traces" => "Recent-file lists, shell/REPL histories and similar traces",
         _ => "Additional cleaners",
@@ -305,62 +342,96 @@ mod tests {
     use super::*;
 
     #[test]
-    fn load_categories_has_user_and_system() {
-        let categories = load_categories();
-        assert!(categories.len() >= 2);
-        assert_eq!(categories[0].name, "User Land Cleaners");
-        assert!(categories.iter().any(|c| c.name == "System Cleaners"));
-        assert!(!categories[0].items.is_empty());
-        let system = categories
-            .iter()
-            .find(|c| c.name == "System Cleaners")
-            .unwrap();
-        assert!(!system.items.is_empty());
-        // System cleaners each declare their own root requirement (e.g.
-        // Homebrew on macOS must not run as root), so not every item in the
-        // System category necessarily requires root — but user cleaners never do.
-        assert!(categories[0].items.iter().all(|i| !i.requires_root));
-    }
-
-    #[test]
-    fn areas_are_two_flat_lists_with_every_cleaner() {
-        let grouped: usize = load_categories().iter().map(|c| c.items.len()).sum();
-        let areas = load_areas();
-        assert_eq!(areas.len(), 2);
-        assert_eq!(areas[0].name, USER_AREA);
-        assert_eq!(areas[1].name, SYSTEM_AREA);
-        assert_eq!(areas.iter().map(|c| c.items.len()).sum::<usize>(), grouped);
-        // Engine cleaners (e.g. project build artifacts) are in the flat user list.
-        assert!(areas[0].items.iter().any(|i| i.id == "proj-rust"));
-        assert!(
-            areas[1]
-                .items
-                .iter()
-                .all(|i| i.requires_root || i.id.starts_with("core-sys-"))
-        );
-        assert!(areas[0].items.iter().all(|i| !i.requires_root));
-    }
-
-    #[test]
-    fn user_land_precedes_root_and_groups_are_homogeneous() {
+    fn categories_are_themed_and_split_by_side() {
         let cats = load_categories();
         let first_root = cats
             .iter()
-            .position(|c| c.name == "System Cleaners")
-            .expect("System Cleaners present");
-        // Everything before "System Cleaners" is user-land and root-free.
+            .position(|c| c.name.ends_with(ROOT_SUFFIX))
+            .expect("a system category exists");
+        // User land first: nothing needs root, and no catch-all names remain.
         for c in &cats[..first_root] {
-            assert!(
-                c.items.iter().all(|i| !i.requires_root),
-                "{} has root items",
-                c.name
-            );
+            assert!(c.items.iter().all(|i| !i.requires_root), "{}", c.name);
+            assert!(!c.items.is_empty(), "{} is empty", c.name);
+            assert!(!c.name.ends_with(ROOT_SUFFIX));
         }
-        // Engine categories after it are root-only and clearly labelled.
-        for c in &cats[first_root + 1..] {
+        // System after: every category is labelled and root-only.
+        for c in &cats[first_root..] {
             assert!(c.name.ends_with(ROOT_SUFFIX), "{}", c.name);
             assert!(c.items.iter().all(|i| i.requires_root), "{}", c.name);
         }
+        for old in [
+            "User Land Cleaners",
+            "System Cleaners",
+            "System Maintenance",
+            "Deep Clean",
+        ] {
+            assert!(
+                cats.iter().all(|c| !c.name.starts_with(old)),
+                "{old} still a category"
+            );
+        }
+        // Order follows USER_ORDER / ROOT_ORDER.
+        let rank = |names: Vec<&str>, order: &[&str]| -> Vec<usize> {
+            names
+                .iter()
+                .map(|n| order.iter().position(|o| o == n).unwrap_or(order.len()))
+                .collect()
+        };
+        let user = rank(
+            cats[..first_root].iter().map(|c| c.name.as_str()).collect(),
+            USER_ORDER,
+        );
+        assert!(user.windows(2).all(|w| w[0] <= w[1]), "{user:?}");
+        let root = rank(
+            cats[first_root..]
+                .iter()
+                .map(|c| c.name.trim_end_matches(ROOT_SUFFIX))
+                .collect(),
+            ROOT_ORDER,
+        );
+        assert!(root.windows(2).all(|w| w[0] <= w[1]), "{root:?}");
+    }
+
+    #[test]
+    fn builtin_cleaners_land_in_their_theme() {
+        let find = |id: &str| {
+            load_categories()
+                .into_iter()
+                .find(|c| c.items.iter().any(|i| i.id == id))
+                .map(|c| c.name)
+        };
+        assert_eq!(
+            find("core-user-browser-caches").as_deref(),
+            Some("Web Browsers")
+        );
+        assert_eq!(find("core-user-trash").as_deref(), Some("Everyday Junk"));
+        assert_eq!(
+            find("core-user-package-manager-caches").as_deref(),
+            Some("Developer Caches")
+        );
+        assert_eq!(
+            find("deep-large-files").as_deref(),
+            Some("Large & Old Files")
+        );
+    }
+
+    #[test]
+    fn builtin_category_mapping() {
+        assert_eq!(builtin_category("Trash", false), "Everyday Junk");
+        assert_eq!(
+            builtin_category("Xcode Derived Data", false),
+            "Developer Caches"
+        );
+        assert_eq!(builtin_category("System Logs", true), "System Logs & Dumps");
+        assert_eq!(builtin_category("Old Kernels", true), "Package Managers");
+        assert_eq!(
+            builtin_category("Windows Update Cache", true),
+            "Updates & Snapshots"
+        );
+        assert_eq!(
+            builtin_category("System Caches", true),
+            "Maintenance & Tuning"
+        );
     }
 
     #[test]

@@ -2,7 +2,7 @@
 
 use topcoat::{
     Result,
-    context::{Cx, app_context},
+    context::{Cx, context},
     router::{
         Body, Next, Router, RouterBuilderDiscoverExt, error::forbidden, layer, request::headers,
         response::Response,
@@ -67,7 +67,7 @@ pub fn strip_port(host: &str) -> &str {
 
 #[layer("/")]
 async fn host_guard(cx: &Cx, body: Body, next: Next<'_>) -> Result<Response> {
-    let allowed = app_context::<AllowedHosts>(cx);
+    let allowed = context::<AllowedHosts>(cx);
     let ok = headers(cx)
         .get("host")
         .and_then(|h| h.to_str().ok())
@@ -80,11 +80,7 @@ async fn host_guard(cx: &Cx, body: Body, next: Next<'_>) -> Result<Response> {
 
 /// Build the router around a shared state.
 pub fn router(state: Shared, hosts: AllowedHosts) -> Router {
-    Router::builder()
-        .discover()
-        .app_context(state)
-        .app_context(hosts)
-        .build()
+    Router::builder().discover().with(state).with(hosts).build()
 }
 
 /// Bind and serve until the process is killed.
