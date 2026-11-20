@@ -476,8 +476,6 @@ fn scan_one_dir(
 /// level by level with each level spread over the rayon pool, recording the marker
 /// files (any of `needed` plus every marker the cleaner definitions use).
 fn project_index(cfg: &EngineConfig, needed: &[String]) -> Index {
-    use rayon::prelude::*;
-
     // Serialise builds so parallel scans share one walk instead of each starting their
     // own. The walk itself runs on a helper thread (and so on rayon's *global* pool):
     // a scan worker that held this lock while running a nested parallel walk would
@@ -513,28 +511,13 @@ fn project_index(cfg: &EngineConfig, needed: &[String]) -> Index {
     let dirs = std::thread::scope(|scope| {
         scope
             .spawn(|| {
-                let mut dirs = Vec::new();
-                let mut frontier: Vec<PathBuf> = roots;
-                let mut depth = 0usize;
-                let mut visited = 0usize;
-                while !frontier.is_empty() {
-                    visited += frontier.len();
-                    if visited > MAX_VISITED_DIRS {
-                        warn!("project scan aborted: too many directories");
-                        break;
-                    }
-                    let level: Vec<(Option<DirFiles>, Vec<PathBuf>)> = frontier
-                        .par_iter()
-                        .map(|d| scan_one_dir(d, depth, cfg, &compiled))
-                        .collect();
-                    frontier = Vec::new();
-                    for (found, children) in level {
-                        dirs.extend(found);
-                        frontier.extend(children);
-                    }
-                    depth += 1;
-                }
-                dirs
+                super::walk::walk_levels(
+                    roots,
+                    usize::MAX,
+                    MAX_VISITED_DIRS,
+                    "project scan",
+                    |d, depth| scan_one_dir(d, depth, cfg, &compiled),
+                )
             })
             .join()
             .unwrap_or_default()

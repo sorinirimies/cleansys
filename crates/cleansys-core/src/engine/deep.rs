@@ -5,7 +5,6 @@
 //! not entered (other cleaners own those), and the walk stops after `MAX_VISITED_DIRS`
 //! directories. Only the biggest `MAX_MATCHES` hits are kept.
 
-use log::warn;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
@@ -100,29 +99,19 @@ pub fn clear_index() {
     }
 }
 
-/// Walk `roots` once, recording every file of at least `min_bytes`.
+/// Walk `roots` once, recording every file `q` accepts.
 fn walk(roots: &[PathBuf], q: &Query) -> Vec<Entry> {
-    use rayon::prelude::*;
-    let mut out: Vec<Entry> = Vec::new();
-    let mut frontier: Vec<PathBuf> = roots.to_vec();
-    let mut depth = 0usize;
-    let mut visited = 0usize;
-    while !frontier.is_empty() && depth <= MAX_DEPTH {
-        visited += frontier.len();
-        if visited > MAX_VISITED_DIRS {
-            warn!("deep scan stopped: too many directories");
-            break;
-        }
-        let level: Vec<(Vec<Entry>, Vec<PathBuf>)> =
-            frontier.par_iter().map(|d| scan_dir(d, q)).collect();
-        frontier = Vec::new();
-        for (found, children) in level {
-            out.extend(found);
-            frontier.extend(children);
-        }
-        depth += 1;
-    }
-    out
+    let found: Vec<Vec<Entry>> = super::walk::walk_levels(
+        roots.to_vec(),
+        MAX_DEPTH,
+        MAX_VISITED_DIRS,
+        "deep scan",
+        |d, _| {
+            let (files, dirs) = scan_dir(d, q);
+            ((!files.is_empty()).then_some(files), dirs)
+        },
+    );
+    found.into_iter().flatten().collect()
 }
 
 /// One walk shared by every large-file / duplicate cleaner of a scan, instead of one

@@ -29,6 +29,7 @@ pub mod skip;
 pub mod spec;
 pub mod trash;
 pub mod usage;
+mod walk;
 
 pub use config::EngineConfig;
 pub use exec::run_spec;
