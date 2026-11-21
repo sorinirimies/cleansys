@@ -26,6 +26,8 @@ fn sample_item(name: &str, requires_root: bool) -> CleanerItem {
 
 fn app_with_categories() -> App {
     let mut app = App::new();
+    // These tests drive the cleaner list; the app starts on the category menu.
+    app.focus = cleansys_tui::app::Focus::Items;
     app.categories = vec![
         CleanerCategory {
             name: "User".to_string(),
@@ -942,10 +944,32 @@ fn report_opens_only_after_a_finished_clean() {
 }
 
 #[test]
+fn starts_on_the_category_menu_and_esc_keeps_it() {
+    use cleansys_tui::app::Focus;
+    let mut app = App::new();
+    app.persist = false;
+    assert_eq!(app.focus, Focus::Categories);
+    key(&mut app, KeyCode::Esc);
+    assert_eq!(
+        app.focus,
+        Focus::Categories,
+        "Esc does not jump to the cleaners"
+    );
+    key(&mut app, KeyCode::Right);
+    assert_eq!(app.focus, Focus::Items);
+}
+
+#[test]
 fn tab_cycles_panes_and_arrows_act_on_the_focused_one() {
     use cleansys_tui::app::Focus;
     let mut app = App::new();
     app.persist = false;
+    assert_eq!(
+        app.focus,
+        Focus::Categories,
+        "the left menu has focus on start"
+    );
+    key(&mut app, KeyCode::Tab); // Categories -> Items
     assert_eq!(app.focus, Focus::Items);
     key(&mut app, KeyCode::Tab); // Items -> (Activity hidden) -> Categories
     assert_eq!(app.focus, Focus::Categories);

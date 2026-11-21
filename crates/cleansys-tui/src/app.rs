@@ -88,10 +88,10 @@ pub type PendingOperation = (usize, usize, String, CleanerFn, bool);
 /// Which main-screen pane the arrow keys act on (`Tab` / `Shift+Tab` cycle them).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum Focus {
-    /// Category list: ↑/↓ switch category.
+    /// Category list: ↑/↓ switch category. Focused on start.
+    #[default]
     Categories,
     /// Cleaner list: ↑/↓ move, → opens the details.
-    #[default]
     Items,
     /// Activity log: ↑/↓ scroll.
     Activity,
@@ -286,7 +286,7 @@ impl App {
             run_current: None,
             run_summary: None,
             show_log: false,
-            focus: Focus::Items,
+            focus: Focus::Categories,
             log_scroll: 0,
             options_open: false,
             operation_logs: Vec::new(),
@@ -1978,7 +1978,7 @@ impl App {
             (KeyCode::Esc, _) => {
                 if self.show_help {
                     self.show_help = false;
-                } else if self.focus != Focus::Items {
+                } else if self.focus == Focus::Activity {
                     self.focus = Focus::Items;
                 } else if self.is_running {
                     self.cancel_run();
