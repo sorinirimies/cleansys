@@ -519,6 +519,76 @@ mod tests {
     use super::*;
     use crate::model::load_categories;
 
+    fn job(id: &str, root: bool, f: CleanerFn) -> Job {
+        Job {
+            id: id.into(),
+            name: id.into(),
+            category: "Test".into(),
+            risk: Risk::Safe,
+            requires_root: root,
+            function: f,
+        }
+    }
+
+    #[test]
+    fn execute_reports_ok_failed_skipped_and_totals() {
+        use crate::cleaners::cleaned_item::{
+            CleanedItem, CleanedItemType, CleaningResult, cleaner_fn,
+        };
+        let ok = cleaner_fn(|_| {
+            let mut r = CleaningResult::new();
+            r.add_item(CleanedItem::new(
+                "/x/a".into(),
+                10,
+                CleanedItemType::File,
+                "a",
+            ));
+            r.add_item(CleanedItem::new(
+                "/x/b".into(),
+                5,
+                CleanedItemType::File,
+                "b",
+            ));
+            Ok(r)
+        });
+        let failing = cleaner_fn(|_| Err(anyhow::anyhow!("boom")));
+        let busy = cleaner_fn(|_| Err(AppRunning("Firefox".into()).into()));
+        let root = cleaner_fn(|_| Ok(CleaningResult::new()));
+        let jobs = vec![
+            job("ok", false, ok),
+            job("fail", false, failing),
+            job("busy", false, busy),
+            job("root", true, root),
+        ];
+        let out = execute(&jobs, RunOptions::execute());
+        assert_eq!(out.len(), 4, "real runs keep every job, in order");
+        assert_eq!(out[0].status, OutcomeStatus::Ok);
+        assert_eq!((out[0].bytes, out[0].items.len()), (15, 2));
+        assert_eq!(out[0].items[0].path, "/x/a");
+        assert!(matches!(&out[1].status, OutcomeStatus::Failed(m) if m.contains("boom")));
+        assert!(matches!(&out[2].status, OutcomeStatus::Skipped(m) if m.contains("Firefox")));
+        if !check_root() && crate::auth::cached_sudo_password().is_none() {
+            assert!(matches!(&out[3].status, OutcomeStatus::Skipped(m) if m.contains("root")));
+        }
+
+        let t = totals(&out);
+        assert_eq!((t.bytes_freed, t.items, t.failed), (15, 2, 1));
+        assert!(t.skipped >= 1);
+        assert!(!t.scheduled);
+        // JSON shape used by `--json`.
+        let v = serde_json::to_value(&out[1]).unwrap();
+        assert_eq!(v["status"], "failed");
+        assert_eq!(v["id"], "fail");
+    }
+
+    #[test]
+    fn previews_run_root_cleaners_without_a_password() {
+        use crate::cleaners::cleaned_item::{CleaningResult, cleaner_fn};
+        let jobs = vec![job("root", true, cleaner_fn(|_| Ok(CleaningResult::new())))];
+        let out = execute(&jobs, RunOptions::preview());
+        assert_eq!(out[0].status, OutcomeStatus::Ok);
+    }
+
     #[test]
     fn saved_selects_exactly_the_remembered_cleaners() {
         let cats = load_categories();
