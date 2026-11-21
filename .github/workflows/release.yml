@@ -255,8 +255,10 @@ jobs:
           CARGO_REGISTRY_TOKEN: ${{ secrets.CRATES_IO_TOKEN }}
         run: nu scripts/ci/publish_crate.nu
 
-  # Needs the AUR_USERNAME, AUR_EMAIL and AUR_SSH_PRIVATE_KEY secrets; without
-  # them the deploy fails without failing the release.
+  # Attaches the PKGBUILD to the GitHub release (`makepkg -si` works without
+  # the AUR), then pushes it to the AUR when the AUR_USERNAME, AUR_EMAIL and
+  # AUR_SSH_PRIVATE_KEY secrets are set; without them the push is skipped with a
+  # notice instead of failing.
   aur:
     name: AUR
     needs: [validate, publish]
@@ -270,9 +272,26 @@ jobs:
           version: "0.116.1"
       - name: PKGBUILD for this version
         run: nu scripts/ci/package_desktop.nu aur ${{ needs.validate.outputs.version }}
+      - name: Attach the PKGBUILD to the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload ${{ needs.validate.outputs.tag }} dist/aur/PKGBUILD --clobber
+      - name: AUR secrets set?
+        id: secrets
+        env:
+          AUR_USERNAME: ${{ secrets.AUR_USERNAME }}
+          AUR_EMAIL: ${{ secrets.AUR_EMAIL }}
+          AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+        run: |
+          if [ -n "$AUR_USERNAME" ] && [ -n "$AUR_EMAIL" ] && [ -n "$AUR_SSH_PRIVATE_KEY" ]; then
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "::notice title=AUR skipped::AUR_USERNAME, AUR_EMAIL or AUR_SSH_PRIVATE_KEY is not set; the PKGBUILD is attached to the release instead."
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Deploy to the AUR
+        if: steps.secrets.outputs.ok == 'true'
         uses: KSXGitHub/github-actions-deploy-aur@v3
-        continue-on-error: true
         with:
           pkgname: cleansys
           pkgbuild: dist/aur/PKGBUILD

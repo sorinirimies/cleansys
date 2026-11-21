@@ -134,15 +134,17 @@ cargo build --workspace --release          # binaries in target/release/
 cargo install --path crates/cleansys-tui   # or crates/cleansys-gui
 ```
 
-### Arch Linux (PKGBUILD from GitHub)
+### Arch Linux
 
-No AUR account needed: build and install the package straight from this repo.
+Not on the AUR yet. Every release attaches a `PKGBUILD`; build and install it with `makepkg`:
 
 ```bash
 mkdir cleansys-pkg && cd cleansys-pkg
-curl -fsSLO https://raw.githubusercontent.com/sorinirimies/cleansys/main/packaging/aur/cleansys/PKGBUILD
-makepkg -si          # builds and installs cleansys and cleansys-gui (pick which at the prompt)
+curl -fsSLO https://github.com/sorinirimies/cleansys/releases/latest/download/PKGBUILD
+makepkg -si          # builds cleansys, cleansys-gui and cleansys-web into one package
 ```
+
+Uninstall with `sudo pacman -R cleansys`.
 
 ### Download the desktop GUI
 
