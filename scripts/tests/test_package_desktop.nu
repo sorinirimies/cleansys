@@ -184,3 +184,10 @@ def "test desktop: package names are valid debian names" [] {
 }
 
 def main [] { run-tests }
+
+def "test package_desktop: the aur push needs every secret" [] {
+    assert (aur-secrets-set user mail key)
+    assert not (aur-secrets-set "" mail key)
+    assert not (aur-secrets-set user "  " key)
+    assert not (aur-secrets-set user mail "")
+}

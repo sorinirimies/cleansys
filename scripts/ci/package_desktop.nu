@@ -19,6 +19,7 @@
 #   nu scripts/ci/package_desktop.nu macos <version>               # universal DMG
 #   nu scripts/ci/package_desktop.nu windows <version>             # NSIS installer
 #   nu scripts/ci/package_desktop.nu aur <version>                 # dist/aur/PKGBUILD
+#   nu scripts/ci/package_desktop.nu aur-ready                     # ok=true when the AUR secrets are set
 # ──────────────────────────────────────────────────────────────────────────────
 
 use ../project.nu [APP BINS]
@@ -469,6 +470,20 @@ def "main windows" [version: string] {
     let makensis = if (which makensis | is-not-empty) { "makensis" } else { 'C:\Program Files (x86)\NSIS\makensis.exe' }
     run-external $makensis dist/installer.nsi
     print -e $"✅ dist/(setup-name $APP $version)"
+}
+
+# Whether every secret the AUR push needs is set (empty strings count as unset).
+export def aur-secrets-set [username: string, email: string, key: string]: nothing -> bool {
+    [$username $email $key] | all {|v| ($v | str trim) != "" }
+}
+
+# `ok=true|false` for $GITHUB_OUTPUT; warns with a notice when the AUR push is skipped.
+def "main aur-ready" [] {
+    let ok = aur-secrets-set ($env.AUR_USERNAME? | default "") ($env.AUR_EMAIL? | default "") ($env.AUR_SSH_PRIVATE_KEY? | default "")
+    if not $ok {
+        print -e "::notice title=AUR skipped::AUR_USERNAME, AUR_EMAIL or AUR_SSH_PRIVATE_KEY is not set; the PKGBUILD is attached to the release instead."
+    }
+    print $"ok=($ok)"
 }
 
 def "main aur" [version: string] {

@@ -282,13 +282,7 @@ jobs:
           AUR_USERNAME: ${{ secrets.AUR_USERNAME }}
           AUR_EMAIL: ${{ secrets.AUR_EMAIL }}
           AUR_SSH_PRIVATE_KEY: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
-        run: |
-          if [ -n "$AUR_USERNAME" ] && [ -n "$AUR_EMAIL" ] && [ -n "$AUR_SSH_PRIVATE_KEY" ]; then
-            echo "ok=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "::notice title=AUR skipped::AUR_USERNAME, AUR_EMAIL or AUR_SSH_PRIVATE_KEY is not set; the PKGBUILD is attached to the release instead."
-            echo "ok=false" >> "$GITHUB_OUTPUT"
-          fi
+        run: nu scripts/ci/package_desktop.nu aur-ready >> "$GITHUB_OUTPUT"
       - name: Deploy to the AUR
         if: steps.secrets.outputs.ok == 'true'
         uses: KSXGitHub/github-actions-deploy-aur@v3
