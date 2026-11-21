@@ -4,6 +4,64 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.13.0](https://github.com/sorinirimies/cleansys/compare/v0.12.0...v0.13.0) — 2026-11-21
+
+### ✨ Features
+
+- **core:** Npm debug logs and old Xcode device logs cleaners ([`d54bb9a`](https://github.com/sorinirimies/cleansys/commit/d54bb9af412299b98f5ac84b18af2a868cdf25b6))
+- **core:** Battle.net, EA/Origin, Ubisoft Connect, Adobe media cache, GarageBand/Logic content cleaners ([`83103a3`](https://github.com/sorinirimies/cleansys/commit/83103a335eb596758c1b51ffe8838e73a800c3b9))
+- Setting to turn off installed-app cache detection (TUI, GUI, web; applies from next start) ([`37eb3df`](https://github.com/sorinirimies/cleansys/commit/37eb3dffa5d713efd8f1bea05c653e8f6f5e60e4))
+- Cleaner lists show the biggest first (all front-ends) ([`ac1c6c1`](https://github.com/sorinirimies/cleansys/commit/ac1c6c10a7b2dd221559c776681e7ac84bc99622))
+- **core:** Detect installed apps' cache folders (Detected App Caches); platform-specific cleaners (GStreamer, Baloo, Carthage, WebView2) ([`f824be2`](https://github.com/sorinirimies/cleansys/commit/f824be220016154367c5f10dda64c515f4da2f7a))
+- **core:** More cleaners (vcpkg, Unity, speech models, Mattermost/Zulip/Skype/Logseq/Bitwarden, WeChat, Roblox); fix double-counted paths; lints for overlap and category themes ([`5bf82e0`](https://github.com/sorinirimies/cleansys/commit/5bf82e0d37ff48cd437d620db3ab2454d1c51eac))
+- **core:** Themed categories (Everyday Junk, Installers & Backups, Large & Old Files; System Logs, Package Managers, Updates, Maintenance); chore: bump topcoat 0.12, tui-checkbox 0.6, cargo update ([`3e55b93`](https://github.com/sorinirimies/cleansys/commit/3e55b93307b2b1e5051a3cf17ef6db6aedcff80d))
+- Category menu with User land / System sections, each with an All entry; categories as before ([`eff502d`](https://github.com/sorinirimies/cleansys/commit/eff502de85d8f6dbd1684f52fe92dceaddc62b84))
+- **gui,web:** Scan switch per cleaner, scan shortcuts (rescan, stop, s on focused row) ([`b26ace4`](https://github.com/sorinirimies/cleansys/commit/b26ace4ef3e0648b60e517a352ef5fd0a229710b))
+- **tui:** Show the scan on/off key in the action bar ([`0fb4bbf`](https://github.com/sorinirimies/cleansys/commit/0fb4bbfbfa74c0908a567d114db29980bf3f1145))
+
+### 🐛 Bug fixes
+
+- **tui:** Text menu lists every cleaner (TOML, detected) grouped by category, not just the legacy Rust ones ([`3e693de`](https://github.com/sorinirimies/cleansys/commit/3e693de56635b355eb403955c48b0d8913f8693d))
+- **tui:** MacOS notification no longer segfaults after a clean (set the sender app once); restore the terminal on panic ([`a303c56`](https://github.com/sorinirimies/cleansys/commit/a303c5619e78ffcb9d5e2420ffbe373d0a8fba1d))
+- **tui:** Confirm dialog is sized to its content, not a share of the terminal ([`e11e6a2`](https://github.com/sorinirimies/cleansys/commit/e11e6a229f45f61b59fe0c7c1f49a09b63435a9d))
+- **tui:** Dialogs paint the theme background (no see-through on Linux) and cap at 100 columns wide ([`ab851b7`](https://github.com/sorinirimies/cleansys/commit/ab851b72d85e6120a69bb58a923322f2a39c9f72))
+- **core:** Old-temp cleaner targets children of /tmp (the dir itself is protected) ([`f92a094`](https://github.com/sorinirimies/cleansys/commit/f92a094a392d959c7dd28708d5e0d5a05007df13))
+- **core:** Application Caches sweeper skips folders any cleaner already owns (Brave counted twice); drop stale deny ignore ([`7b1998c`](https://github.com/sorinirimies/cleansys/commit/7b1998c93ce15beb9dac2fba32c2b6cbf8a77a8b))
+- **core:** Application Caches sweeper leaves folders that have a detected cleaner (no double counting) ([`0192ddc`](https://github.com/sorinirimies/cleansys/commit/0192ddcf3e25c2c19f2294c3d123703f4b272207))
+
+### ⚡ Performance
+
+- **core:** Share one file walk between all large-file and duplicate cleaners (full scan 62s -> 19s) ([`0a0e439`](https://github.com/sorinirimies/cleansys/commit/0a0e439cf0c97754adfead9488219267c774e049))
+
+### ♻️ Refactor
+
+- **tui:** Themed Dialog + popup helpers (local copy of the planned dodai-ratatui dialog; confirm dialog uses it) ([`b52cd4a`](https://github.com/sorinirimies/cleansys/commit/b52cd4a714c28fd63cb12a76835884796ff49b10))
+- **core:** System cleaners move to TOML (system_core.toml); Delete gains min_age_days; Recycle Bin stays in Rust (Shell API) ([`4549812`](https://github.com/sorinirimies/cleansys/commit/45498127ac93ff92e03931716b8574dee8d7639d))
+- **core:** Split scan.rs into scan/{mod,board,spawn}.rs ([`50402e8`](https://github.com/sorinirimies/cleansys/commit/50402e842240d800a35c6872f28809a3973ca355))
+- **core:** Theme presets as one table generating names, count, index lookup and constructors (1513 -> ~280 lines, output identical) ([`264a76a`](https://github.com/sorinirimies/cleansys/commit/264a76a3c1a54a283b2217cf34afbf7d491483fa))
+- **core:** One level-parallel walk helper shared by the project and deep scans ([`cd1830a`](https://github.com/sorinirimies/cleansys/commit/cd1830a624edb449b6787a4dc0717cf28b20714c))
+- Selection counting/setting lives in core (Scope::selected_count/set_selected) for TUI, GUI and web ([`1bf1ea7`](https://github.com/sorinirimies/cleansys/commit/1bf1ea7d61be411b95bbcc02a91f812e0d875ce5))
+
+### 📚 Documentation
+
+- Rewrite TESTING.md, drop the stale checkbox doc, README on TOML system cleaners and min_age_days ([`a5e3caf`](https://github.com/sorinirimies/cleansys/commit/a5e3cafd2e613cb98e7c71bbff30c13caddbe7d6))
+- Detection setting ([`fa30482`](https://github.com/sorinirimies/cleansys/commit/fa30482e11f77fd32af5cb747e104f1433feb427))
+- Detected App Caches ([`5c8ba2a`](https://github.com/sorinirimies/cleansys/commit/5c8ba2a4f7be05bb7dcf441e1ff2010cf2a6f33f))
+
+### 🧪 Tests
+
+- **core:** Headless execute covers ok/failed/app-running/root-skip outcomes, totals and JSON shape ([`c179727`](https://github.com/sorinirimies/cleansys/commit/c1797270c1019a4d915f18893caa94b9118ebd86))
+- **core:** Fix walk depth test ([`9d36459`](https://github.com/sorinirimies/cleansys/commit/9d3645908118aa66a2ebafa8b3cedb918106669e))
+
+### 💄 Style
+
+- Apply safe pedantic clippy fixes; document the one expect ([`f0ed5f0`](https://github.com/sorinirimies/cleansys/commit/f0ed5f07df0ad590aa54718afb937fe7f11318de))
+
+### 🔧 Chores
+
+- Enable clippy::pedantic workspace-wide (documented allow list), fix the remaining hits ([`f019084`](https://github.com/sorinirimies/cleansys/commit/f019084564197b4fb01fde48a401b083626d1855))
+- **scripts:** Str downcase -> str lowercase ([`c537f50`](https://github.com/sorinirimies/cleansys/commit/c537f50d779bb88a309f357ded7d341301540cad))
+
 ## [0.12.0](https://github.com/sorinirimies/cleansys/compare/v0.11.2...v0.12.0) — 2026-11-20
 
 ### ✨ Features
