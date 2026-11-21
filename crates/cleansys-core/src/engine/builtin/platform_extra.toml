@@ -109,3 +109,27 @@ requires_root = true
 type = "delete"
 paths = ["/Library/Application Support/GarageBand/*", "/Library/Application Support/Logic/*", "/Library/Audio/Apple Loops/*"]
 label = "GarageBand / Logic content"
+
+[[cleaner]]
+id = "dev-npm-logs"
+name = "npm Debug Logs"
+description = "npm's per-run debug logs (~/.npm/_logs); only useful while debugging a failed install"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.npm/_logs/*"]
+windows = ["%LOCALAPPDATA%/npm-cache/_logs/*"]
+label = "npm log"
+
+[[cleaner]]
+id = "mac-xcode-device-logs"
+name = "Xcode Device Logs"
+description = "Logs Xcode copied from connected iPhones and iPads; older than 30 days"
+category = "Developer Caches"
+os = ["macos"]
+[[cleaner.action]]
+type = "delete"
+paths = ["~/Library/Developer/Xcode/iOS Device Logs", "~/Library/Developer/Xcode/watchOS Device Logs"]
+files_only = true
+min_age_days = 30
+label = "Device log"
