@@ -4,16 +4,14 @@ use std::collections::HashMap;
 use std::io::{self, Write};
 
 use cleansys_core::utils::{print_success, print_warning};
-use cleansys_core::{
-    CleanerFn, check_root, confirm, format_size, print_error, print_header, system_cleaners,
-    user_cleaners,
-};
+use cleansys_core::{CleanerFn, check_root, confirm, format_size, print_error, print_header};
 
 #[derive(Debug)]
 pub struct MenuItem {
     id: usize,
     name: String,
     description: String,
+    category: String,
     requires_root: bool,
     function: CleanerFn,
 }
@@ -31,36 +29,39 @@ impl Default for Menu {
 }
 
 impl Menu {
+    /// Every cleaner of this platform (built-in Rust, TOML, detected app caches), numbered
+    /// from 1, user cleaners first.
     pub fn new() -> Self {
-        let is_root = check_root();
-        let mut items = Vec::new();
-        let mut id = 1;
+        Self::from_categories(cleansys_core::load_categories(), check_root())
+    }
 
-        // Add user cleaner items
-        for cleaner in user_cleaners::get_cleaners() {
-            items.push(MenuItem {
-                id,
-                name: cleaner.name.to_string(),
-                description: cleaner.description.to_string(),
-                requires_root: false,
-                function: cleansys_core::cleaner_fn(cleaner.function),
-            });
-            id += 1;
+    fn from_categories(categories: Vec<cleansys_core::CleanerCategory>, is_root: bool) -> Self {
+        let mut seen = std::collections::HashSet::new();
+        let mut all: Vec<MenuItem> = categories
+            .into_iter()
+            .flat_map(|c| {
+                let category = c.name;
+                c.items.into_iter().map(move |i| (category.clone(), i))
+            })
+            .filter(|(_, i)| seen.insert(i.id.clone()))
+            .map(|(category, i)| MenuItem {
+                id: 0,
+                name: i.name,
+                description: i.description,
+                category,
+                requires_root: i.requires_root,
+                function: i.function,
+            })
+            .collect();
+        // User cleaners first, keeping the category order within each side.
+        all.sort_by_key(|i| i.requires_root);
+        for (n, item) in all.iter_mut().enumerate() {
+            item.id = n + 1;
         }
-
-        // Add system cleaner items
-        for cleaner in system_cleaners::get_cleaners() {
-            items.push(MenuItem {
-                id,
-                name: cleaner.name.to_string(),
-                description: cleaner.description.to_string(),
-                requires_root: true,
-                function: cleansys_core::cleaner_fn(cleaner.function),
-            });
-            id += 1;
+        Menu {
+            items: all,
+            is_root,
         }
-
-        Menu { items, is_root }
     }
 
     pub fn display(&self) -> Result<()> {
@@ -79,25 +80,27 @@ impl Menu {
 
         // Group items by user/system
         println!("\n{}", "USER CLEANERS:".blue().bold());
-        for item in &self.items {
-            if !item.requires_root {
-                println!("{}: [{}] {}", item.id, item.name.green(), item.description);
-            }
-        }
-
+        self.print_side(false);
         println!("\n{}", "SYSTEM CLEANERS:".red().bold());
-        for item in &self.items {
-            if item.requires_root {
-                let status = if self.is_root {
-                    item.name.green()
-                } else {
-                    format!("{} (requires root)", item.name).red()
-                };
-                println!("{}: [{}] {}", item.id, status, item.description);
-            }
-        }
+        self.print_side(true);
 
         Ok(())
+    }
+
+    fn print_side(&self, root: bool) {
+        let mut last = "";
+        for item in self.items.iter().filter(|i| i.requires_root == root) {
+            if item.category != last {
+                println!("  {}", item.category.bold());
+                last = &item.category;
+            }
+            let name = if root && !self.is_root {
+                format!("{} (requires root)", item.name).red()
+            } else {
+                item.name.green()
+            };
+            println!("{}: [{}] {}", item.id, name, item.description);
+        }
     }
 
     pub fn run_interactive(&self) -> Result<()> {
@@ -191,5 +194,48 @@ impl Menu {
         print_success(&format!("Total space freed: {}", format_size(total_saved)));
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn menu(is_root: bool) -> Menu {
+        Menu::from_categories(cleansys_core::load_categories(), is_root)
+    }
+
+    #[test]
+    fn lists_toml_cleaners_once_user_side_first() {
+        let m = menu(false);
+        assert!(m.items.len() > 20, "TOML cleaners are listed");
+        let ids: Vec<_> = m.items.iter().map(|i| i.id).collect();
+        assert_eq!(ids, (1..=m.items.len()).collect::<Vec<_>>());
+        let first_root = m.items.iter().position(|i| i.requires_root);
+        if let Some(p) = first_root {
+            assert!(m.items[p..].iter().all(|i| i.requires_root));
+        }
+        let mut names: Vec<_> = m.items.iter().map(|i| (&i.category, &i.name)).collect();
+        let n = names.len();
+        names.dedup();
+        assert_eq!(names.len(), n, "no cleaner twice");
+    }
+
+    #[test]
+    fn zero_selects_what_this_user_may_run() {
+        let user = menu(false);
+        let all = user.parse_selections("0");
+        assert!(all.iter().all(|id| !user.items[id - 1].requires_root));
+        assert_eq!(menu(true).parse_selections("0").len(), user.items.len());
+    }
+
+    #[test]
+    fn selections_ignore_junk_and_out_of_range() {
+        let m = menu(false);
+        let n = m.items.len();
+        assert_eq!(
+            m.parse_selections(&format!("1, x, 0, {}, 2", n + 1)),
+            vec![1, 2]
+        );
     }
 }
