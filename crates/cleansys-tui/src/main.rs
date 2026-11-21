@@ -263,7 +263,20 @@ fn load_cleaners(app: &mut App) {
     app.start_scan();
 }
 
+/// Put the terminal back (leave the alternate screen, raw mode and mouse reporting).
+fn restore_terminal() {
+    let _ = disable_raw_mode();
+    let _ = execute!(io::stdout(), LeaveAlternateScreen, DisableMouseCapture);
+}
+
 fn run_tui() -> Result<()> {
+    // A panic must not leave the terminal raw with mouse reporting on (every mouse move would
+    // print escape codes); restore first, then show the panic.
+    let default_hook = std::panic::take_hook();
+    std::panic::set_hook(Box::new(move |info| {
+        restore_terminal();
+        default_hook(info);
+    }));
     // Setup terminal
     enable_raw_mode()?;
     let mut stdout = io::stdout();
