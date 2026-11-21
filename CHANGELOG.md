@@ -4,6 +4,17 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.14.0](https://github.com/sorinirimies/cleansys/compare/v0.13.0...v0.14.0) — 2026-11-21
+
+### ✨ Features
+
+- **tui:** Focus the category menu on start ([`2db84af`](https://github.com/sorinirimies/cleansys/commit/2db84af0f9e2920b32278dc6d45419b14fa4eb40))
+
+### 🔄 CI and release
+
+- **release:** Check AUR secrets in nushell ([`272a658`](https://github.com/sorinirimies/cleansys/commit/272a658e52452cc789b50ab3d26abafe2a1c2338))
+- **release:** Attach PKGBUILD to releases and skip AUR push without secrets ([`2460a1c`](https://github.com/sorinirimies/cleansys/commit/2460a1c6748e4a781645bcb3bffa9509c9d01045))
+
 ## [0.13.0](https://github.com/sorinirimies/cleansys/compare/v0.12.0...v0.13.0) — 2026-11-21
 
 ### ✨ Features
