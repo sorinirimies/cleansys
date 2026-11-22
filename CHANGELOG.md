@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.14.3](https://github.com/sorinirimies/cleansys/compare/v0.14.2...v0.14.3) — 2026-11-22
+
+### ✨ Features
+
+- **gui:** Start with nothing ticked ([`0207492`](https://github.com/sorinirimies/cleansys/commit/020749222bdeade18fedd65ffe72c9bc85f1d009))
+
 ## [0.14.2](https://github.com/sorinirimies/cleansys/compare/v0.14.1...v0.14.2) — 2026-11-22
 
 ### ✨ Features
