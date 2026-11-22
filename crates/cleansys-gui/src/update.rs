@@ -1277,6 +1277,17 @@ mod tests {
     }
 
     #[test]
+    fn starts_with_nothing_ticked() {
+        let state = CleanSysGui::new();
+        assert!(
+            state
+                .categories
+                .iter()
+                .all(|c| c.items.iter().all(|i| !i.selected))
+        );
+    }
+
+    #[test]
     fn scan_all_unticks_every_cleaner() {
         let mut state = CleanSysGui::new();
         for category in &mut state.categories {

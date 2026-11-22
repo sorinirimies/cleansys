@@ -162,12 +162,9 @@ impl CleanSysGui {
         } else {
             cleansys_core::load_settings().unwrap_or_default()
         };
+        // Start with nothing ticked: the user picks from the first scan's sizes.
         let mut categories = cleansys_core::load_categories();
-        for category in &mut categories {
-            for item in &mut category.items {
-                item.selected = settings.is_selected(&category.name, &item.name);
-            }
-        }
+        cleansys_core::scope::set_all_selected(&mut categories, false, true);
         let board = cleansys_core::ScanBoard::new(&categories);
         Self {
             categories,

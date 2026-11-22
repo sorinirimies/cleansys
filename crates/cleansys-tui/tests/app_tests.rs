@@ -944,6 +944,16 @@ fn report_opens_only_after_a_finished_clean() {
 }
 
 #[test]
+fn starts_with_nothing_ticked() {
+    let app = App::new();
+    assert!(
+        app.categories
+            .iter()
+            .all(|c| c.items.iter().all(|i| !i.selected))
+    );
+}
+
+#[test]
 fn every_scan_starts_with_nothing_ticked() {
     let mut app = app_with_categories();
     app.persist = false;

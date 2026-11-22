@@ -795,6 +795,22 @@ mod tests {
     }
 
     #[test]
+    fn starts_with_nothing_ticked() {
+        let s = Shared::new(vec![CleanerCategory {
+            name: "User Land Cleaners".into(),
+            description: "u".into(),
+            items: vec![{
+                let mut i = item("u1", 1, false, Risk::Safe);
+                i.selected = true;
+                i
+            }],
+        }]);
+        s.set_root(false);
+        s.start_scan(); // what the server does on start
+        assert_eq!(s.snapshot().selected_count, 0);
+    }
+
+    #[test]
     fn every_scan_starts_with_nothing_ticked() {
         let s = shared();
         assert!(s.toggle("u1"));
