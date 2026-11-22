@@ -701,8 +701,10 @@ fn stop_scan_locked(g: &mut Inner) {
     g.board.cancel();
 }
 
+/// Every scan starts with nothing ticked, so the user picks from the fresh sizes.
 fn start_scan_locked(g: &mut Inner) {
     stop_scan_locked(g);
+    cleansys_core::scope::set_all_selected(&mut g.categories, false, true);
     g.board = ScanBoard::new(&g.categories);
     let off = cleansys_core::disabled_positions(&g.categories, &g.disabled);
     let (tx, rx) = std::sync::mpsc::channel();
@@ -790,6 +792,17 @@ mod tests {
         assert!(snap.categories[1].root && !snap.categories[0].root);
         assert_eq!(s.select_recommended(), 1); // u1 only: u2 empty, u3 caution, s1 root
         assert_eq!(s.snapshot().selected_count, 1);
+    }
+
+    #[test]
+    fn every_scan_starts_with_nothing_ticked() {
+        let s = shared();
+        assert!(s.toggle("u1"));
+        assert_eq!(s.snapshot().selected_count, 1);
+        s.start_scan();
+        assert_eq!(s.snapshot().selected_count, 0);
+        wait_scan(&s);
+        assert_eq!(s.snapshot().selected_count, 0, "results do not re-tick");
     }
 
     #[test]
@@ -918,6 +931,10 @@ mod tests {
         s.set_root(false);
         s.start_scan();
         assert!(s.snapshot().scanning);
+        assert!(
+            s.toggle("slow"),
+            "tick it after the scan cleared the selection"
+        );
         s.start_run().unwrap();
         // Cleaning started without waiting for the 1.5 s scan.
         let snap = s.snapshot();

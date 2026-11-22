@@ -944,6 +944,21 @@ fn report_opens_only_after_a_finished_clean() {
 }
 
 #[test]
+fn every_scan_starts_with_nothing_ticked() {
+    let mut app = app_with_categories();
+    app.persist = false;
+    app.categories[0].items[0].selected = true;
+    app.categories[1].items[0].selected = true;
+    app.start_scan();
+    app.stop_scan();
+    assert!(
+        app.categories
+            .iter()
+            .all(|c| c.items.iter().all(|i| !i.selected))
+    );
+}
+
+#[test]
 fn starts_on_the_category_menu_and_esc_keeps_it() {
     use cleansys_tui::app::Focus;
     let mut app = App::new();

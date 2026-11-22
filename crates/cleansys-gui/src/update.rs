@@ -735,12 +735,14 @@ fn stop_scan(state: &mut CleanSysGui) {
 
 /// Measure every cleaner the user did not opt out of in the background (read-only
 /// previews), through the shared core scan so the GUI scans exactly like the TUI and web
-/// front-ends. A scan already running is replaced.
+/// front-ends. A scan already running is replaced. Every scan starts with nothing
+/// ticked, so the user picks from the fresh sizes.
 fn start_scan(state: &mut CleanSysGui) -> Task<Message> {
     if state.is_running {
         return Task::none();
     }
     stop_scan(state);
+    cleansys_core::scope::set_all_selected(&mut state.categories, false, true);
     use std::collections::HashMap;
     use std::sync::{Arc, Mutex};
     type Tx = iced::futures::channel::oneshot::Sender<cleansys_core::ScanInfo>;
@@ -1272,6 +1274,24 @@ mod tests {
 
         let _ = update(&mut state, Message::DeselectAllCategory(0));
         assert!(state.categories[0].items.iter().all(|i| !i.selected));
+    }
+
+    #[test]
+    fn scan_all_unticks_every_cleaner() {
+        let mut state = CleanSysGui::new();
+        for category in &mut state.categories {
+            for item in &mut category.items {
+                item.selected = true;
+            }
+        }
+        let _ = update(&mut state, Message::ScanAll);
+        stop_scan(&mut state);
+        assert!(
+            state
+                .categories
+                .iter()
+                .all(|c| c.items.iter().all(|i| !i.selected))
+        );
     }
 
     #[test]

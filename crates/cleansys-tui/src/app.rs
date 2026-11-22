@@ -330,9 +330,11 @@ impl App {
 
     /// Start measuring every cleaner the user did not opt out of, in the background
     /// (read-only). A scan already running is replaced: its results are stale.
+    /// Every scan starts with nothing ticked, so the user picks from the fresh sizes.
     pub fn start_scan(&mut self) {
         self.stop_scan();
         self.collapse_details();
+        cleansys_core::scope::set_all_selected(&mut self.categories, false, true);
         self.board = cleansys_core::ScanBoard::new(&self.categories);
         let off = cleansys_core::disabled_positions(&self.categories, &self.disabled_cleaners);
         let (tx, rx) = std::sync::mpsc::channel();
