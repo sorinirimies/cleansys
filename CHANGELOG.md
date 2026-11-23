@@ -4,6 +4,17 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.17.0](https://github.com/sorinirimies/cleansys/compare/v0.16.1...v0.17.0) — 2026-11-23
+
+### ✨ Features
+
+- **core:** ~60 more cleaners: embedded (PlatformIO, Arduino, ESP-IDF), Conan, Emscripten, JetBrains, Android SDK/emulators, IaC, ML/GPU caches, Godot/Unreal, creative apps, Google Drive, and project output for JS frameworks, React Native, C/C++, Visual Studio, Xcode, ESP-IDF, docs sites, ML experiments ([`0f55827`](https://github.com/sorinirimies/cleansys/commit/0f55827df8fadf08c1ea60095d18cdc836cba332))
+
+### 🐛 Bug fixes
+
+- **core:** 32 MB scan worker stacks (nested work-stealing overflowed rayon's 2 MB default and aborted tests/scans) ([`a61309d`](https://github.com/sorinirimies/cleansys/commit/a61309d20c8a6f8f73c5a56f500441acfda9c1e4))
+- **core:** Tighten C/C++ index, Electron and JS framework project cleaners ([`1dc82cc`](https://github.com/sorinirimies/cleansys/commit/1dc82cc97a1d6398a0d9bf2aab0fc6ac351a28bb))
+
 ## [0.16.1](https://github.com/sorinirimies/cleansys/compare/v0.16.0...v0.16.1) — 2026-11-23
 
 ### ✨ Features
