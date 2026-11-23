@@ -4,6 +4,16 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.15.1](https://github.com/sorinirimies/cleansys/compare/v0.15.0...v0.15.1) — 2026-11-23
+
+### ✨ Features
+
+- **tui:** Space on the category list ticks every cleaner in it ([`912426d`](https://github.com/sorinirimies/cleansys/commit/912426d8ae79871b501e4664c7859c59cac4a5e5))
+
+### 🐛 Bug fixes
+
+- **tui:** Scan-off cleaners say how to re-enable them ([`b790d4b`](https://github.com/sorinirimies/cleansys/commit/b790d4b98d0e8928b05100f277da25cb804c1847))
+
 ## [0.15.0](https://github.com/sorinirimies/cleansys/compare/v0.14.3...v0.15.0) — 2026-11-23
 
 ### ✨ Features
