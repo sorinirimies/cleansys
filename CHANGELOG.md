@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.15.5](https://github.com/sorinirimies/cleansys/compare/v0.15.4...v0.15.5) — 2026-11-23
+
+### ✨ Features
+
+- **tui:** Treemap tiles sized by sqrt of bytes so small categories stay readable ([`36ba3a3`](https://github.com/sorinirimies/cleansys/commit/36ba3a3882dd9ed3482b896046aa601dd2361c78))
+
 ## [0.15.4](https://github.com/sorinirimies/cleansys/compare/v0.15.3...v0.15.4) — 2026-11-23
 
 ### ✨ Features
