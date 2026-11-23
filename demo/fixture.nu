@@ -86,6 +86,32 @@ let sparse = if $linux {
         [$e.0 $rel]
     } | where {|e| not ($e.1 | str starts-with "Library/") }
 } else { $sparse }
+# Fake system side (read through CLEANSYS_FS_ROOT): the root cleaners get mock data too.
+let sys_root = ($demo_home | path join "root")
+let sys_sparse = if $linux {[
+    ["380M", "var/lib/apt/lists/archive.ubuntu.com_ubuntu_dists_noble_InRelease"]
+    ["1300M", "var/cache/apt/archives/linux-firmware.deb"]
+    ["70M", "var/backups/dpkg.status.0.gz"]
+    ["420M", "var/log/syslog.2.gz"]
+    ["180M", "var/log/auth.log.1"]
+    ["1800M", "var/log/journal/3f1a/system.journal"]
+    ["640M", "var/lib/systemd/coredump/core.firefox.zst"]
+    ["90M", "var/crash/_usr_bin_app.1000.crash"]
+    ["40M", "var/cache/fontconfig/cache.bin"]
+    ["300M", "var/tmp/installer.tmp"]
+    ["120M", "tmp/build.tmp"]
+    ["700M", "var/lib/snapd/cache/snap.blob"]
+    ["900M", "var/lib/snapd/snaps/core22_1380.snap"]
+    ["60M", "var/cache/app-info/xmls/appstream.xml"]
+    ["30M", "var/cache/fwupd/metadata.bin"]
+    ["250M", "root/.cache/pip/wheels.bin"]
+    ["210M", "boot/vmlinuz-6.5.0-14-generic"]
+]} else { [] }
+for entry in $sys_sparse {
+    let dest = ($sys_root | path join $entry.1)
+    mkdir ($dest | path dirname)
+    ^truncate -s $entry.0 $dest
+}
 for entry in $sparse {
     let dest = ($demo_home | path join $entry.1)
     mkdir ($dest | path dirname)
@@ -132,7 +158,7 @@ $env.HOME = $demo_home
 $env.USERPROFILE = $demo_home
 $env.TMPDIR = ($demo_home | path join "tmp")
 $env.CLEANSYS_SCAN_ROOTS = $p
-$env.CLEANSYS_USER_ONLY = "1"
+$env.CLEANSYS_FS_ROOT = ($demo_home | path join "root")
 $env.XDG_CACHE_HOME = ($demo_home | path join ".cache")
 $env.PROMPT_COMMAND = {|| "" }
 $env.PROMPT_COMMAND_RIGHT = {|| "" }

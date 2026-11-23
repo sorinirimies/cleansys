@@ -37,6 +37,27 @@ pub fn lookup_env(name: &str) -> Option<String> {
 /// Unknown variables expand to the empty string, which makes the resulting
 /// path obviously invalid; callers drop results that are not absolute.
 pub fn expand(input: &str, env: &dyn Fn(&str) -> Option<String>) -> String {
+    expand_in(input, env, std::env::var_os("CLEANSYS_FS_ROOT"))
+}
+
+fn expand_in(
+    input: &str,
+    env: &dyn Fn(&str) -> Option<String>,
+    fs_root: Option<std::ffi::OsString>,
+) -> String {
+    let mut out = expand_vars(input, env);
+    // `CLEANSYS_FS_ROOT=/some/dir` re-roots every *literal* absolute template (`/var/log/*`)
+    // under that directory, so demos and tests can fake the system side without touching it.
+    // Templates built from `~` or `$VARS` already follow HOME / the environment.
+    if input.starts_with('/')
+        && let Some(root) = fs_root.filter(|r| !r.is_empty())
+    {
+        out = format!("{}{out}", root.to_string_lossy().trim_end_matches('/'));
+    }
+    out
+}
+
+fn expand_vars(input: &str, env: &dyn Fn(&str) -> Option<String>) -> String {
     let mut s = input.to_string();
     if s == "~" || s.starts_with("~/") || s.starts_with("~\\") {
         s = format!("{}{}", env("HOME").unwrap_or_default(), &s[1..]);
@@ -58,7 +79,7 @@ pub fn expand(input: &str, env: &dyn Fn(&str) -> Option<String>) -> String {
                     Some(v) => out.push_str(&v),
                     None => {
                         if let Some(d) = default {
-                            out.push_str(&expand(&d, env));
+                            out.push_str(&expand_vars(&d, env));
                         }
                     }
                 }
@@ -192,5 +213,17 @@ mod tests {
         let root = dir.path().to_string_lossy().into_owned();
         let got = resolve(&format!("{root}/a.cache.*"), &env);
         assert_eq!(got.len(), 2);
+    }
+
+    #[test]
+    fn fs_root_reroots_only_literal_absolute_templates() {
+        let env = |n: &str| (n == "HOME").then(|| "/home/u".to_string());
+        let root = Some(std::ffi::OsString::from("/fake/"));
+        assert_eq!(
+            expand_in("/var/log/*.gz", &env, root.clone()),
+            "/fake/var/log/*.gz"
+        );
+        assert_eq!(expand_in("~/.cache", &env, root), "/home/u/.cache");
+        assert_eq!(expand_in("/var/log/*.gz", &env, None), "/var/log/*.gz");
     }
 }

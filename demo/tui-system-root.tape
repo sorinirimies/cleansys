@@ -13,7 +13,7 @@ Set TypingSpeed 45ms
 
 Hide
 Sleep 3s
-Type "source-env demo/fixture.nu; hide-env CLEANSYS_USER_ONLY; clear"
+Type "source-env demo/fixture.nu; clear"
 Enter
 Sleep 8s
 Show
@@ -23,17 +23,32 @@ Type "cleansys"
 Enter
 Sleep 5s
 
-# Shift+Tab jumps to the last category: the SYSTEM · ROOT section
-Shift+Tab
-Sleep 1500ms
-Shift+Tab
-Sleep 1500ms
+# Walk down the category list into the SYSTEM · ROOT section, tick "All system"
 Down
+Sleep 250ms
+Down
+Sleep 250ms
+Down
+Sleep 250ms
+Down
+Sleep 250ms
+Down
+Sleep 250ms
+Down
+Sleep 250ms
+Down
+Sleep 250ms
 Sleep 700ms
 Down
-Sleep 700ms
-Space
 Sleep 1200ms
+Screenshot demo/target/tui-system-root-1.png
+Space
+Sleep 1500ms
+Right
+Sleep 800ms
+Screenshot demo/target/tui-system-root-2.png
+Left
+Sleep 800ms
 
 # Run it: confirm, then CleanSys asks for the password (root cleaners only)
 Enter

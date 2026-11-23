@@ -138,11 +138,7 @@ pub fn load_categories() -> Vec<CleanerCategory> {
     // fixed order of `USER_ORDER` / `ROOT_ORDER` (unknown names last, first-seen order kept).
     sort_by_order(&mut user, USER_ORDER);
     sort_by_order(&mut root, ROOT_ORDER);
-    // `CLEANSYS_USER_ONLY=1` hides the root side (demos and screenshots that must show
-    // synthetic data only: root cleaners read real system paths).
-    if std::env::var_os("CLEANSYS_USER_ONLY").is_none() {
-        user.extend(root);
-    }
+    user.extend(root);
     user
 }
 
