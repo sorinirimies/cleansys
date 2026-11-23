@@ -140,6 +140,7 @@ pub fn run_spec_with(
                 min_mb,
                 min_age_days,
                 extensions,
+                names,
                 label,
             } => {
                 let label = label.as_deref().unwrap_or(&spec.name);
@@ -148,6 +149,7 @@ pub fn run_spec_with(
                     min_bytes: min_mb.saturating_mul(1 << 20),
                     min_age: Duration::from_secs(min_age_days.saturating_mul(86_400)),
                     extensions: extensions.iter().map(|e| e.to_ascii_lowercase()).collect(),
+                    names: names.iter().map(|n| n.to_ascii_lowercase()).collect(),
                 };
                 for (path, _) in super::deep::find_files(&query, cfg) {
                     remove_path(&mut result, &path, label, opts, false, false, cfg)?;
@@ -164,6 +166,7 @@ pub fn run_spec_with(
                     min_bytes: min_mb.saturating_mul(1 << 20),
                     min_age: Duration::ZERO,
                     extensions: Vec::new(),
+                    names: Vec::new(),
                 };
                 for (path, _) in super::deep::find_duplicates(&query, cfg) {
                     remove_path(&mut result, &path, label, opts, false, false, cfg)?;

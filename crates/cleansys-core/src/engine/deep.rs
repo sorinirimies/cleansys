@@ -41,6 +41,9 @@ pub struct Query {
     pub min_age: Duration,
     /// Lower-case extensions without the dot; empty = any.
     pub extensions: Vec<String>,
+    /// Lower-case file names: exact, `*suffix` or `prefix*`. A file passes when it matches
+    /// an extension *or* a name; both empty = any file.
+    pub names: Vec<String>,
 }
 
 impl Query {
@@ -48,13 +51,23 @@ impl Query {
         if size == 0 || size < self.min_bytes {
             return false;
         }
-        if !self.extensions.is_empty() {
+        if !self.extensions.is_empty() || !self.names.is_empty() {
             let lower = name.to_ascii_lowercase();
-            if !self
+            let by_ext = self
                 .extensions
                 .iter()
-                .any(|e| lower.ends_with(&format!(".{e}")))
-            {
+                .any(|e| lower.ends_with(&format!(".{e}")));
+            let by_name = self.names.iter().any(|n| {
+                if let Some(suffix) = n.strip_prefix('*') {
+                    lower.ends_with(suffix) && lower.len() > suffix.len()
+                } else if let Some(prefix) = n.strip_suffix('*') {
+                    lower.starts_with(prefix) && lower.len() > prefix.len()
+                } else {
+                    lower == *n
+                }
+            });
+            // Either list may match (`extensions` and `names` are alternatives).
+            if !(by_ext || by_name) {
                 return false;
             }
         }
@@ -133,6 +146,7 @@ fn shared_index(roots: &[PathBuf]) -> Shared {
         min_bytes: INDEX_MIN_BYTES,
         min_age: Duration::ZERO,
         extensions: Vec::new(),
+        names: Vec::new(),
     };
     let entries = std::thread::scope(|sc| sc.spawn(|| walk(roots, &q)).join().unwrap_or_default());
     let idx: Shared = std::sync::Arc::new(entries);
@@ -342,7 +356,22 @@ mod tests {
             min_bytes: 1000,
             min_age: Duration::ZERO,
             extensions: Vec::new(),
+            names: Vec::new(),
         }
+    }
+
+    #[test]
+    fn names_and_extensions_are_alternatives() {
+        let q = Query {
+            roots: vec![],
+            min_bytes: 0,
+            min_age: Duration::ZERO,
+            extensions: vec!["bak".into()],
+            names: vec![".ds_store".into(), "*~".into(), "._*".into()],
+        };
+        let hit = |n: &str| q.accepts(n, 10, None);
+        assert!(hit(".DS_Store") && hit("notes.txt~") && hit("a.BAK") && hit("._img.jpg"));
+        assert!(!hit("~") && !hit("notes.txt") && !hit("ds_store.txt"));
     }
 
     #[test]

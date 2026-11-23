@@ -100,3 +100,37 @@ risk = "caution"
 type = "duplicates"
 min_mb = 1
 label = "Duplicate"
+
+# Junk files scattered through the deep roots (your home folder; hidden folders are never entered).
+[[cleaner]]
+id = "deep-os-junk-files"
+name = "Finder & Explorer Junk (.DS_Store, Thumbs.db)"
+description = ".DS_Store, Thumbs.db, desktop.ini and ehthumbs.db left behind by macOS and Windows file managers"
+category = "Everyday Junk"
+[[cleaner.action]]
+type = "large_files"
+names = [".ds_store", "thumbs.db", "ehthumbs.db", "desktop.ini", "._*"]
+label = "OS junk file"
+
+[[cleaner]]
+id = "deep-vim-swap"
+name = "Vim & Editor Swap Files"
+description = "*.swp, *.swo and *.swn swap files of Vim/Neovim, — unsaved edits can live in them, so check the list"
+category = "Everyday Junk"
+risk = "moderate"
+[[cleaner.action]]
+type = "large_files"
+extensions = ["swp", "swo", "swn"]
+label = "Swap file"
+
+[[cleaner]]
+id = "deep-backup-files"
+name = "Editor Backup Files (*~, *.bak, *.orig)"
+description = "gedit/Emacs/Vim `file~` backups, *.bak and merge leftovers (*.orig, *.rej) in your folders"
+category = "Everyday Junk"
+risk = "moderate"
+[[cleaner.action]]
+type = "large_files"
+extensions = ["bak", "orig", "rej"]
+names = ["*~"]
+label = "Backup file"

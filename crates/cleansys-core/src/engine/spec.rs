@@ -153,6 +153,10 @@ pub enum Action {
         /// Only these extensions (no dot, case-insensitive). Empty = any file.
         #[serde(default)]
         extensions: Vec<String>,
+        /// Only these file names: exact (`.DS_Store`), `*suffix` (`*~`) or `prefix*`
+        /// (`._*`), case-insensitive. A file passes if it matches `extensions` or `names`.
+        #[serde(default)]
+        names: Vec<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },

@@ -353,3 +353,45 @@ type = "command"
 program = "powershell.exe"
 args = ["-NoProfile", "-Command", "'Application','System','Setup' | ForEach-Object { wevtutil.exe cl $_ }"]
 label = "wevtutil cl"
+
+[[cleaner]]
+id = "sys-lin-flush-dns"
+name = "DNS Cache"
+description = "Flush the resolver cache (systemd-resolved, nscd or dnsmasq); frees no disk, fixes stale lookups"
+category = "Maintenance & Tuning"
+os = ["linux"]
+requires_root = true
+[[cleaner.action]]
+type = "command"
+program = "sh"
+args = ["-c", "resolvectl flush-caches 2>/dev/null || systemd-resolve --flush-caches 2>/dev/null || nscd -i hosts 2>/dev/null || pkill -HUP dnsmasq 2>/dev/null || true"]
+sudo = true
+label = "flush DNS cache"
+
+[[cleaner]]
+id = "sys-mac-flush-dns"
+name = "DNS Cache"
+description = "Flush the macOS DNS cache (dscacheutil + mDNSResponder); frees no disk, fixes stale lookups"
+category = "Maintenance & Tuning"
+os = ["macos"]
+requires_root = true
+[[cleaner.action]]
+type = "command"
+program = "sh"
+args = ["-c", "dscacheutil -flushcache; killall -HUP mDNSResponder"]
+sudo = true
+label = "flush DNS cache"
+
+[[cleaner]]
+id = "sys-lin-drop-caches"
+name = "Memory: Drop Page Cache"
+description = "sync, then drop the kernel page, dentry and inode caches to give RAM back (frees no disk; the cache refills as you work)"
+category = "Maintenance & Tuning"
+os = ["linux"]
+requires_root = true
+[[cleaner.action]]
+type = "command"
+program = "sh"
+args = ["-c", "sync && echo 3 > /proc/sys/vm/drop_caches"]
+sudo = true
+label = "drop caches"

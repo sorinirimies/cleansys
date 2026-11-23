@@ -50,3 +50,16 @@ linux = ["$XDG_DATA_HOME/nvim/swap/*", "$XDG_STATE_HOME/nvim/swap/*", "$XDG_STAT
 macos = ["~/.local/state/nvim/swap/*", "~/.local/state/nvim/undo/*", "~/.local/state/nvim/shada/*", "~/.vim/undo/*", "~/.vim/swap/*"]
 windows = ["$LOCALAPPDATA/nvim-data/swap/*", "$LOCALAPPDATA/nvim-data/shada/*", "$LOCALAPPDATA/nvim-data/undo/*"]
 label = "Editor history"
+
+[[cleaner]]
+id = "priv-clipboard"
+name = "Clipboard"
+description = "Empty the clipboard (whatever you copied last, passwords included)"
+category = "Privacy Traces"
+risk = "moderate"
+os = ["linux", "macos"]
+[[cleaner.action]]
+type = "command"
+program = "sh"
+args = ["-c", "wl-copy --clear 2>/dev/null || xsel -bc 2>/dev/null || xclip -selection clipboard -i /dev/null 2>/dev/null || pbcopy < /dev/null 2>/dev/null || true"]
+label = "clear clipboard"
