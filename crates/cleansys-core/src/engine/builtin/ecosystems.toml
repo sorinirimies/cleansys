@@ -1,0 +1,379 @@
+# Ecosystem caches beyond the core developer set: embedded, data science, cloud/IaC,
+# IDEs, mobile SDKs, game and creative tools, cloud drives and desktop leftovers.
+# Generated entries stay declarative: edit freely or override by id in your own TOML.
+
+[[cleaner]]
+id = "dev-platformio"
+name = "PlatformIO Cache"
+description = "Download and build cache of PlatformIO (installed platforms and packages stay)"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.platformio/.cache"]
+label = "PlatformIO Cache"
+
+[[cleaner]]
+id = "dev-arduino"
+name = "Arduino Build & Download Cache"
+description = "Sketch build cache and staged downloads of Arduino IDE / CLI"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/arduino/sketches", "~/.arduino15/staging"]
+macos = ["~/Library/Caches/arduino/sketches", "~/Library/Arduino15/staging"]
+windows = ["$LOCALAPPDATA/Temp/arduino/sketches", "$LOCALAPPDATA/Arduino15/staging"]
+label = "Arduino Build & Download Cache"
+
+[[cleaner]]
+id = "dev-esp-idf-downloads"
+name = "ESP-IDF / espup Download Archives"
+description = "Downloaded tool archives in ~/.espressif/dist (installed tools stay) and the Zephyr cache"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.espressif/dist", "$XDG_CACHE_HOME/zephyr"]
+label = "ESP-IDF / espup Download Archives"
+
+[[cleaner]]
+id = "dev-conan"
+name = "Conan Package Cache"
+description = "Conan 1/2 recipe and binary package caches (re-downloaded or rebuilt on demand)"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.conan2/p", "~/.conan/data"]
+label = "Conan Package Cache"
+
+[[cleaner]]
+id = "dev-emscripten-wasm"
+name = "Emscripten & WebAssembly Caches"
+description = "Emscripten system-library cache, wasm-pack and trunk downloads"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.emscripten_cache", "~/.cache/.wasm-pack", "~/.cache/trunk"]
+macos = ["~/Library/Caches/.wasm-pack", "~/Library/Caches/trunk"]
+windows = ["$LOCALAPPDATA/.wasm-pack", "$LOCALAPPDATA/trunk"]
+label = "Emscripten & WebAssembly Caches"
+
+[[cleaner]]
+id = "dev-cargo-binstall"
+name = "cargo-binstall Cache"
+description = "Downloaded release archives of cargo-binstall"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/cargo-binstall"]
+macos = ["~/Library/Caches/cargo-binstall"]
+windows = ["$LOCALAPPDATA/cargo-binstall"]
+label = "cargo-binstall Cache"
+
+[[cleaner]]
+id = "dev-zig-global"
+name = "Zig Global Cache"
+description = "Zig's global build cache (rebuilt on demand)"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/zig"]
+macos = ["~/Library/Caches/zig"]
+windows = ["$LOCALAPPDATA/zig"]
+label = "Zig Global Cache"
+
+[[cleaner]]
+id = "dev-nim-crystal-lua"
+name = "Nim / Crystal / LuaRocks / V Caches"
+description = "Compiler and package-manager caches of Nim, Crystal, LuaRocks and V"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/nim", "$XDG_CACHE_HOME/crystal", "$XDG_CACHE_HOME/luarocks", "~/.vmodules/cache"]
+macos = ["~/Library/Caches/nim", "~/Library/Caches/crystal", "~/Library/Caches/luarocks", "~/.vmodules/cache"]
+label = "Nim / Crystal / LuaRocks / V Caches"
+
+[[cleaner]]
+id = "dev-elm"
+name = "Elm Package Cache"
+description = "Downloaded Elm packages (~/.elm); re-downloaded on next build"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.elm"]
+windows = ["$APPDATA/elm"]
+label = "Elm Package Cache"
+
+[[cleaner]]
+id = "dev-ghcup-cache"
+name = "GHCup Downloads & Logs"
+description = "Downloaded archives, tmp and logs of ghcup (installed GHC versions stay)"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.ghcup/cache", "~/.ghcup/tmp", "~/.ghcup/logs"]
+label = "GHCup Downloads & Logs"
+
+[[cleaner]]
+id = "dev-perl-cpan"
+name = "Perl CPAN / cpanm Build Dirs"
+description = "cpanm work dirs and CPAN build/source caches"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.cpanm/work", "~/.cpanm/latest-build", "~/.cpan/build", "~/.cpan/sources"]
+label = "Perl CPAN / cpanm Build Dirs"
+
+[[cleaner]]
+id = "dev-clojure-groovy"
+name = "Clojure gitlibs / Groovy Grapes"
+description = "Clojure git libs and CLI cache, Groovy Grape downloads (re-downloaded)"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.gitlibs", "~/.clojure/.cpcache", "~/.groovy/grapes"]
+label = "Clojure gitlibs / Groovy Grapes"
+
+[[cleaner]]
+id = "dev-dotnet-misc"
+name = "dotnet CLI Telemetry & Template Cache"
+description = "Telemetry spool and template engine caches of the .NET SDK"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.dotnet/TelemetryStorageService", "~/.templateengine/dotnetcli/*/scratch"]
+label = "dotnet CLI Telemetry & Template Cache"
+
+[[cleaner]]
+id = "dev-js-runtimes"
+name = "Yarn Berry / Corepack / Volta Caches"
+description = "Yarn Berry global cache, Corepack and Volta downloads"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.yarn/berry/cache", "~/.volta/tmp"]
+linux = ["$XDG_CACHE_HOME/node/corepack"]
+macos = ["~/Library/Caches/node/corepack"]
+windows = ["$LOCALAPPDATA/node/corepack"]
+label = "Bun / Yarn Berry / Corepack / Volta Caches"
+
+[[cleaner]]
+id = "dev-webdriver-caches"
+name = "WebDriver Downloads"
+description = "Selenium Manager and webdriver-manager browser/driver downloads"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.wdm"]
+linux = ["$XDG_CACHE_HOME/selenium"]
+macos = ["~/Library/Caches/selenium"]
+windows = ["~/.cache/selenium"]
+label = "WebDriver Downloads"
+
+[[cleaner]]
+id = "dev-python-envs"
+name = "Python pdm / hatch / pixi / pyright Caches"
+description = "Download and environment caches of pdm, hatch, pixi/rattler, pyright and black"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/pdm", "$XDG_CACHE_HOME/hatch", "$XDG_CACHE_HOME/pixi", "$XDG_CACHE_HOME/rattler", "$XDG_CACHE_HOME/pyright-python", "$XDG_CACHE_HOME/black", "$XDG_CACHE_HOME/jedi"]
+macos = ["~/Library/Caches/pdm", "~/Library/Caches/hatch", "~/Library/Caches/rattler", "~/Library/Caches/pyright-python", "~/Library/Caches/black"]
+windows = ["$LOCALAPPDATA/pdm/pdm/Cache", "$LOCALAPPDATA/hatch/Cache", "$LOCALAPPDATA/rattler/cache"]
+label = "Python pdm / hatch / pixi / pyright Caches"
+
+[[cleaner]]
+id = "ai-ml-runtime-caches"
+name = "GPU / ML Compile Caches"
+description = "Triton, torch extensions, matplotlib and kagglehub caches (rebuilt or re-downloaded)"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.triton"]
+linux = ["$XDG_CACHE_HOME/torch_extensions", "$XDG_CACHE_HOME/matplotlib", "$XDG_CACHE_HOME/kagglehub", "$XDG_CACHE_HOME/wandb"]
+macos = ["~/Library/Caches/torch_extensions", "~/Library/Caches/matplotlib", "~/.cache/kagglehub", "~/Library/Caches/wandb"]
+windows = ["$LOCALAPPDATA/torch_extensions"]
+label = "GPU / ML Compile Caches"
+
+[[cleaner]]
+id = "dev-r-renv"
+name = "R renv Global Cache"
+description = "renv's shared package cache (re-installed per project)"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+linux = ["~/.local/share/renv/cache", "$XDG_CACHE_HOME/R/renv"]
+macos = ["~/Library/Application Support/renv/cache"]
+windows = ["$LOCALAPPDATA/R/cache/R/renv"]
+label = "R renv Global Cache"
+
+[[cleaner]]
+id = "dev-iac-caches"
+name = "Pulumi / Packer / Serverless / SAM Caches"
+description = "Pulumi plugins, Packer and Serverless download caches, AWS SAM build cache"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.pulumi/plugins", "~/.packer.d/packer_cache", "~/.serverless/cache", "~/.aws-sam/cache"]
+label = "Pulumi / Packer / Serverless / SAM Caches"
+
+[[cleaner]]
+id = "dev-skaffold"
+name = "Skaffold Cache"
+description = "Skaffold build and image cache"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.skaffold/cache"]
+label = "Skaffold cache"
+
+[[cleaner]]
+id = "dev-firebase-emulators"
+name = "Firebase CLI Emulator Downloads"
+description = "Emulator JARs and binaries downloaded by firebase-tools"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/firebase"]
+macos = ["~/.cache/firebase"]
+windows = ["~/.cache/firebase"]
+label = "Firebase CLI Emulator Downloads"
+
+[[cleaner]]
+id = "dev-jetbrains-caches"
+name = "JetBrains IDE Caches & Logs"
+description = "Index/caches, temp and logs of IntelliJ, PyCharm, CLion, RustRover, WebStorm, GoLand and Rider (re-indexed on next open)"
+category = "Developer Caches"
+risk = "moderate"
+process = ["idea", "pycharm", "clion", "rustrover", "webstorm", "goland", "rider", "phpstorm", "rubymine", "datagrip"]
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/JetBrains/*/caches", "$XDG_CACHE_HOME/JetBrains/*/tmp", "$XDG_CACHE_HOME/JetBrains/*/compile-server"]
+macos = ["~/Library/Caches/JetBrains/*/caches", "~/Library/Caches/JetBrains/*/tmp", "~/Library/Caches/JetBrains/*/compile-server"]
+windows = ["$LOCALAPPDATA/JetBrains/*/caches", "$LOCALAPPDATA/JetBrains/*/tmp", "$LOCALAPPDATA/JetBrains/*/compile-server"]
+label = "JetBrains IDE Caches & Logs"
+
+[[cleaner]]
+id = "dev-netbeans-eclipse"
+name = "NetBeans / Eclipse Caches"
+description = "NetBeans cache and Eclipse p2 download caches"
+category = "Developer Caches"
+risk = "moderate"
+process = ["netbeans", "eclipse"]
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/NetBeans", "~/.p2/pool/plugins"]
+macos = ["~/Library/Caches/NetBeans"]
+windows = ["$APPDATA/NetBeans/*/var/cache"]
+label = "NetBeans / Eclipse Caches"
+
+[[cleaner]]
+id = "dev-visual-studio"
+name = "Visual Studio Caches"
+description = "Component model, designer and Roslyn caches of Visual Studio (rebuilt on next launch)"
+category = "Developer Caches"
+os = ["windows"]
+process = ["devenv"]
+[[cleaner.action]]
+type = "delete"
+windows = ["$LOCALAPPDATA/Microsoft/VisualStudio/*/ComponentModelCache", "$LOCALAPPDATA/Microsoft/VisualStudio/*/Designer/ShadowCache", "$LOCALAPPDATA/Microsoft/VisualStudio/*/ProjectsCache", "$LOCALAPPDATA/Temp/VSLogs", "$LOCALAPPDATA/Temp/VSFeedbackIntelliCodeLogs"]
+label = "Visual Studio Caches"
+
+[[cleaner]]
+id = "dev-android-emulator-snapshots"
+name = "Android Emulator Snapshots"
+description = "Quick-boot snapshots and cache images of Android virtual devices (AVDs boot cold afterwards)"
+category = "Developer Caches"
+risk = "moderate"
+process = ["emulator", "qemu-system-x86_64", "qemu-system-aarch64"]
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.android/avd/*.avd/snapshots", "~/.android/avd/*.avd/cache.img", "~/.android/avd/*.avd/cache.img.qcow2"]
+label = "Android Emulator Snapshots"
+
+[[cleaner]]
+id = "dev-android-sdk-stale"
+name = "Unused Android SDK System Images & NDKs"
+description = "System images and NDK versions untouched for 120+ days (re-download via sdkmanager)"
+category = "Developer Caches"
+risk = "caution"
+[[cleaner.action]]
+type = "delete"
+linux = ["~/Android/Sdk/system-images/*/*", "~/Android/Sdk/ndk/*", "~/Android/Sdk/cmake/*"]
+macos = ["~/Library/Android/sdk/system-images/*/*", "~/Library/Android/sdk/ndk/*", "~/Library/Android/sdk/cmake/*"]
+windows = ["$LOCALAPPDATA/Android/Sdk/system-images/*/*", "$LOCALAPPDATA/Android/Sdk/ndk/*", "$LOCALAPPDATA/Android/Sdk/cmake/*"]
+label = "Unused Android SDK System Images & NDKs"
+
+[[cleaner]]
+id = "dev-fastlane-expo"
+name = "Fastlane / Expo / Watchman Caches"
+description = "Fastlane spaceship and report caches, Expo CLI cache, Watchman state"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.fastlane/spaceship", "~/.expo/cache"]
+linux = ["~/.local/state/watchman"]
+macos = ["~/Library/Caches/Expo"]
+label = "Fastlane / Expo / Watchman Caches"
+
+[[cleaner]]
+id = "dev-godot-unreal"
+name = "Godot & Unreal Shared Caches"
+description = "Godot editor cache and Unreal Engine derived data cache (regenerated on demand)"
+category = "Developer Caches"
+risk = "moderate"
+process = ["godot", "UnrealEditor"]
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/godot", "~/.config/Epic/UnrealEngine/Common/DerivedDataCache"]
+macos = ["~/Library/Caches/Godot", "~/Library/Application Support/Epic/UnrealEngine/Common/DerivedDataCache"]
+windows = ["$LOCALAPPDATA/UnrealEngine/Common/DerivedDataCache", "$LOCALAPPDATA/Godot"]
+label = "Godot & Unreal Shared Caches"
+
+[[cleaner]]
+id = "app-photo-raw"
+name = "darktable / RawTherapee Caches"
+description = "Thumbnail and mipmap caches of darktable and RawTherapee (rebuilt when browsing)"
+category = "Applications"
+process = ["darktable", "rawtherapee"]
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/darktable", "$XDG_CACHE_HOME/RawTherapee"]
+macos = ["~/Library/Caches/darktable", "~/Library/Caches/RawTherapee"]
+windows = ["$LOCALAPPDATA/darktable/cache"]
+label = "darktable / RawTherapee Caches"
+
+[[cleaner]]
+id = "app-music-production"
+name = "Bitwig / Ableton Logs & Caches"
+description = "Logs and caches of Bitwig Studio and Ableton Live (projects and presets stay)"
+category = "Applications"
+process = ["bitwig-studio", "Live"]
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.BitwigStudio/log", "~/.BitwigStudio/cache"]
+macos = ["~/Library/Caches/Ableton", "~/Library/Application Support/Bitwig/Bitwig Studio/log"]
+windows = ["$LOCALAPPDATA/Ableton/Live Reports"]
+label = "Bitwig / Ableton Logs & Caches"
+
+[[cleaner]]
+id = "app-google-drive-cache"
+name = "Google Drive Offline Cache"
+description = "Locally cached copies of Drive for Desktop files (re-downloaded when opened)"
+category = "Applications"
+risk = "moderate"
+process = ["GoogleDriveFS", "Google Drive"]
+[[cleaner.action]]
+type = "delete"
+linux = ["~/.config/Google/DriveFS/*/content_cache"]
+macos = ["~/Library/Application Support/Google/DriveFS/*/content_cache"]
+windows = ["$LOCALAPPDATA/Google/DriveFS/*/content_cache"]
+label = "Google Drive Offline Cache"

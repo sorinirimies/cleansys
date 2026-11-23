@@ -25,6 +25,7 @@ const BUILTIN: &[(&str, &str)] = &[
         "developer_extra.toml",
         include_str!("builtin/developer_extra.toml"),
     ),
+    ("ecosystems.toml", include_str!("builtin/ecosystems.toml")),
     ("browsers.toml", include_str!("builtin/browsers.toml")),
     ("apps.toml", include_str!("builtin/apps.toml")),
     ("games.toml", include_str!("builtin/games.toml")),
@@ -186,6 +187,32 @@ mod tests {
                         assert!(full.components().count() >= 3, "{}: {t} too broad", s.id);
                     } else {
                         assert!(!safety::is_protected(&p), "{}: {t} protected", s.id);
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn project_artifacts_stay_inside_their_project() {
+        use crate::engine::spec::Action;
+        for spec in load_all_unfiltered(None) {
+            for a in &spec.actions {
+                if let Action::ProjectArtifacts {
+                    markers, artifacts, ..
+                } = a
+                {
+                    assert!(!markers.is_empty(), "{}: no markers", spec.id);
+                    for art in artifacts {
+                        let p = std::path::Path::new(art);
+                        assert!(
+                            p.is_relative()
+                                && !art.contains("..")
+                                && !art.contains('*')
+                                && !art.is_empty(),
+                            "{}: artifact `{art}` must be a plain relative path",
+                            spec.id
+                        );
                     }
                 }
             }

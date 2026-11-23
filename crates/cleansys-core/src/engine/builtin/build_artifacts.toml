@@ -287,6 +287,7 @@ id = "proj-ruby-bundle"
 name = "Ruby Bundler Gems"
 description = "vendor/bundle and .bundle/ of Bundler projects (restore with bundle install)"
 category = "Project Build Artifacts"
+risk = "moderate"
 [[cleaner.action]]
 type = "project_artifacts"
 markers = ["Gemfile"]
@@ -298,6 +299,7 @@ id = "proj-php-vendor"
 name = "PHP Composer vendor/"
 description = "vendor/ of Composer projects (restore with composer install)"
 category = "Project Build Artifacts"
+risk = "moderate"
 [[cleaner.action]]
 type = "project_artifacts"
 markers = ["composer.json"]
@@ -320,6 +322,7 @@ id = "proj-elixir-deps"
 name = "Elixir deps/"
 description = "Fetched dependencies deps/ of Mix projects (restore with mix deps.get)"
 category = "Project Build Artifacts"
+risk = "moderate"
 [[cleaner.action]]
 type = "project_artifacts"
 markers = ["mix.exs"]
@@ -331,6 +334,7 @@ id = "proj-crystal"
 name = "Crystal Shards"
 description = "lib/ and .shards/ of Crystal projects (restore with shards install)"
 category = "Project Build Artifacts"
+risk = "moderate"
 [[cleaner.action]]
 type = "project_artifacts"
 markers = ["shard.yml"]
@@ -380,3 +384,230 @@ type = "project_artifacts"
 markers = ["*.rockspec"]
 artifacts = ["lua_modules", ".luarocks"]
 label = "Lua rocks"
+
+[[cleaner]]
+id = "proj-js-frameworks-more"
+name = "JS Framework Output (Astro, Nx, Docusaurus, Vercel, Netlify, Wrangler)"
+description = ".astro/, .nx/, .docusaurus/, .vercel/, .netlify/, .wrangler/, .swc/ and .eslintcache-style generated dirs next to package.json"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["package.json"]
+artifacts = [".astro", ".nx", ".docusaurus", ".vercel", ".netlify", ".wrangler", ".swc", ".output", ".nitro", ".solid", ".angular"]
+label = "JS framework output"
+
+[[cleaner]]
+id = "proj-js-test-output"
+name = "JS Test & Coverage Output"
+description = "coverage/, .nyc_output/ and storybook-static/ of Node projects"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["package.json"]
+artifacts = ["coverage", ".nyc_output", "storybook-static"]
+label = "Test output"
+
+[[cleaner]]
+id = "proj-js-bower"
+name = "Bower Components"
+description = "bower_components/ next to bower.json"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["bower.json"]
+artifacts = ["bower_components"]
+label = "Bower components"
+
+[[cleaner]]
+id = "proj-react-native"
+name = "React Native Native Build Dirs"
+description = "android/build, android/app/build, android/.gradle and ios/build of React Native projects"
+category = "Project Build Artifacts"
+risk = "moderate"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["metro.config.js", "metro.config.ts", "react-native.config.js"]
+artifacts = ["android/build", "android/app/build", "android/.gradle", "ios/build", "ios/Pods"]
+label = "React Native build"
+
+[[cleaner]]
+id = "proj-python-more"
+name = "Python Env Managers & Coverage"
+description = "pixi/pdm/hatch environments, __pypackages__, htmlcov and tox work dirs"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["pyproject.toml", "pixi.toml", "pdm.lock"]
+artifacts = [".pixi", "__pypackages__", ".pdm-build", "htmlcov", ".hatch", ".pytype", ".pyre"]
+label = "Python env/output"
+
+[[cleaner]]
+id = "proj-meson-ninja"
+name = "Meson / Ninja Build Dirs"
+description = "builddir/ and build-* directories of Meson projects"
+category = "Project Build Artifacts"
+risk = "moderate"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["meson.build"]
+artifacts = ["builddir", "build", "_build"]
+label = "Meson build"
+
+[[cleaner]]
+id = "proj-c-ide-caches"
+name = "C/C++ Index & IDE Caches"
+description = "clangd/ccls indexes next to compile_commands.json"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["compile_commands.json", "CMakeLists.txt", "Makefile"]
+artifacts = [".cache", ".ccls-cache", "cmake-build-debug-*", "out/build"]
+label = "C/C++ index"
+
+[[cleaner]]
+id = "proj-visual-studio"
+name = "Visual Studio .vs & Build Folders"
+description = ".vs/, x64/, x86/ and ipch/ next to solutions and C++ projects"
+category = "Project Build Artifacts"
+risk = "moderate"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["*.sln", "*.vcxproj"]
+artifacts = [".vs", "x64", "x86", "ipch"]
+label = "Visual Studio output"
+
+[[cleaner]]
+id = "proj-xcode-local"
+name = "Xcode Local Build Folders"
+description = "build/ and DerivedData/ next to Xcode projects"
+category = "Project Build Artifacts"
+risk = "moderate"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["*.xcodeproj", "*.xcworkspace"]
+artifacts = ["build", "DerivedData"]
+label = "Xcode build"
+
+[[cleaner]]
+id = "proj-swiftpm-extra"
+name = "SwiftPM .swiftpm & Carthage Build"
+description = "per-package .swiftpm/ and Carthage/Build"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["Package.swift", "Cartfile"]
+artifacts = [".swiftpm", "Carthage/Build"]
+label = "SwiftPM output"
+
+[[cleaner]]
+id = "proj-embuild-esp"
+name = "ESP-IDF Rust Build (.embuild)"
+description = "Downloaded ESP-IDF sources and toolchains in .embuild/ of esp-idf-sys projects, plus managed_components"
+category = "Project Build Artifacts"
+risk = "moderate"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["Cargo.toml", "idf_component.yml", "CMakeLists.txt"]
+artifacts = [".embuild", "managed_components"]
+label = "ESP-IDF build"
+
+[[cleaner]]
+id = "proj-platformio-arduino"
+name = "PlatformIO / Arduino Build Dirs"
+description = ".pio/ and build/ of PlatformIO projects"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["platformio.ini"]
+artifacts = [".pio"]
+label = "PlatformIO build"
+
+[[cleaner]]
+id = "proj-iac-local"
+name = "Terraform / Terragrunt / Serverless / CDK Local Caches"
+description = ".terragrunt-cache/, .serverless/, .aws-sam/ and cdk.out/ next to their config"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["terragrunt.hcl", "serverless.yml", "serverless.yaml", "samconfig.toml", "cdk.json"]
+artifacts = [".terragrunt-cache", ".serverless", ".aws-sam", "cdk.out"]
+label = "IaC local cache"
+
+[[cleaner]]
+id = "proj-ml-experiments"
+name = "ML Experiment Outputs"
+description = "wandb/, mlruns/, lightning_logs/ and .dvc/cache next to training projects (experiment history is deleted)"
+category = "Project Build Artifacts"
+risk = "caution"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["requirements.txt", "pyproject.toml", "dvc.yaml"]
+artifacts = ["wandb", "mlruns", "lightning_logs", ".dvc/cache"]
+label = "ML experiment output"
+
+[[cleaner]]
+id = "proj-direnv-nix"
+name = "direnv / Nix Local Caches"
+description = ".direnv/ and result symlink targets next to .envrc or flake.nix"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = [".envrc", "flake.nix", "shell.nix"]
+artifacts = [".direnv"]
+label = "direnv cache"
+
+[[cleaner]]
+id = "proj-tauri-electron"
+name = "Electron / Tauri Packaging Output"
+description = "dist/, release/, and out/ of packaged desktop apps (electron-builder, forge, tauri)"
+category = "Project Build Artifacts"
+risk = "moderate"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["electron-builder.yml", "forge.config.js", "forge.config.ts", "tauri.conf.json"]
+artifacts = ["dist", "release", "out", "dist_electron", "src-tauri/gen"]
+label = "Packaging output"
+
+[[cleaner]]
+id = "proj-jekyll-hugo"
+name = "Jekyll / Hugo Build Output"
+description = "_site/, .jekyll-cache/, .sass-cache/ and Hugo resources/_gen"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["_config.yml", "_config.yaml", "hugo.toml", "hugo.yaml"]
+artifacts = ["_site", ".jekyll-cache", ".sass-cache", "resources/_gen"]
+label = "Site build"
+
+[[cleaner]]
+id = "proj-mkdocs"
+name = "MkDocs site/"
+description = "site/ next to mkdocs.yml"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["mkdocs.yml", "mkdocs.yaml"]
+artifacts = ["site"]
+label = "MkDocs build"
+
+[[cleaner]]
+id = "proj-mdbook"
+name = "mdBook book/"
+description = "book/ next to book.toml"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["book.toml"]
+artifacts = ["book"]
+label = "mdBook build"
+
+[[cleaner]]
+id = "proj-sphinx"
+name = "Sphinx _build"
+description = "_build/ and docs/_build next to conf.py"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["conf.py"]
+artifacts = ["_build"]
+label = "Sphinx build"
