@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.19.0](https://github.com/sorinirimies/cleansys/compare/v0.18.0...v0.19.0) — 2026-11-23
+
+### ✨ Features
+
+- **core:** BleachBit-style extras: browser autofill/passwords/site prefs, deep junk files (.DS_Store, Thumbs.db, Vim swap, backups), clipboard, DNS cache, page cache; deep-scan name filter ([`e816c62`](https://github.com/sorinirimies/cleansys/commit/e816c62fe05ebe1489f9774f2e9cac734265762d))
+
 ## [0.18.0](https://github.com/sorinirimies/cleansys/compare/v0.17.0...v0.18.0) — 2026-11-23
 
 ### ✨ Features
