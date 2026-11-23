@@ -1135,7 +1135,7 @@ fn space_on_category_list_ticks_every_cleaner_in_it() {
 fn press(app: &mut App, c: char) {
     use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
     app.handle_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE))
-        .unwrap();
+        .expect("key handled");
 }
 
 #[test]

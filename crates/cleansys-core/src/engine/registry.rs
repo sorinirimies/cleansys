@@ -231,24 +231,22 @@ mod tests {
         for s in all_specs() {
             for a in &s.actions {
                 if let Action::Delete {
-                    age_by_contents,
+                    age_by_contents: true,
                     min_age_days,
                     ..
                 } = a
                 {
-                    if *age_by_contents {
-                        assert!(
-                            *min_age_days > 0,
-                            "{}: age_by_contents without min_age_days",
-                            s.id
-                        );
-                        assert_ne!(
-                            s.risk,
-                            Risk::Safe,
-                            "{}: removing installed tools is not safe",
-                            s.id
-                        );
-                    }
+                    assert!(
+                        *min_age_days > 0,
+                        "{}: age_by_contents without min_age_days",
+                        s.id
+                    );
+                    assert_ne!(
+                        s.risk,
+                        Risk::Safe,
+                        "{}: removing installed tools is not safe",
+                        s.id
+                    );
                 }
             }
         }
