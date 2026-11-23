@@ -388,12 +388,12 @@ label = "Lua rocks"
 [[cleaner]]
 id = "proj-js-frameworks-more"
 name = "JS Framework Output (Astro, Nx, Docusaurus, Vercel, Netlify, Wrangler)"
-description = ".astro/, .nx/, .docusaurus/, .vercel/, .netlify/, .wrangler/, .swc/ and .eslintcache-style generated dirs next to package.json"
+description = ".astro/, .nx/, .docusaurus/, .vercel/, .netlify/, .wrangler/, .swc/, .output/ and .nitro/ next to package.json"
 category = "Project Build Artifacts"
 [[cleaner.action]]
 type = "project_artifacts"
 markers = ["package.json"]
-artifacts = [".astro", ".nx", ".docusaurus", ".vercel", ".netlify", ".wrangler", ".swc", ".output", ".nitro", ".solid", ".angular"]
+artifacts = [".astro", ".nx", ".docusaurus", ".vercel", ".netlify", ".wrangler", ".swc", ".output", ".nitro", ".solid"]
 label = "JS framework output"
 
 [[cleaner]]
@@ -460,8 +460,8 @@ description = "clangd/ccls indexes next to compile_commands.json"
 category = "Project Build Artifacts"
 [[cleaner.action]]
 type = "project_artifacts"
-markers = ["compile_commands.json", "CMakeLists.txt", "Makefile"]
-artifacts = [".cache", ".ccls-cache", "cmake-build-debug-*", "out/build"]
+markers = ["compile_commands.json"]
+artifacts = [".cache", ".ccls-cache"]
 label = "C/C++ index"
 
 [[cleaner]]
@@ -564,8 +564,8 @@ category = "Project Build Artifacts"
 risk = "moderate"
 [[cleaner.action]]
 type = "project_artifacts"
-markers = ["electron-builder.yml", "forge.config.js", "forge.config.ts", "tauri.conf.json"]
-artifacts = ["dist", "release", "out", "dist_electron", "src-tauri/gen"]
+markers = ["electron-builder.yml", "forge.config.js", "forge.config.ts"]
+artifacts = ["dist", "release", "out", "dist_electron"]
 label = "Packaging output"
 
 [[cleaner]]
