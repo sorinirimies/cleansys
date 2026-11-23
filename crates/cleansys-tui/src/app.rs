@@ -423,6 +423,7 @@ impl App {
         };
         if self.board.get(c, i).is_some_and(|s| !s.entries.is_empty()) {
             self.expanded = Some((c, i));
+            // Row 0 is the "All" row; paths follow at 1..=n.
             self.entry_cursor = Some(0);
         }
     }
@@ -435,7 +436,7 @@ impl App {
     pub fn entry_next(&mut self) {
         let n = self.expanded_entries().len();
         if let (Some(cur), true) = (self.entry_cursor, n > 0) {
-            self.entry_cursor = Some((cur + 1).min(n - 1));
+            self.entry_cursor = Some((cur + 1).min(n));
         }
     }
 
@@ -445,12 +446,30 @@ impl App {
         }
     }
 
-    /// Tick/untick the highlighted path (no-op for paths that can't be skipped).
+    /// Tick state of the expanded cleaner's skippable paths: `(ticked, total)`.
+    #[must_use]
+    pub fn entry_tick_counts(&self) -> (usize, usize) {
+        let skippable = self.expanded_entries().iter().filter(|e| e.skippable);
+        let total = skippable.clone().count();
+        let ticked = skippable
+            .filter(|e| self.board.entry_selected(&e.path))
+            .count();
+        (ticked, total)
+    }
+
+    /// Tick/untick the highlighted row: the "All" row (cursor 0) flips every path
+    /// (all ticked → none, otherwise all); a path row flips just that path
+    /// (no-op for paths that can't be skipped).
     pub fn entry_toggle(&mut self) {
         let Some(cur) = self.entry_cursor else { return };
+        if cur == 0 {
+            let (ticked, total) = self.entry_tick_counts();
+            self.entry_set_all(ticked < total);
+            return;
+        }
         let target = self
             .expanded_entries()
-            .get(cur)
+            .get(cur - 1)
             .filter(|e| e.skippable)
             .map(|e| e.path.clone());
         if let Some(path) = target {

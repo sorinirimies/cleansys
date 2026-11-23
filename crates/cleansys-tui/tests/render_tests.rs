@@ -248,10 +248,19 @@ fn expanded_details_render_paths_and_follow_the_cursor() {
 
     // Moving the cursor and unticking an entry updates the board.
     app.entry_next();
-    assert_eq!(app.entry_cursor, Some(1));
+    app.entry_next();
+    assert_eq!(app.entry_cursor, Some(2));
     app.entry_toggle();
     assert!(!app.board.entry_selected("/p/b/target"));
     assert!(app.board.entry_selected("/p/a/target"));
+
+    // The "All" row (cursor 0) ticks everything when some are off, then clears all.
+    app.entry_cursor = Some(0);
+    app.entry_toggle();
+    assert!(app.board.entry_selected("/p/b/target"));
+    app.entry_toggle();
+    assert!(!app.board.entry_selected("/p/a/target"));
+    assert!(!app.board.entry_selected("/p/b/target"));
     terminal.draw(|f| ui(f, &mut app)).unwrap();
 
     app.collapse_details();

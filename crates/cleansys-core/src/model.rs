@@ -162,6 +162,7 @@ pub const USER_ORDER: &[&str] = &[
 pub const ROOT_ORDER: &[&str] = &[
     "System Logs & Dumps",
     "Package Managers",
+    "Containers & Virtualization",
     "Updates & Snapshots",
     "Maintenance & Tuning",
 ];

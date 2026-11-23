@@ -942,7 +942,40 @@ fn entry_rows(app: &App, ci: usize, ii: usize, width: usize) -> Vec<ListItem<'st
         return Vec::new();
     };
     let any_skippable = info.entries.iter().any(|e| e.skippable);
-    let mut rows = Vec::with_capacity(info.entries.len() + 2);
+    let mut rows = Vec::with_capacity(info.entries.len() + 3);
+    if any_skippable {
+        let (ticked, total) = app.entry_tick_counts();
+        let (mark, color) = if ticked == total {
+            ("[x]", crate::theme::th().success)
+        } else if ticked == 0 {
+            ("[ ]", crate::theme::th().foreground)
+        } else {
+            ("[-]", crate::theme::th().warning)
+        };
+        let total_bytes: u64 = info.entries.iter().map(|e| e.bytes).sum();
+        let size = format_size(total_bytes);
+        let left = vec![
+            Span::styled(
+                format!("    {mark} All"),
+                Style::default().fg(color).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                format!("  {ticked}/{total} paths"),
+                Style::default().fg(crate::theme::th().muted),
+            ),
+        ];
+        rows.push(ListItem::new(row_line(
+            left,
+            Span::styled(size, size_style(total_bytes)),
+            width,
+        )));
+    } else {
+        // Nothing to tick: keep the cursor model (row 0 = header) with a plain label.
+        rows.push(ListItem::new(Line::from(Span::styled(
+            "     All paths (removed together)",
+            Style::default().fg(crate::theme::th().muted),
+        ))));
+    }
     for e in &info.entries {
         let on = app.board.entry_selected(&e.path);
         let (mark, style) = match (e.skippable, on) {
@@ -968,7 +1001,7 @@ fn entry_rows(app: &App, ci: usize, ii: usize, width: usize) -> Vec<ListItem<'st
     }
     let hidden = info.items.saturating_sub(info.entries.len());
     let hint = if any_skippable {
-        "    ↑/↓ move · Space tick · a all · n none · ←/Esc back"
+        "    ↑/↓ move · Space tick (top row = All) · a all · n none · ←/Esc back"
     } else {
         "    removed together — paths can't be unticked · ←/Esc back"
     };
@@ -1292,7 +1325,7 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
         let n = rows.len();
         items.splice((p + 1)..=p, rows);
         display_sel = match (app.entry_cursor, display_sel) {
-            (Some(k), _) => Some(p + 1 + k.min(n.saturating_sub(1))),
+            (Some(k), _) => Some(p + 1 + k.min(n.saturating_sub(2))),
             (None, Some(s)) if s > p => Some(s + n),
             (None, s) => s,
         };
