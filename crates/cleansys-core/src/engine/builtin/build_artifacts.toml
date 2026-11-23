@@ -611,3 +611,59 @@ type = "project_artifacts"
 markers = ["conf.py"]
 artifacts = ["_build"]
 label = "Sphinx build"
+
+[[cleaner]]
+id = "proj-mill"
+name = "Scala Mill out/"
+description = "out/ next to build.mill / build.sc"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["build.mill", "build.sc", "build.mill.scala"]
+artifacts = ["out", ".bloop", ".metals"]
+label = "Mill build"
+
+[[cleaner]]
+id = "proj-scala-cli"
+name = "scala-cli .scala-build"
+description = "Compile output .scala-build/ and .bsp/ of scala-cli scripts"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["project.scala"]
+artifacts = [".scala-build", ".bsp"]
+label = "scala-cli build"
+
+[[cleaner]]
+id = "proj-kotlin-native-js"
+name = "Kotlin Multiplatform Native / JS Output"
+description = "build/, .kotlin/ and kotlin-js-store caches of KMP projects (also Compose Multiplatform)"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["settings.gradle.kts", "build.gradle.kts"]
+artifacts = ["build", ".kotlin", "kotlin-js-store"]
+label = "Kotlin MPP build"
+
+[[cleaner]]
+id = "proj-go-air-tmp"
+name = "Go air / Delve Temp Output"
+description = "tmp/ of air live-reload projects and __debug_bin* debug binaries"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = [".air.toml", "air.toml"]
+artifacts = ["tmp"]
+label = "Go air output"
+
+[[cleaner]]
+id = "proj-swift-xcodegen"
+name = "Swift: Tuist / XcodeGen Derived"
+description = "Tuist and XcodeGen derived files .tuist-cache/, Derived/ and .build-cache/"
+category = "Project Build Artifacts"
+risk = "moderate"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["Project.swift", "project.yml", "Tuist.swift"]
+artifacts = ["Derived", ".tuist-cache", ".build-cache"]
+label = "Tuist/XcodeGen derived"

@@ -128,7 +128,7 @@ label = "Jupyter runtime"
 [[cleaner]]
 id = "dev-unused-toolchains"
 name = "Unused Language Runtimes"
-description = "Node, Python, Ruby, Java, Go, Flutter, Haskell (ghcup), Julia (juliaup), Zig and Swift runtimes installed by nvm, fnm, pyenv, rbenv, sdkman, mise, asdf, fvm, zvm or Go's toolchain downloads that nothing has run for 120+ days (judged by the newest file inside; `current`/`default` stay) [CAUTION: reinstall takes time]"
+description = "Node, Python, Ruby, Java, Go, Flutter, Haskell (ghcup), Julia (juliaup), Zig and Swift runtimes installed by nvm, fnm, nodenv, volta, pyenv, uv, rbenv, rvm, chruby, goenv, gvm, sdkman, jabba, mise, asdf, proto, fvm, zvm or Go's toolchain downloads that nothing has run for 120+ days (judged by the newest file inside; the selected version — `current`, `default`, a `version` file, a `bin/` shim — always stays) [CAUTION: reinstall takes time]"
 category = "Developer Caches"
 risk = "caution"
 [[cleaner.action]]
@@ -147,6 +147,21 @@ paths = [
   "~/.ghcup/ghc/*",
   "~/.julia/juliaup/julia-*",
   "~/.zvm/*",
+  "~/.rvm/rubies/*",
+  "~/.rubies/*",
+  "~/.nodenv/versions/*",
+  "~/.goenv/versions/*",
+  "~/.volta/tools/image/node/*",
+  "~/.volta/tools/image/yarn/*",
+  "~/.volta/tools/image/npm/*",
+  "~/.volta/tools/image/pnpm/*",
+  "$XDG_DATA_HOME/uv/python/*",
+  "~/.local/share/rtx/installs/*/*",
+  "~/.local/share/proto/tools/*/*",
+  "~/.proto/tools/*/*",
+  "~/.jabba/jdk/*",
+  "~/.jdks/*",
+  "~/.gvm/gos/*",
   "~/.local/share/zigup/*",
   "~/.local/share/swiftly/toolchains/*",
 ]
@@ -154,3 +169,30 @@ not_name_regex = "^(current|default|system|latest|self|bin)$"
 min_age_days = 120
 age_by_contents = true
 label = "Runtime"
+
+[[cleaner]]
+id = "dev-unused-envs"
+name = "Unused Conda & Virtual Environments"
+description = "Named conda envs, virtualenvwrapper, pipenv and Poetry virtualenvs nothing has used for 120+ days (recreate with conda/pip/poetry) [CAUTION: may hold hand-installed packages]"
+category = "Developer Caches"
+risk = "caution"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.conda/envs/*", "~/miniconda3/envs/*", "~/anaconda3/envs/*", "~/miniforge3/envs/*", "~/mambaforge/envs/*", "~/micromamba/envs/*", "~/.virtualenvs/*", "$XDG_DATA_HOME/virtualenvs/*", "$XDG_CACHE_HOME/pypoetry/virtualenvs/*"]
+not_name_regex = "^(base|default)$"
+min_age_days = 120
+age_by_contents = true
+label = "Environment"
+
+[[cleaner]]
+id = "dev-gem-cleanup"
+name = "RubyGems: Remove Old Gem Versions"
+description = "gem cleanup: uninstalls every gem version that a newer installed version supersedes"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "command"
+program = "gem"
+args = ["cleanup"]
+measure = ["~/.local/share/gem", "~/.gem", "~/.rbenv/versions/*/lib/ruby/gems", "~/.rvm/gems"]
+label = "gem cleanup"

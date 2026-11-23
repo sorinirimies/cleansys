@@ -262,6 +262,59 @@ impl PathFilter {
         false
     }
 
+    /// Is `dir` the version a version manager currently has selected? Either a sibling
+    /// (or uncle) symlink such as sdkman's `current` or fvm's `default` points at it, or
+    /// a `version` / `alias/default` file (pyenv, rbenv, nodenv, goenv, nvm) names it.
+    /// Idle time alone cannot be trusted: a mount without atime never shows use.
+    fn is_selected_version(dir: &Path) -> bool {
+        let Ok(real) = fs::canonicalize(dir) else {
+            return false;
+        };
+        let name = dir
+            .file_name()
+            .map(|n| n.to_string_lossy().trim_start_matches('v').to_string())
+            .unwrap_or_default();
+        let mut anc = dir.parent();
+        for _ in 0..3 {
+            let Some(a) = anc else { break };
+            if let Ok(rd) = fs::read_dir(a) {
+                for e in rd.flatten() {
+                    let ep = e.path();
+                    let Ok(meta) = fs::symlink_metadata(&ep) else {
+                        continue;
+                    };
+                    // `current` -> <version>, or a shim such as `bin/zig` -> <version>/zig
+                    let mut links = Vec::new();
+                    if meta.file_type().is_symlink() {
+                        links.push(ep);
+                    } else if meta.is_dir() && e.file_name() == "bin" {
+                        if let Ok(b) = fs::read_dir(&ep) {
+                            links.extend(b.flatten().map(|x| x.path()).take(200));
+                        }
+                    }
+                    for l in links {
+                        let is_link =
+                            fs::symlink_metadata(&l).is_ok_and(|m| m.file_type().is_symlink());
+                        if is_link && fs::canonicalize(&l).is_ok_and(|t| t.starts_with(&real)) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            for f in ["version", "alias/default", ".version"] {
+                if let Ok(txt) = fs::read_to_string(a.join(f))
+                    && txt
+                        .lines()
+                        .any(|l| l.trim().trim_start_matches('v') == name && !name.is_empty())
+                {
+                    return true;
+                }
+            }
+            anc = a.parent();
+        }
+        false
+    }
+
     fn is_old_enough(&self, p: &Path) -> bool {
         let Some(cutoff) = self.cutoff else {
             return true;
@@ -274,7 +327,9 @@ impl PathFilter {
             .flatten()
             .max();
         newest.is_some_and(|t| t < cutoff)
-            && !(self.by_contents && meta.is_dir() && Self::touched_below(p, cutoff))
+            && !(self.by_contents
+                && meta.is_dir()
+                && (Self::is_selected_version(p) || Self::touched_below(p, cutoff)))
     }
 
     fn accepts(&self, p: &Path) -> bool {
@@ -826,6 +881,63 @@ mod tests {
         assert!(aged.accepts(&old));
         assert!(!aged.accepts(&fresh));
         assert_eq!(files_below(d.path(), &aged), vec![old]);
+    }
+
+    #[test]
+    fn age_by_contents_never_removes_the_selected_version() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("candidates/java");
+        let (used, spare) = (root.join("21.0.11"), root.join("17.0.1"));
+        fs::create_dir_all(&used).unwrap();
+        fs::create_dir_all(&spare).unwrap();
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(&used, root.join("current")).unwrap();
+        write(&used.join("release"), 1);
+        write(&spare.join("release"), 1);
+        let old = SystemTime::now() - Duration::from_secs(400 * 86_400);
+        let times = fs::FileTimes::new().set_modified(old).set_accessed(old);
+        for p in [&used, &spare, &used.join("release"), &spare.join("release")] {
+            fs::File::open(p).unwrap().set_times(times).unwrap();
+        }
+        let f = PathFilter::new(None, None, None, None)
+            .unwrap()
+            .older_than_days(120)
+            .by_contents(true);
+        assert!(
+            f.accepts(&spare),
+            "an idle, unselected version is removable"
+        );
+        #[cfg(unix)]
+        assert!(
+            !f.accepts(&used),
+            "the version `current` points to must stay"
+        );
+        // zvm-style: `bin/zig` -> <version>/zig selects the version.
+        let zig = d.path().join("zvm");
+        fs::create_dir_all(zig.join("0.13.0")).unwrap();
+        fs::create_dir_all(zig.join("0.12.0")).unwrap();
+        fs::create_dir_all(zig.join("bin")).unwrap();
+        write(&zig.join("0.13.0/zig"), 1);
+        write(&zig.join("0.12.0/zig"), 1);
+        #[cfg(unix)]
+        std::os::unix::fs::symlink(zig.join("0.13.0/zig"), zig.join("bin/zig")).unwrap();
+        for p in [
+            zig.join("0.13.0"),
+            zig.join("0.12.0"),
+            zig.join("0.13.0/zig"),
+            zig.join("0.12.0/zig"),
+        ] {
+            fs::File::open(&p).unwrap().set_times(times).unwrap();
+        }
+        assert!(f.accepts(&zig.join("0.12.0")));
+        #[cfg(unix)]
+        assert!(!f.accepts(&zig.join("0.13.0")), "bin/zig points into it");
+        // pyenv-style: a `version` file names the selected one.
+        fs::write(d.path().join("candidates/version"), "17.0.1\n").unwrap();
+        assert!(
+            !f.accepts(&spare),
+            "the version named in `version` must stay"
+        );
     }
 
     #[test]

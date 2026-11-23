@@ -377,3 +377,109 @@ linux = ["~/.config/Google/DriveFS/*/content_cache"]
 macos = ["~/Library/Application Support/Google/DriveFS/*/content_cache"]
 windows = ["$LOCALAPPDATA/Google/DriveFS/*/content_cache"]
 label = "Google Drive Offline Cache"
+
+# Kotlin, Swift, Go and Scala tooling beyond the core developer set.
+
+[[cleaner]]
+id = "dev-scala-tools"
+name = "Scala: Mill / scala-cli / Ammonite / Bloop Caches"
+description = "Mill out cache downloads, scala-cli and Ammonite compile caches, global Bloop and Metals state (rebuilt on demand)"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.mill/download", "~/.ammonite/cache", "~/.bloop", "~/.metals"]
+linux = ["$XDG_CACHE_HOME/scalacli", "$XDG_CACHE_HOME/mill", "$XDG_CACHE_HOME/coursier/jvm"]
+macos = ["~/Library/Caches/ScalaCli", "~/Library/Caches/mill"]
+windows = ["$LOCALAPPDATA/ScalaCli/cache", "$LOCALAPPDATA/mill"]
+label = "Scala: Mill / scala-cli / Ammonite / Bloop Caches"
+
+[[cleaner]]
+id = "dev-go-tools"
+name = "Go: golangci-lint / gopls / staticcheck / air Caches"
+description = "Lint results, language-server and live-reload caches of Go tooling (rebuilt on demand)"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/tmp/air"]
+linux = ["$XDG_CACHE_HOME/golangci-lint", "$XDG_CACHE_HOME/gopls", "$XDG_CACHE_HOME/staticcheck"]
+macos = ["~/Library/Caches/golangci-lint", "~/Library/Caches/gopls", "~/Library/Caches/staticcheck"]
+windows = ["$LOCALAPPDATA/golangci-lint", "$LOCALAPPDATA/gopls", "$LOCALAPPDATA/staticcheck"]
+label = "Go: golangci-lint / gopls / staticcheck / air Caches"
+
+[[cleaner]]
+id = "dev-go-sdks"
+name = "Go: Extra SDK Downloads"
+description = "Additional Go SDKs fetched with `go install golang.org/dl/goX.Y` that nothing has used for 120+ days"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/sdk/go*"]
+min_age_days = 120
+age_by_contents = true
+label = "Go SDK"
+
+[[cleaner]]
+id = "dev-kotlin-tooling"
+name = "Kotlin: Daemon Logs, ktlint, detekt & Compose Caches"
+description = "Kotlin compile-daemon logs, ktlint/detekt download caches and Compose Multiplatform/Hot Reload temp output"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.kotlin/daemon", "~/.kotlin/errors", "~/.kotlin/sessions", "~/.ktlint", "~/.detekt"]
+linux = ["$XDG_CACHE_HOME/ktlint", "$XDG_CACHE_HOME/detekt"]
+macos = ["~/Library/Caches/ktlint", "~/Library/Caches/detekt"]
+windows = ["$LOCALAPPDATA/ktlint", "$LOCALAPPDATA/detekt"]
+label = "Kotlin: Daemon Logs, ktlint, detekt & Compose Caches"
+
+[[cleaner]]
+id = "dev-swift-tooling"
+name = "Swift: Mint / sourcekit-lsp / SwiftLint / swift-format Caches"
+description = "Mint package builds, sourcekit-lsp indexes and SwiftLint/swift-format caches (rebuilt on demand)"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.mint/packages", "~/.cache/sourcekit-lsp", "~/.swiftlint"]
+linux = ["$XDG_CACHE_HOME/swiftlint", "$XDG_CACHE_HOME/org.swift.swiftpm"]
+macos = ["~/Library/Caches/SwiftLint", "~/Library/Caches/org.swift.swiftpm.cache", "~/Library/Developer/Xcode/UserData/IDEEditorInteractivityHistory"]
+windows = ["$LOCALAPPDATA/swift-package-manager"]
+label = "Swift: Mint / sourcekit-lsp / SwiftLint / swift-format Caches"
+
+[[cleaner]]
+id = "dev-xcode-more"
+name = "Xcode: Previews, Documentation & Index Caches"
+description = "SwiftUI preview devices, documentation cache, module cache and index store caches (rebuilt on demand)"
+category = "Developer Caches"
+risk = "moderate"
+os = ["macos"]
+process = ["Xcode"]
+[[cleaner.action]]
+type = "delete"
+macos = ["~/Library/Developer/CoreSimulator/Caches", "~/Library/Developer/XCPGDevices"]
+label = "Xcode: Previews, Documentation & Index Caches"
+
+[[cleaner]]
+id = "dev-java-vm-tools"
+name = "JVM: JBang / Quarkus / Micronaut / Spring Tool Caches"
+description = "JBang script cache and Quarkus CLI downloads (re-downloaded)"
+category = "Developer Caches"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.jbang/cache", "~/.quarkus/cache"]
+linux = ["$XDG_CACHE_HOME/jbang"]
+macos = ["~/Library/Caches/jbang"]
+windows = ["$LOCALAPPDATA/jbang/cache"]
+label = "JVM: JBang / Quarkus / Micronaut / Spring Tool Caches"
+
+[[cleaner]]
+id = "dev-gradle-wrapper-old"
+name = "Gradle: Unused Distributions"
+description = "Gradle wrapper distributions and daemon dirs untouched for 90+ days"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["~/.gradle/wrapper/dists/*/*"]
+min_age_days = 90
+age_by_contents = true
+label = "Gradle distribution"
