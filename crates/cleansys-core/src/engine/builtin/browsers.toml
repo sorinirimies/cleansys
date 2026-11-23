@@ -834,3 +834,20 @@ linux = ["~/.zen/*/permissions.sqlite", "~/.zen/*/content-prefs.sqlite"]
 macos = ["~/Library/Application Support/zen/Profiles/*/permissions.sqlite", "~/Library/Application Support/zen/Profiles/*/content-prefs.sqlite"]
 windows = ["$APPDATA/zen/Profiles/*/permissions.sqlite", "$APPDATA/zen/Profiles/*/content-prefs.sqlite"]
 label = "Zen Browser site preferences"
+
+# Ladybird: layout read from LibWebView/Profile.cpp and LibHTTP/Cache/DiskCache.cpp.
+# Cache = <cache root>/Ladybird/Cache, and Ladybird/Profiles/<id>/Cache for named profiles.
+# (On Windows the cache root is %LOCALAPPDATA%\Ladybird itself.)
+[[cleaner]]
+id = "br-ladybird-cache"
+name = "Ladybird Cache"
+description = "HTTP disk cache of the Ladybird browser (all profiles); rebuilt as you browse. Cookies and history are not touched"
+category = "Web Browsers"
+os = ["linux", "macos", "windows"]
+process = ["Ladybird", "ladybird"]
+[[cleaner.action]]
+type = "delete"
+linux = ["$XDG_CACHE_HOME/Ladybird/Cache", "$XDG_CACHE_HOME/Ladybird/Profiles/*/Cache"]
+macos = ["~/Library/Caches/Ladybird/Cache", "~/Library/Caches/Ladybird/Profiles/*/Cache"]
+windows = ["$LOCALAPPDATA/Ladybird/Cache", "$LOCALAPPDATA/Ladybird/Profiles/*/Cache"]
+label = "Ladybird cache"
