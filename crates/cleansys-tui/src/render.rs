@@ -826,6 +826,7 @@ fn short_name(name: &str) -> String {
         "Applications" => "Apps",
         "AI & LLM Caches" => "AI",
         "Containers & Virtualization" => "Ctrs",
+        "Detected App Caches" => "Found",
         "System Logs & Dumps" => "Logs",
         "Updates & Snapshots" => "Snaps",
         n if n.starts_with("Maintenance") => "Maint",

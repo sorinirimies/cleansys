@@ -12,12 +12,14 @@ Set Theme "Catppuccin Mocha"
 Set TypingSpeed 45ms
 
 Hide
+Sleep 3s
 Type "source-env demo/fixture.nu; clear"
 Enter
-Sleep 3s
+Sleep 8s
 Show
+Sleep 1s
 
-Type "./target/release/cleansys"
+Type "cleansys"
 Enter
 Sleep 4s
 Screenshot demo/target/tui-1.png
@@ -37,7 +39,7 @@ Sleep 2s
 
 # Preview exactly what would go — deletes nothing
 Type "d"
-Sleep 3s
+Sleep 8s
 Screenshot demo/target/tui-2-preview.png
 Escape
 Sleep 800ms
@@ -73,7 +75,7 @@ Type "e"
 Sleep 1500ms
 
 Type "?"
-Sleep 3s
+Sleep 8s
 Escape
 Sleep 500ms
 Type "q"

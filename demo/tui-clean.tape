@@ -11,42 +11,47 @@ Set Width 1400
 Set Height 800
 
 Hide
+Sleep 3s
 Type "source-env demo/fixture.nu; clear"
 Enter
-Sleep 3s
+Sleep 8s
 Show
+Sleep 1s
 
-Type "./target/release/cleansys"
+Type "cleansys"
 Enter
 Sleep 5s
 
-# Project build output: tick Rust target/ and Gradle build/, then open Gradle (→) and untick one path
-Tab
-Sleep 600ms
-Tab
-Sleep 1500ms
-Space
-Sleep 800ms
+# Space on a category ticks every cleaner in it; → opens one, its top row is "All paths"
 Down
-Sleep 400ms
+Sleep 500ms
+Down
+Sleep 500ms
+Down
+Sleep 500ms
+Down
+Sleep 1200ms
 Space
-Sleep 800ms
+Sleep 1500ms
 Right
-Sleep 1800ms
+Sleep 600ms
+Right
+Sleep 1500ms
 Screenshot demo/target/tui-clean-details.png
+Down
 Down
 Sleep 500ms
 Space
-Sleep 1500ms
+Sleep 1200ms
+Up
+Up
+Sleep 500ms
+Space
+Sleep 1200ms
+Left
+Sleep 600ms
 Left
 Sleep 800ms
-
-# ...and the JS framework caches
-Down
-Down
-Sleep 600ms
-Space
-Sleep 1500ms
 Screenshot demo/target/tui-clean-1.png
 
 # Run -> confirm. Progress, the outcome and the activity log stay in the main view.

@@ -12,12 +12,14 @@ Set Theme "Catppuccin Mocha"
 Set TypingSpeed 45ms
 
 Hide
-Type "source-env demo/fixture.nu; clear"
-Enter
 Sleep 3s
+Type "source-env demo/fixture.nu; hide-env CLEANSYS_USER_ONLY; clear"
+Enter
+Sleep 8s
 Show
+Sleep 1s
 
-Type "./target/release/cleansys"
+Type "cleansys"
 Enter
 Sleep 5s
 

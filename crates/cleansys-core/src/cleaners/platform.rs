@@ -204,14 +204,8 @@ pub fn thumbnail_cache_paths() -> Vec<PathBuf> {
 /// clean without extra ownership checks on macOS/Windows since the whole
 /// directory is per-user; Linux's shared `/tmp` still filters by UID).
 pub fn temp_dir() -> PathBuf {
-    #[cfg(target_os = "linux")]
-    {
-        PathBuf::from("/tmp")
-    }
-    #[cfg(not(target_os = "linux"))]
-    {
-        std::env::temp_dir()
-    }
+    // `TMPDIR` is honoured on Linux too (demos and sandboxes point it elsewhere).
+    std::env::temp_dir()
 }
 
 /// `(label, path)` pairs for user-level package-manager caches.

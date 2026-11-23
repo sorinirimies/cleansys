@@ -77,7 +77,7 @@ the sidebar becomes a drop-down on narrow windows.
 
 | | |
 |---|---|
-| **Run it for real** — pick paths (`→`), confirm, live progress and the activity log *under the list*, summary, automatic re-scan<br><img src="demo/previews/tui-clean.gif" width="440"> | **Schedule it** — `S`<br><img src="demo/previews/tui-schedule.gif" width="440"> |
+| **Run it for real** — pick paths (`→`), confirm, live progress and the activity log *under the list*, summary, automatic re-scan<br><img src="demo/previews/tui-clean.gif" width="440"> | **Schedule it** — `C`<br><img src="demo/previews/tui-schedule.gif" width="440"> |
 | **User land vs root** — root cleaners ask for your password only when run<br><img src="demo/previews/tui-system-root.gif" width="440"> | **Narrow terminals** — the sidebar collapses to a category bar<br><img src="demo/previews/tui-narrow.gif" width="440"> |
 | **Settings & About** — `o` / `i`<br><img src="demo/previews/tui-settings.gif" width="440"> | |
 | **Details** — `→` opens a cleaner: every path with its size, `Space` unticks one<br><img src="demo/previews/tui-details.png" width="440"> | **Done** — the outcome, freed space and activity log stay in the main view; `Esc` dismisses<br><img src="demo/previews/tui-clean-done.png" width="440"> |

@@ -7,8 +7,10 @@
 #
 # Requires: nushell, and a `truncate` binary (macOS/Linux).
 
-let demo_home = ($env.DEMO_HOME? | default "/tmp/cleansys-demo-home")
-if ($demo_home | path exists) { rm -rf $demo_home }
+# Linux scans the real /tmp-like dirs and the demo home must not sit inside one: /dev/shm.
+let linux = ($nu.os-info.name == "linux")
+let demo_home = ($env.DEMO_HOME? | default (if $linux { "/dev/shm/demo" } else { "/tmp/cleansys-demo-home" }))
+if ($demo_home | path exists) { ^rm -rf $demo_home }
 mkdir $demo_home
 
 let p = ($demo_home | path join "Projects")
@@ -71,6 +73,19 @@ let sparse = [
     ["3M", "tmp/build-cache.tmp"]
     ["1M", "tmp/session.lock"]
 ]
+# Linux keeps the same data under the XDG / dotfile layout the Linux cleaners read.
+let sparse = if $linux {
+    $sparse | each {|e|
+        let rel = ($e.1
+            | str replace "Library/Application Support/" ".config/"
+            | str replace "Library/Caches/" ".cache/"
+            | str replace "Library/Logs/" ".local/state/"
+            | str replace "Google/Chrome" "google-chrome"
+            | str replace "Firefox/Profiles" "mozilla/firefox"
+            | str replace ".Trash/" ".local/share/Trash/files/")
+        [$e.0 $rel]
+    } | where {|e| not ($e.1 | str starts-with "Library/") }
+} else { $sparse }
 for entry in $sparse {
     let dest = ($demo_home | path join $entry.1)
     mkdir ($dest | path dirname)
@@ -94,7 +109,7 @@ for m in $markers {
 }
 
 # Make every project look untouched for months (default: only idle projects are cleaned).
-^find $p -exec touch -t 202501150900 {} +
+^find $p -exec touch -t 202501150900 '{}' +
 
 # ── preferences read by the GUI/web: a pleasant theme + a few cleaners pre-ticked ──
 let settings = {
@@ -117,6 +132,10 @@ $env.HOME = $demo_home
 $env.USERPROFILE = $demo_home
 $env.TMPDIR = ($demo_home | path join "tmp")
 $env.CLEANSYS_SCAN_ROOTS = $p
+$env.CLEANSYS_USER_ONLY = "1"
+$env.XDG_CACHE_HOME = ($demo_home | path join ".cache")
 $env.PROMPT_COMMAND = {|| "" }
 $env.PROMPT_COMMAND_RIGHT = {|| "" }
 $env.PROMPT_INDICATOR = "$ "
+# The tapes type plain `cleansys`: put the release build on PATH.
+$env.PATH = ($env.PATH | prepend ($env.CLEANSYS_BIN_DIR? | default ($env.FILE_PWD | path dirname | path join "target" "release")))
