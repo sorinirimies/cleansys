@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.16.1](https://github.com/sorinirimies/cleansys/compare/v0.16.0...v0.16.1) — 2026-11-23
+
+### ✨ Features
+
+- **core:** Build-output cleaners for Ruby, PHP, Erlang, Elixir deps, Crystal, D, Unreal, R; ghcup, juliaup, zig and swift runtimes in unused runtimes ([`41c9ade`](https://github.com/sorinirimies/cleansys/commit/41c9ade9c46abca31c4c771161c173140b3b05ae))
+
 ## [0.16.0](https://github.com/sorinirimies/cleansys/compare/v0.15.6...v0.16.0) — 2026-11-23
 
 ### ✨ Features
