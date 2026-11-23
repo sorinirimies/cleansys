@@ -405,6 +405,10 @@ pub fn scan_pool() -> &'static rayon::ThreadPool {
         rayon::ThreadPoolBuilder::new()
             .num_threads(scan_thread_count())
             .thread_name(|i| format!("cleansys-scan-{i}"))
+            // A worker that waits on a nested scope steals other jobs onto its own stack, so
+            // dozens of cleaners can pile up there. rayon's 2 MB default overflowed (aborting
+            // the whole process); stack memory is only committed when touched.
+            .stack_size(32 * 1024 * 1024)
             .build()
             .expect("scan thread pool")
     })
