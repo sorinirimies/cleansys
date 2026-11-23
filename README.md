@@ -179,16 +179,17 @@ Cleaners are grouped by theme; the UIs list a **User land** section first (every
 | Category | Examples |
 |----------|----------|
 | **Everyday Junk** | App/thumbnail caches, temp files, Trash, Quick Look & icon caches, Explorer/WER/Internet caches, desktop-environment caches, user core dumps |
-| **Developer Caches** | Gradle (caches, wrapper), Android SDK & Studio, Maven, Cargo git/src, sccache, npm/yarn/pnpm/bun, Go, uv/Poetry, Bazel, Playwright/Cypress, node-gyp/Expo, ESLint/Nx/Turbo, rustup temp, Hex, opam, Zed, VS Code/Cursor/Windsurf, Xcode, Ruby, NuGet, ccache… |
-| **Project Build Artifacts** | Rust `target/`, Gradle/Android `build/` + `.gradle/` + `.cxx`, Maven, `node_modules`, Next/Nuxt/Vite caches, Python caches & venvs, SwiftPM, CocoaPods, .NET `bin/obj`, Flutter, Zig, CMake, Terraform |
+| **Developer Caches** | Gradle (caches, wrapper), Android SDK & Studio, Maven, Cargo git/src, sccache, npm/yarn/pnpm/bun, Go, uv/Poetry, Bazel, Playwright/Cypress, node-gyp/Expo, ESLint/Nx/Turbo, rustup temp + old pinned toolchains, shared `CARGO_TARGET_DIR`, **unused language runtimes** (nvm, fnm, volta, pyenv, uv, rbenv, rvm, sdkman, mise, asdf, ghcup, zvm, … — the selected version always stays), unused conda/virtualenvs, Hex, opam, PlatformIO/Arduino/ESP-IDF/Conan/Emscripten, JetBrains, Android SDK/emulators, Pulumi/Packer/SAM, Scala/Go/Kotlin/Swift tooling, Zed, VS Code/Cursor/Windsurf, Xcode, Ruby, NuGet, ccache… |
+| **Project Build Artifacts** | ~55 ecosystems, found next to their marker file and only when idle: Rust `target/`, Gradle/Kotlin Multiplatform/Android, Maven, sbt/Mill/scala-cli, Haskell, Clojure, Elixir/Erlang, OCaml, Gleam, Elm, Crystal, D, `node_modules` + Astro/Nx/Vercel/Next/Nuxt/Vite output, React Native, Python caches/venvs/packaging, Ruby, PHP, Swift/Xcode/Tuist, CocoaPods, .NET, Visual Studio, C/C++ (Meson, clangd), ESP-IDF, PlatformIO, Unreal, Godot, Flutter, Zig, CMake, Terraform/CDK, Jekyll/Hugo/MkDocs/Sphinx, ML experiment output |
 | **AI & LLM Caches** | Hugging Face, PyTorch/Keras, Ollama, LM Studio/GPT4All/Jan, Claude Code, Codex/Gemini CLI, agent session histories, code-index caches |
 | **Detected App Caches** | Cache folders of apps installed here that have no dedicated cleaner (`~/.cache/*`, `~/Library/Caches/*`, `%LOCALAPPDATA%\*\Cache`): found automatically, one cleaner per app, moderate risk. Turn it off in Settings (next start) or with `CLEANSYS_NO_DISCOVER=1`. |
-| **Web Browsers** | Cache, cookies & site data, history, sessions — Chrome, Chromium, Brave, Edge, Vivaldi, Opera, Arc, Firefox, LibreWolf, Zen, Safari |
+| **Web Browsers** | Cache, cookies & site data, history, sessions — Chrome, Chromium, Brave, Edge, Vivaldi, Opera, Arc, Firefox, LibreWolf, Zen, Safari, **Ladybird** · autofill, site preferences and saved passwords (caution, refused while the browser runs) |
 | **Applications / Games** | Slack, Discord, Teams, Signal, Spotify, Zoom, Telegram, Office, Adobe, JetBrains logs · Steam shader cache, Epic, Lutris/Heroic, Wine, GPU shader caches |
 | **Installers & Backups** | Installer files in `~/Downloads`, old *Install macOS* apps, iOS/iPadOS firmware & device backups, Mail downloads |
 | **Large & Old Files** | Files over 500 MB, untouched for a year, old downloads, disk images, archives, dumps, duplicates (nothing ticked by default) |
+| **Everyday Junk** *(deep scan)* | `.DS_Store` / `Thumbs.db` / `._*`, Vim swap files, `*~` / `*.bak` / `*.orig` backups |
 | **Containers & Virtualization** | Docker/Podman prune, Flatpak unused runtimes, Nix GC, Conda, Kubernetes/Helm caches, Vagrant boxes |
-| **Privacy Traces** | Recent-file lists, shell/REPL/editor histories |
+| **Privacy Traces** | Recent-file lists, shell/REPL/editor histories, clipboard |
 | **System Logs & Dumps** *(root)* | System logs, journal vacuum, rotated logs, crash reports, core dumps, ASL / setup / event logs, Defender history |
 | **Package Managers** *(root)* | APT/DNF/pacman/zypper caches & orphans, old kernels, snap revisions, AppStream, DISM component cleanup |
 | **Updates & Snapshots** *(root)* | Downloaded macOS updates, Time Machine local snapshots, Windows Update & Delivery Optimization caches |
@@ -216,9 +217,9 @@ sidebar collapses into a one-line category bar (Tab / Shift+Tab).
 | `e` | Hide / show cleaners with nothing to clean |
 | `d` | Preview — exact paths and sizes, deletes nothing |
 | `Enter` | Run (asks for confirmation; `y` toggles the prompt). Progress, the outcome and the log appear **under the list** — the view never changes; `q` / `Esc` cancels, `Esc` dismisses the summary |
-| `R` | Re-scan sizes |
-| `s` | Opt the highlighted cleaner in / out of scanning (saved as `disabled_cleaners` in `settings.json`) |
-| `S` | **Schedule** automatic cleaning |
+| `S` | **Scan** — measure every cleaner (`R` still works as an alias) |
+| `x` | Opt the highlighted cleaner in / out of scanning (saved as `disabled_cleaners` in `settings.json`); a switched-off row says *scan off · x to enable* |
+| `C` | **Schedule** automatic cleaning |
 | `L` | Show / hide the **activity log** under the list |
 | `o` / `i` | **Settings** / **About** overlay (`Tab` switches; see [Settings & About](#settings--about)) |
 | `?`, `Esc`, `q` | Help · back/cancel · quit |
@@ -389,9 +390,9 @@ linux = ["$XDG_CACHE_HOME/myapp"]  # per-OS lists: linux / macos / windows
 ```
 
 Other actions: `command` (`program`, `args`, `sudo`, `measure = [paths]` to report freed bytes) and
-`project_artifacts` (`markers`, `artifacts`). `delete` also supports `contents_only`, `files_only`, `recreate`, regex filters
+`project_artifacts` (`markers`, `artifacts`) and `large_files` (deep scan: `extensions` and/or `names` — exact, `*suffix`, `prefix*`; either list may match). `delete` also supports `contents_only`, `files_only`, `recreate`, regex filters
 (`name_regex`, `not_name_regex`, `path_regex`, `not_path_regex`) and `min_age_days` (only items neither written nor
-read for that many days). Set `requires_root = true` for anything that
+read for that many days; with `age_by_contents = true` a directory is judged by the newest file *inside* it, and the version a manager has selected — a `current`/`default` symlink, a `bin/` shim, a `version` or `alias/default` file — is never removed). Set `requires_root = true` for anything that
 needs elevation — it will appear in the System · root section.
 
 ## 🛡️ Safety
@@ -425,7 +426,7 @@ crates/
 │   └── src/
 │       ├── engine/           # declarative cleaners: spec (TOML) · exec · paths · safety · running guard ·
 │       │   │                 #   schedule · headless (scan/clean/auto) · config
-│       │   └── builtin/*.toml    # ~250 built-in cleaners (system ones in system*.toml) (browsers/apps/games are generated by scripts/gen_content_packs.nu)
+│       │   └── builtin/*.toml    # ~370 built-in cleaners (system ones in system*.toml; browsers/apps/games are generated by scripts/gen_content_packs.nu — hand-written browser extras live in browsers_extra.toml, ecosystems in ecosystems.toml)
 │       ├── cleaners/         # hard-coded user cleaners, the Windows Recycle Bin (Shell API) + platform paths
 │       ├── model.rs          # CleanerItem (id, risk, root), categories, user-land/root layout, recommended preset
 │       ├── scan/             # background scan pool + ScanBoard (sizes, visibility, filtering) used by TUI and GUI
@@ -463,7 +464,7 @@ cargo test -p cleansys-web        # end-to-end: real server on an ephemeral port
 ## 🎥 Demos & screenshots
 
 Everything shown above is generated by **nushell scripts** (no bash/python) against a **synthetic home directory**
-(`demo/fixture.nu`, sparse files — no real paths, nothing of yours is touched). See
+(`demo/fixture.nu`, sparse files — no real paths, nothing of yours is touched; it points `HOME` at `/dev/shm/demo` and `CLEANSYS_FS_ROOT` at its fake `root/` so even the System · root cleaners read synthetic data). See
 [`demo/previews/README.md`](demo/previews/README.md).
 
 ```bash

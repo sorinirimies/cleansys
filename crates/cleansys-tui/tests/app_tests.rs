@@ -1131,3 +1131,57 @@ fn space_on_category_list_ticks_every_cleaner_in_it() {
             .all(|&(c, i)| !app.categories[c].items[i].selected)
     );
 }
+
+fn press(app: &mut App, c: char) {
+    use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
+    app.handle_key(KeyEvent::new(KeyCode::Char(c), KeyModifiers::NONE))
+        .unwrap();
+}
+
+#[test]
+fn x_toggles_scan_for_the_highlighted_cleaner_and_s_does_not() {
+    let mut app = app_with_categories();
+    app.persist = false;
+    app.category_index = 1;
+    app.item_list_state.select(Some(0));
+    let (ci, ii) = app.current_item().expect("a highlighted cleaner");
+    let id = app.categories[ci].items[ii].id.clone();
+    press(&mut app, 's');
+    assert!(
+        !app.disabled_cleaners.contains(&id),
+        "`s` no longer toggles scanning"
+    );
+    press(&mut app, 'x');
+    assert!(
+        app.disabled_cleaners.contains(&id),
+        "`x` turns scanning off"
+    );
+    press(&mut app, 'x');
+    assert!(
+        !app.disabled_cleaners.contains(&id),
+        "`x` again turns it back on"
+    );
+}
+
+#[test]
+fn capital_c_opens_the_schedule_and_capital_s_does_not() {
+    let mut app = app_with_categories();
+    app.persist = false;
+    press(&mut app, 'S');
+    assert!(!app.schedule_open, "`S` is scan now, not schedule");
+    press(&mut app, 'C');
+    assert!(app.schedule_open, "`C` opens the schedule");
+}
+
+#[test]
+fn capital_s_and_the_old_capital_r_both_start_a_scan() {
+    for key in ['S', 'R'] {
+        let mut app = app_with_categories();
+        app.persist = false;
+        press(&mut app, key);
+        assert!(
+            app.board.is_scanning() || app.board.complete(),
+            "`{key}` should start a scan"
+        );
+    }
+}

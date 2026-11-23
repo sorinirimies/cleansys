@@ -841,7 +841,20 @@ fn short_name(name: &str) -> String {
 /// category (build output) leaves the others as unreadable slivers. Categories
 /// under 6% of the total area are folded into one "Other" tile.
 fn render_space_treemap(f: &mut Frame, app: &App, area: Rect) {
-    let scaled: Vec<(String, f64, u64)> = category_sizes(app)
+    let items = treemap_weights(category_sizes(app))
+        .into_iter()
+        .map(|(n, w)| tui_chart::TreemapItem::new(n, w));
+    let chart = tui_chart::Treemap::new(items)
+        .gradient(crate::theme::th().border, crate::theme::th().success)
+        .show_values(false)
+        .block(panel("Space (area ~ √size)"));
+    f.render_widget(chart, area);
+}
+
+/// Tile weights for the space treemap: short names, area ∝ √bytes, and every category
+/// under 6% of the total weight folded into one "Other" tile (only when it merges 2+).
+fn treemap_weights(sizes: Vec<(String, u64)>) -> Vec<(String, f64)> {
+    let scaled: Vec<(String, f64, u64)> = sizes
         .into_iter()
         .map(|(n, b)| (short_name(&n), (b as f64).sqrt(), b))
         .collect();
@@ -854,14 +867,7 @@ fn render_space_treemap(f: &mut Frame, app: &App, area: Rect) {
     } else {
         big.extend(small);
     }
-    let items = big
-        .into_iter()
-        .map(|(n, w, _)| tui_chart::TreemapItem::new(n, w));
-    let chart = tui_chart::Treemap::new(items)
-        .gradient(crate::theme::th().border, crate::theme::th().success)
-        .show_values(false)
-        .block(panel("Space (area ~ √size)"));
-    f.render_widget(chart, area);
+    big.into_iter().map(|(n, w, _)| (n, w)).collect()
 }
 
 fn render_categories(f: &mut Frame, app: &App, area: Rect) {
@@ -2601,5 +2607,57 @@ mod popup_tests {
         t.draw(|f| clear_popup(f, Rect::new(2, 1, 10, 3))).unwrap();
         let bg = crate::theme::bg(&crate::theme::th());
         assert_eq!(t.backend().buffer()[(3, 2)].bg, bg);
+    }
+}
+
+#[cfg(test)]
+mod treemap_tests {
+    use super::*;
+
+    #[test]
+    fn long_category_names_get_short_tile_labels() {
+        for (long, short) in [
+            ("Project Build Artifacts", "Build"),
+            ("Package Managers", "Pkgs"),
+            ("Developer Caches", "Dev"),
+            ("Maintenance & Tuning", "Maint"),
+            ("Containers & Virtualization", "Ctrs"),
+            ("Some Unknown Category", "Some"),
+        ] {
+            assert_eq!(short_name(long), short, "{long}");
+        }
+    }
+
+    #[test]
+    fn one_giant_category_does_not_starve_the_rest() {
+        let w = treemap_weights(vec![
+            ("Project Build Artifacts".into(), 120_000_000_000),
+            ("Developer Caches".into(), 5_000_000_000),
+            ("Web Browsers".into(), 2_000_000_000),
+        ]);
+        let get = |n: &str| w.iter().find(|(x, _)| x == n).map(|(_, v)| *v).unwrap();
+        // sqrt scale: 24x the bytes is only ~5x the area weight.
+        let ratio = get("Build") / get("Dev");
+        assert!((4.0..6.0).contains(&ratio), "ratio {ratio}");
+    }
+
+    #[test]
+    fn tiny_categories_fold_into_other_only_when_two_or_more_merge() {
+        let many = treemap_weights(vec![
+            ("Project Build Artifacts".into(), 100_000_000_000),
+            ("Everyday Junk".into(), 10_000_000),
+            ("Web Browsers".into(), 20_000_000),
+        ]);
+        assert!(many.iter().any(|(n, _)| n == "Other"), "{many:?}");
+        assert_eq!(many.len(), 2);
+        let one = treemap_weights(vec![
+            ("Project Build Artifacts".into(), 100_000_000_000),
+            ("Everyday Junk".into(), 10_000_000),
+        ]);
+        assert!(
+            one.iter().all(|(n, _)| n != "Other"),
+            "a lone small tile stays: {one:?}"
+        );
+        assert!(treemap_weights(vec![]).is_empty());
     }
 }

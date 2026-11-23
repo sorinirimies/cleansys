@@ -980,6 +980,63 @@ mod tests {
         assert!(by_contents.accepts(&tool), "everything inside is idle too");
     }
 
+    /// End to end: a TOML-defined "unused runtimes" cleaner removes only the idle,
+    /// unselected versions, in preview and for real.
+    #[test]
+    fn unused_runtime_cleaner_keeps_selected_and_recent_versions_end_to_end() {
+        let d = tempfile::tempdir().unwrap();
+        let root = d.path().join("sdk");
+        let old = SystemTime::now() - Duration::from_secs(300 * 86_400);
+        let times = fs::FileTimes::new().set_modified(old).set_accessed(old);
+        // nvm layout: versions/node/<v>, alias/default names the selected one.
+        for v in ["v18.0.0", "v20.0.0", "v22.0.0"] {
+            write(&root.join(format!("versions/node/{v}/bin/node")), 100);
+        }
+        fs::create_dir_all(root.join("alias")).unwrap();
+        fs::write(root.join("alias/default"), "v20.0.0\n").unwrap();
+        for v in ["v18.0.0", "v20.0.0"] {
+            for p in [
+                root.join(format!("versions/node/{v}/bin/node")),
+                root.join(format!("versions/node/{v}/bin")),
+                root.join(format!("versions/node/{v}")),
+            ] {
+                fs::File::open(p).unwrap().set_times(times).unwrap();
+            }
+        }
+        // v22 stays untouched-now (recent), v20 is selected, v18 is the only removable one.
+        let src = format!(
+            r#"
+[[cleaner]]
+id = "t-rt"
+name = "Runtimes"
+description = "d"
+[[cleaner.action]]
+type = "delete"
+paths = ["{}/versions/node/*"]
+min_age_days = 120
+age_by_contents = true
+"#,
+            root.display()
+        );
+        let spec = crate::engine::registry::parse_spec_file(&src)
+            .unwrap()
+            .remove(0);
+        let cfg = EngineConfig::default();
+        let preview = run_spec_with(&spec, RunOptions::preview(), &cfg).unwrap();
+        assert_eq!(preview.items.len(), 1, "{:?}", preview.items);
+        assert!(
+            root.join("versions/node/v18.0.0").exists(),
+            "preview deletes nothing"
+        );
+        run_spec_with(&spec, RunOptions::execute(), &cfg).unwrap();
+        assert!(!root.join("versions/node/v18.0.0").exists());
+        assert!(
+            root.join("versions/node/v20.0.0").exists(),
+            "selected via alias/default"
+        );
+        assert!(root.join("versions/node/v22.0.0").exists(), "recently used");
+    }
+
     #[test]
     fn dry_run_keeps_files_real_run_deletes() {
         let d = tempfile::tempdir().unwrap();

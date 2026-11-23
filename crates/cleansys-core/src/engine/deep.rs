@@ -393,8 +393,10 @@ mod tests {
         assert_eq!(names, ["bigger.bin", "big.bin"]);
     }
 
-    #[test]
-    fn queries_share_one_walk_and_still_filter_on_their_own() {
+    /// One attempt: does a second query inside the TTL reuse the first walk?
+    /// `None` = a concurrent test (any scan calls the global `clear_index()`) wiped the cache
+    /// between the two queries, so this attempt proves nothing either way.
+    fn second_query_reuses_walk() -> Option<(usize, usize)> {
         let tmp = tempfile::tempdir().unwrap();
         write(&tmp.path().join("a.iso"), 3 << 20);
         write(&tmp.path().join("b.zip"), 3 << 20);
@@ -407,13 +409,24 @@ mod tests {
         std::fs::remove_file(tmp.path().join("b.zip")).unwrap();
         q.extensions = vec!["zip".into()];
         let zip = find_files(&q, &cfg);
-        assert_eq!(iso.len(), 1);
-        assert_eq!(zip.len(), 1, "second query reused the first walk");
+        if zip.is_empty() {
+            return None;
+        }
+        // The cleared index walks again (and now finds nothing).
         clear_index();
         assert!(
             find_files(&q, &cfg).is_empty(),
             "a cleared index walks again"
         );
+        Some((iso.len(), zip.len()))
+    }
+
+    #[test]
+    fn queries_share_one_walk_and_still_filter_on_their_own() {
+        // A racing `clear_index()` can only make an attempt inconclusive (never a false
+        // positive), so retry on fresh directories until one runs undisturbed.
+        let got = (0..50).find_map(|_| second_query_reuses_walk());
+        assert_eq!(got, Some((1, 1)), "second query reused the first walk");
     }
 
     #[test]

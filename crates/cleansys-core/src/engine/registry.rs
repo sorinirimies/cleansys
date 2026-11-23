@@ -27,6 +27,10 @@ const BUILTIN: &[(&str, &str)] = &[
     ),
     ("ecosystems.toml", include_str!("builtin/ecosystems.toml")),
     ("browsers.toml", include_str!("builtin/browsers.toml")),
+    (
+        "browsers_extra.toml",
+        include_str!("builtin/browsers_extra.toml"),
+    ),
     ("apps.toml", include_str!("builtin/apps.toml")),
     ("games.toml", include_str!("builtin/games.toml")),
     ("system.toml", include_str!("builtin/system.toml")),
@@ -191,6 +195,209 @@ mod tests {
                 }
             }
         }
+    }
+
+    // ---- catalog guards: rules every built-in cleaner must keep -------------------------
+
+    fn all_specs() -> Vec<CleanerSpec> {
+        load_all_unfiltered(None)
+    }
+
+    #[test]
+    fn credential_cleaners_are_caution_and_refuse_while_the_app_runs() {
+        use crate::engine::spec::Risk;
+        let creds: Vec<_> = all_specs()
+            .into_iter()
+            .filter(|s| s.id.ends_with("-passwords"))
+            .collect();
+        assert!(
+            creds.len() >= 9,
+            "expected one per browser, got {}",
+            creds.len()
+        );
+        for s in creds {
+            assert_eq!(s.risk, Risk::Caution, "{} deletes passwords", s.id);
+            assert!(
+                !s.process.is_empty(),
+                "{}: must refuse while the browser runs",
+                s.id
+            );
+        }
+    }
+
+    #[test]
+    fn age_gated_cleaners_have_an_age_and_are_never_safe() {
+        use crate::engine::spec::{Action, Risk};
+        for s in all_specs() {
+            for a in &s.actions {
+                if let Action::Delete {
+                    age_by_contents,
+                    min_age_days,
+                    ..
+                } = a
+                {
+                    if *age_by_contents {
+                        assert!(
+                            *min_age_days > 0,
+                            "{}: age_by_contents without min_age_days",
+                            s.id
+                        );
+                        assert_ne!(
+                            s.risk,
+                            Risk::Safe,
+                            "{}: removing installed tools is not safe",
+                            s.id
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn no_delete_template_can_match_a_whole_home_or_root() {
+        use crate::engine::spec::Action;
+        let bad = [
+            "/",
+            "~",
+            "~/",
+            "~/*",
+            "*",
+            "/*",
+            "$HOME",
+            "${HOME}",
+            "$HOME/*",
+            "$XDG_CACHE_HOME",
+            "$XDG_DATA_HOME",
+            "$XDG_CONFIG_HOME",
+        ];
+        for s in all_specs() {
+            for a in &s.actions {
+                if !matches!(a, Action::Delete { .. }) {
+                    continue;
+                }
+                for os in ["linux", "macos", "windows"] {
+                    for t in a.delete_templates_for(os) {
+                        assert!(
+                            !bad.contains(&t),
+                            "{}: `{t}` would delete far too much",
+                            s.id
+                        );
+                        assert!(
+                            t.starts_with(['~', '$', '/', '%']) || t.chars().nth(1) == Some(':'),
+                            "{}: `{t}` is relative to the current directory",
+                            s.id
+                        );
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn delete_cleaners_have_a_path_on_every_os_they_claim() {
+        use crate::engine::spec::Action;
+        for s in all_specs() {
+            for os in ["linux", "macos", "windows"] {
+                if !(s.os.is_empty() || s.os.iter().any(|o| o == os)) {
+                    continue;
+                }
+                // A cleaner that deletes must point somewhere on each OS it claims, or it
+                // is dead weight there (os = [...] narrows it).
+                let deletes = s.actions.iter().all(|a| matches!(a, Action::Delete { .. }));
+                if deletes && !s.actions.is_empty() {
+                    let any = s
+                        .actions
+                        .iter()
+                        .any(|a| !a.delete_templates_for(os).is_empty());
+                    // Cross-platform cleaners may legitimately be Linux/macOS-only data; require
+                    // at least one OS to have paths, and warn-free parity for explicit os lists.
+                    if !s.os.is_empty() {
+                        assert!(any, "{}: claims {os} but has no {os} paths", s.id);
+                    }
+                }
+            }
+            let some = ["linux", "macos", "windows"].iter().any(|os| {
+                s.actions
+                    .iter()
+                    .any(|a| !a.delete_templates_for(os).is_empty())
+            });
+            let only_deletes = s.actions.iter().all(|a| matches!(a, Action::Delete { .. }));
+            if only_deletes && !s.actions.is_empty() {
+                assert!(some, "{}: deletes nothing on any OS", s.id);
+            }
+        }
+    }
+
+    #[test]
+    fn ladybird_is_covered_on_every_platform_with_real_profile_layout() {
+        use crate::engine::spec::Action;
+        let specs = all_specs();
+        for id in [
+            "br-ladybird-cache",
+            "br-ladybird-history",
+            "br-ladybird-crash-reports",
+        ] {
+            let s = specs
+                .iter()
+                .find(|s| s.id == id)
+                .unwrap_or_else(|| panic!("{id} missing"));
+            assert_eq!(s.category, "Web Browsers");
+            assert!(
+                !s.process.is_empty(),
+                "{id} must refuse while Ladybird runs"
+            );
+            for os in ["linux", "macos", "windows"] {
+                let t: Vec<&str> = s
+                    .actions
+                    .iter()
+                    .flat_map(|a| a.delete_templates_for(os))
+                    .collect();
+                assert!(!t.is_empty(), "{id}: no {os} path");
+                assert!(
+                    t.iter().all(|p| p.contains("Ladybird/Profiles/*/")),
+                    "{id}: {t:?}"
+                );
+            }
+            assert!(matches!(s.actions[0], Action::Delete { .. }));
+        }
+        let cache = specs.iter().find(|s| s.id == "br-ladybird-cache").unwrap();
+        let linux: Vec<&str> = cache.actions[0].delete_templates_for("linux");
+        assert!(
+            linux.iter().any(|p| p.ends_with("/RequestServer")),
+            "{linux:?}"
+        );
+    }
+
+    #[test]
+    fn project_cleaners_cover_the_major_ecosystems() {
+        let ids: std::collections::HashSet<String> =
+            all_specs().into_iter().map(|s| s.id).collect();
+        for want in [
+            "proj-rust",
+            "proj-gradle",
+            "proj-node-modules",
+            "proj-python-venv",
+            "proj-haskell",
+            "proj-sbt",
+            "proj-mill",
+            "proj-kotlin-native-js",
+            "proj-ruby-bundle",
+            "proj-php-vendor",
+            "proj-elixir-deps",
+            "proj-xcode-local",
+            "proj-react-native",
+            "proj-meson-ninja",
+            "dev-cargo-target-dir",
+            "dev-rustup-old-toolchains",
+            "dev-unused-toolchains",
+            "deep-os-junk-files",
+            "deep-vim-swap",
+            "deep-backup-files",
+        ] {
+            assert!(ids.contains(want), "built-in cleaner `{want}` is missing");
+        }
+        assert!(ids.len() >= 330, "catalog shrank to {}", ids.len());
     }
 
     #[test]

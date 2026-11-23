@@ -250,6 +250,9 @@ fn expanded_details_render_paths_and_follow_the_cursor() {
     app.entry_next();
     app.entry_next();
     assert_eq!(app.entry_cursor, Some(2));
+    app.entry_previous();
+    assert_eq!(app.entry_cursor, Some(1));
+    app.entry_next();
     app.entry_toggle();
     assert!(!app.board.entry_selected("/p/b/target"));
     assert!(app.board.entry_selected("/p/a/target"));
