@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.20.0](https://github.com/sorinirimies/cleansys/compare/v0.19.2...v0.20.0) — 2026-11-23
+
+### ✨ Features
+
+- Scan-off cleaners are never silent in TUI, GUI and web: shared count and wording from cleansys-core, row badges say how to re-enable; parity tests; docs ([`8d69b34`](https://github.com/sorinirimies/cleansys/commit/8d69b34032be087abb72cc00ce622793a0d8453e))
+
 ## [0.19.2](https://github.com/sorinirimies/cleansys/compare/v0.19.1...v0.19.2) — 2026-11-23
 
 ### 🐛 Bug fixes
