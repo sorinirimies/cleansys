@@ -815,18 +815,46 @@ fn category_sizes(app: &App) -> Vec<(String, u64)> {
         .collect()
 }
 
-/// Lollipop chart (tui-chart) of reclaimable space per category, largest first.
-/// One row per category, so long names and tiny slices never collide the way
-/// treemap tiles did. Values are in GB.
+/// Short tile label for a category name (treemap tiles are only a few cells wide).
+fn short_name(name: &str) -> String {
+    let short = match name {
+        "Project Build Artifacts" => "Build",
+        "Package Managers" => "Pkgs",
+        "Developer Caches" => "Dev",
+        "Everyday Junk" => "Junk",
+        "Web Browsers" => "Web",
+        "Applications" => "Apps",
+        "AI & LLM Caches" => "AI",
+        "Containers & Virtualization" => "Ctrs",
+        "System Logs & Dumps" => "Logs",
+        "Updates & Snapshots" => "Snaps",
+        n if n.starts_with("Maintenance") => "Maint",
+        n => n.split([' ', '&']).find(|w| !w.is_empty()).unwrap_or(n),
+    };
+    short.to_string()
+}
+
+/// Treemap (tui-chart) of reclaimable space per category. Slices under 3% of the
+/// total are folded into one "Other" tile so no tile is an unreadable sliver.
 fn render_space_treemap(f: &mut Frame, app: &App, area: Rect) {
-    const GB: f64 = 1_073_741_824.0;
-    let th = crate::theme::th();
-    let items = category_sizes(app)
+    let mut sizes = category_sizes(app);
+    let total: u64 = sizes.iter().map(|(_, b)| b).sum();
+    let (mut big, small): (Vec<_>, Vec<_>) = sizes
+        .drain(..)
+        .partition(|(_, b)| *b as f64 >= total as f64 * 0.03);
+    let rest: u64 = small.iter().map(|(_, b)| b).sum();
+    if small.len() > 1 && rest > 0 {
+        big.push(("Other".to_string(), rest));
+    } else {
+        big.extend(small);
+    }
+    let items = big
         .into_iter()
-        .map(|(n, b)| tui_chart::LollipopItem::new(n, b as f64 / GB).color(th.success));
-    let chart = tui_chart::LollipopChart::new(items)
-        .sorted(true)
-        .block(panel("Space (GB)"));
+        .map(|(n, b)| tui_chart::TreemapItem::new(short_name(&n), b as f64));
+    let chart = tui_chart::Treemap::new(items)
+        .gradient(crate::theme::th().border, crate::theme::th().success)
+        .show_values(false)
+        .block(panel("Space"));
     f.render_widget(chart, area);
 }
 
