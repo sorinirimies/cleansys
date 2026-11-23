@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.15.3](https://github.com/sorinirimies/cleansys/compare/v0.15.2...v0.15.3) — 2026-11-23
+
+### ✨ Features
+
+- **tui:** Space panel is a lollipop chart, one row per category ([`11a0c14`](https://github.com/sorinirimies/cleansys/commit/11a0c14bb6f6fd917b0ebca03d53a5dea51915bc))
+
 ## [0.15.2](https://github.com/sorinirimies/cleansys/compare/v0.15.1...v0.15.2) — 2026-11-23
 
 ### ✨ Features
