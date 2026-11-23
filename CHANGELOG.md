@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.16.0](https://github.com/sorinirimies/cleansys/compare/v0.15.6...v0.16.0) — 2026-11-23
+
+### ✨ Features
+
+- **core:** Shared cargo target dir, pinned rustup toolchains, unused language runtimes (age by contents) and build outputs for Haskell, sbt, Clojure, dune, Gleam, Elm, Godot, Nim, Python packaging ([`82f088d`](https://github.com/sorinirimies/cleansys/commit/82f088d2decceba8c560aad201005b25137d8a67))
+
 ## [0.15.6](https://github.com/sorinirimies/cleansys/compare/v0.15.5...v0.15.6) — 2026-11-23
 
 ### 📚 Documentation
