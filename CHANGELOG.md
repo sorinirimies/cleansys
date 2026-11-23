@@ -4,6 +4,16 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.19.2](https://github.com/sorinirimies/cleansys/compare/v0.19.1...v0.19.2) — 2026-11-23
+
+### 🐛 Bug fixes
+
+- **core:** Ladybird layout verified on a real install; move hand-written browser cleaners out of the generated browsers.toml; deflake the shared-walk test; catalog guard tests, TUI key/treemap tests; READMEs and TESTING.md updated ([`f736e6f`](https://github.com/sorinirimies/cleansys/commit/f736e6fc455771ec5bd3ceda30625a220a6643bb))
+
+### 💄 Style
+
+- Satisfy the gate's clippy (all features): expect over unwrap, collapse if-let ([`5c0bbc3`](https://github.com/sorinirimies/cleansys/commit/5c0bbc3139be9831cd99be3d2c47eb7526292356))
+
 ## [0.19.1](https://github.com/sorinirimies/cleansys/compare/v0.19.0...v0.19.1) — 2026-11-23
 
 ### ✨ Features
