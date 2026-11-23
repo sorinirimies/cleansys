@@ -287,10 +287,11 @@ impl PathFilter {
                     let mut links = Vec::new();
                     if meta.file_type().is_symlink() {
                         links.push(ep);
-                    } else if meta.is_dir() && e.file_name() == "bin" {
-                        if let Ok(b) = fs::read_dir(&ep) {
-                            links.extend(b.flatten().map(|x| x.path()).take(200));
-                        }
+                    } else if meta.is_dir()
+                        && e.file_name() == "bin"
+                        && let Ok(b) = fs::read_dir(&ep)
+                    {
+                        links.extend(b.flatten().map(|x| x.path()).take(200));
                     }
                     for l in links {
                         let is_link =
