@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.19.1](https://github.com/sorinirimies/cleansys/compare/v0.19.0...v0.19.1) — 2026-11-23
+
+### ✨ Features
+
+- **core:** Ladybird browser cache cleaner (all profiles) ([`e510eae`](https://github.com/sorinirimies/cleansys/commit/e510eae3eb6e15b5277d417d96c1c205cc0cb16d))
+
 ## [0.19.0](https://github.com/sorinirimies/cleansys/compare/v0.18.0...v0.19.0) — 2026-11-23
 
 ### ✨ Features
