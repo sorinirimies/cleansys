@@ -630,7 +630,10 @@ fn item_row<'a>(
             }
             Some(_) => text("nothing to clean").size(12).color(c.muted).into(),
             None if state.board.is_off(cat_idx, item_idx) => {
-                text("scan off").size(12).color(c.muted).into()
+                text(cleansys_core::scan_off_badge("use the Scan switch"))
+                    .size(12)
+                    .color(c.accent)
+                    .into()
             }
             // Still being measured: a round progress ring, like the web UI's.
             None if state.board.is_scanning() => row![
@@ -882,10 +885,17 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
                     state.board.total
                 )
             } else {
-                format!(
+                let mut line = format!(
                     "{} reclaimable in total",
                     format_size(state.total_reclaimable())
-                )
+                );
+                if let Some(note) = cleansys_core::scan_off_note(cleansys_core::scan_off_count(
+                    &state.categories,
+                    &state.disabled_cleaners,
+                )) {
+                    line.push_str(&format!(" · {note}"));
+                }
+                line
             })
             .size(11)
             .color(c.muted),
@@ -2387,6 +2397,22 @@ mod tests {
         state.categories[0].items[0].selected = true;
         state.push_log("some activity");
         state.push_log("more activity");
+        let _ = view(&state);
+    }
+
+    #[test]
+    fn view_does_not_panic_when_cleaners_have_scanning_off() {
+        let mut state = CleanSysGui::new();
+        let id = state.categories[0].items[0].id.clone();
+        state.disabled_cleaners.push(id);
+        state
+            .disabled_cleaners
+            .push("an-id-that-no-longer-exists".into());
+        // Only the cleaner that exists counts (the shared helper ignores stale ids).
+        assert_eq!(
+            cleansys_core::scan_off_count(&state.categories, &state.disabled_cleaners),
+            1
+        );
         let _ = view(&state);
     }
 

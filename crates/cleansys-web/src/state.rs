@@ -117,6 +117,8 @@ pub struct Snapshot {
     pub scanning: bool,
     pub scan_done: usize,
     pub scan_total: usize,
+    /// Cleaners with scanning switched off (shared wording: `cleansys_core::scan_off_note`).
+    pub scan_off: usize,
     pub complete: bool,
     pub total_bytes: u64,
     pub selected_count: usize,
@@ -514,6 +516,7 @@ impl Shared {
             scanning: g.board.is_scanning(),
             scan_done: g.board.total.saturating_sub(g.board.pending),
             scan_total: g.board.total,
+            scan_off: cleansys_core::scan_off_count(&g.categories, &g.disabled),
             complete: g.board.complete(),
             total_bytes: g.board.total_bytes(),
             selected_count: g
@@ -911,8 +914,14 @@ mod tests {
             ],
         }]);
         assert!(!s.toggle_scan("nope"));
+        assert_eq!(s.snapshot().scan_off, 0);
         assert!(s.toggle_scan("b"));
         assert!(s.snapshot().items[1].scan_off);
+        assert_eq!(
+            s.snapshot().scan_off,
+            1,
+            "the footer count follows the toggle"
+        );
         assert_eq!(s.snapshot().scan_total, 1);
         for _ in 0..200 {
             s.poll();

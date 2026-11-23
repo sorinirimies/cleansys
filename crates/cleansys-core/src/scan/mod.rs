@@ -101,7 +101,10 @@ pub enum EntryState {
 mod board;
 mod spawn;
 
-pub use spawn::{ScanHandle, disabled_positions, spawn_scan, spawn_scan_filtered, spawn_scan_with};
+pub use spawn::{
+    ScanHandle, disabled_positions, scan_off_badge, scan_off_count, scan_off_note, spawn_scan,
+    spawn_scan_filtered, spawn_scan_with,
+};
 pub(crate) use spawn::{load_scan_times, save_scan_times};
 
 #[cfg(test)]
@@ -448,6 +451,29 @@ mod tests {
             EntryState::Nothing
         };
         assert_eq!(b.entry_state(0, 0), want, "paths mirror the cleaner");
+    }
+
+    #[test]
+    fn scan_off_count_counts_only_cleaners_that_exist() {
+        let c = cats();
+        assert_eq!(scan_off_count(&c, &[]), 0);
+        assert_eq!(scan_off_count(&c, &["a2".to_string()]), 1);
+        let stale = ["a2".to_string(), "removed-long-ago".to_string()];
+        assert_eq!(scan_off_count(&c, &stale), 1, "stale ids are ignored");
+    }
+
+    #[test]
+    fn scan_off_wording_is_shared_and_singular_plural_aware() {
+        assert_eq!(scan_off_note(0), None);
+        assert_eq!(
+            scan_off_note(1).as_deref(),
+            Some("1 cleaner has scanning off")
+        );
+        assert_eq!(
+            scan_off_note(3).as_deref(),
+            Some("3 cleaners have scanning off")
+        );
+        assert_eq!(scan_off_badge("x to enable"), "scan off · x to enable");
     }
 
     #[test]

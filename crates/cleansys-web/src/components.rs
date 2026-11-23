@@ -248,7 +248,7 @@ pub(crate) async fn item_row(
                             "nothing to clean"
                         }
                     } else if item.scan_off {
-                        "scan off"
+                        (cleansys_core::scan_off_badge("use the Scan switch"))
                     } else if scanning_now {
                         spinner() " measuring…"
                     } else {
@@ -328,7 +328,9 @@ pub(crate) async fn action_bar(
                         <div class="progress"><span style=(format!("width:{}%", (snap.scan_done * 100).checked_div(snap.scan_total).unwrap_or(0)))></span></div>
                     } else if snap.selected_count == 0 {
                         <b>(fmt(snap.total_bytes)) " can be freed"</b>
-                        <small>"tick cleaners or press Recommended"</small>
+                        <small>"tick cleaners or press Recommended"
+                            if let Some(note) = cleansys_core::scan_off_note(snap.scan_off) { " · " (note) }
+                        </small>
                     } else {
                         if snap.scanning {
                             <b>(snap.selected_count) " selected"</b>
@@ -338,7 +340,9 @@ pub(crate) async fn action_bar(
                         if snap.scanning {
                             <small>spinner() " still scanning " (snap.scan_done) "/" (snap.scan_total) " — you can clean now"</small>
                         } else {
-                            <small>(fmt(snap.total_bytes)) " reclaimable in total"</small>
+                            <small>(fmt(snap.total_bytes)) " reclaimable in total"
+                                if let Some(note) = cleansys_core::scan_off_note(snap.scan_off) { " · " (note) }
+                            </small>
                         }
                     }
                 </div>

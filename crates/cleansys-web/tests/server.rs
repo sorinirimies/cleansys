@@ -754,3 +754,40 @@ async fn the_menu_offers_an_all_entry_per_area_and_it_opens() {
     assert_eq!(all.status, 200);
     assert!(all.body.contains("<h2>All user land</h2>"));
 }
+
+#[tokio::test]
+async fn a_cleaner_with_scanning_off_is_called_out_on_the_page_in_shared_wording() {
+    let addr = start().await;
+    wait_for_scan(addr).await;
+    let before = get(addr, "/").await;
+    assert!(
+        !before.body.contains("scanning off"),
+        "nothing is switched off yet"
+    );
+    post(addr, "/toggle-scan", "id=proj-rust&back=%2F").await;
+    wait_for_scan(addr).await;
+    let after = get(addr, "/").await;
+    assert!(
+        after.body.contains("1 cleaner has scanning off"),
+        "the totals line names the count"
+    );
+    // Hide-empty would drop the unscanned row; show everything to see its badge.
+    let n = get(addr, "/api/categories")
+        .await
+        .body
+        .matches("\"root\"")
+        .count();
+    let rows = get(addr, &format!("/?cat={n}&hide=0")).await;
+    assert!(
+        rows.body.contains("scan off · use the Scan switch"),
+        "the row says how to turn it back on"
+    );
+    // Switching it back on clears both cues.
+    post(addr, "/toggle-scan", "id=proj-rust&back=%2F").await;
+    wait_for_scan(addr).await;
+    let again = get(addr, "/").await;
+    assert!(
+        !again.body.contains("scanning off"),
+        "count disappears when none are off"
+    );
+}

@@ -55,6 +55,30 @@ where
     spawn_inner(categories, scan_timeout(), include, sink)
 }
 
+/// How many of the loaded cleaners scans leave out (ids no longer in the catalog are
+/// ignored, so a stale `disabled_cleaners` entry never inflates the count).
+#[must_use]
+pub fn scan_off_count(categories: &[CleanerCategory], disabled: &[String]) -> usize {
+    disabled_positions(categories, disabled).len()
+}
+
+/// The shared "N cleaners have scanning switched off" wording, so the TUI, GUI and web UI
+/// say the same thing; `None` when nothing is switched off.
+#[must_use]
+pub fn scan_off_note(count: usize) -> Option<String> {
+    match count {
+        0 => None,
+        1 => Some("1 cleaner has scanning off".to_string()),
+        n => Some(format!("{n} cleaners have scanning off")),
+    }
+}
+
+/// Wording of the per-row "scan off" badge; `hint` names the front-end's way to switch it on.
+#[must_use]
+pub fn scan_off_badge(hint: &str) -> String {
+    format!("scan off · {hint}")
+}
+
 /// The `(category, item)` pairs of cleaners that scans leave out, per `disabled` ids.
 pub fn disabled_positions(
     categories: &[CleanerCategory],

@@ -844,7 +844,10 @@ fn opted_out_cleaner_shows_scan_off_and_help_lists_the_key() {
     app.item_list_state.select(Some(0));
     app.toggle_scan_enabled();
     let text = screen_text(&mut app, 120, 40);
-    assert!(text.contains("scan off"), "row says scan off");
+    assert!(
+        text.contains("scan off · x to enable"),
+        "row says how to enable"
+    );
     app.show_help = true;
     let help = screen_text(&mut app, 120, 60);
     assert!(help.contains("Scan on/off"), "help documents the s key");
@@ -872,4 +875,40 @@ fn the_menu_shows_an_all_entry_for_each_area() {
     let mut app = app_with_categories();
     let text = screen_text(&mut app, 120, 40);
     assert!(text.contains("All user land"));
+}
+
+fn finish_scan(app: &mut App) {
+    use cleansys_core::ScanInfo;
+    let shape: Vec<usize> = app.categories.iter().map(|c| c.items.len()).collect();
+    app.board.start(shape.iter().sum());
+    for (ci, n) in shape.into_iter().enumerate() {
+        for ii in 0..n {
+            let info = ScanInfo {
+                bytes: 1_000_000,
+                items: 1,
+                ..ScanInfo::default()
+            };
+            app.board.record(ci, ii, info);
+        }
+    }
+}
+
+#[test]
+fn category_panel_counts_cleaners_with_scanning_off_once_the_scan_is_complete() {
+    let mut app = app_with_categories();
+    app.persist = false;
+    // A finished scan: every cleaner recorded.
+    finish_scan(&mut app);
+    assert!(app.board.complete());
+    let before = screen_text(&mut app, 140, 40);
+    assert!(!before.contains("scan off (x)"), "nothing is off yet");
+    app.item_list_state.select(Some(0));
+    app.toggle_scan_enabled();
+    // Toggling re-measures; finish that scan the same way.
+    finish_scan(&mut app);
+    let after = screen_text(&mut app, 140, 40);
+    assert!(
+        after.contains("1 scan off (x)"),
+        "the category panel title should name the count and the key:\n{after}"
+    );
 }

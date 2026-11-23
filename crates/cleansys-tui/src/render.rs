@@ -784,10 +784,19 @@ fn scan_line(app: &App) -> Line<'static> {
         ));
         Line::from(spans)
     } else if app.board.complete() {
-        Line::from(Span::styled(
+        let mut spans = vec![Span::styled(
             format!("{} can be freed", format_size(app.board.total_bytes())),
             Style::default().fg(crate::theme::th().success),
-        ))
+        )];
+        // Compact on purpose: this title is only as wide as the category list.
+        let off = cleansys_core::scan_off_count(&app.categories, &app.disabled_cleaners);
+        if off > 0 {
+            spans.push(Span::styled(
+                format!(" · {off} scan off (x)"),
+                Style::default().fg(crate::theme::th().warning),
+            ));
+        }
+        Line::from(spans)
     } else if app.board.was_interrupted() {
         Line::from(Span::styled(
             "scan stopped",
@@ -1259,7 +1268,7 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
                     }
                     Some(_) => Span::styled("—", Style::default().fg(crate::theme::th().muted)),
                     None if app.board.is_off(ci, ii) => Span::styled(
-                        "scan off · x to enable",
+                        cleansys_core::scan_off_badge("x to enable"),
                         Style::default().fg(crate::theme::th().warning),
                     ),
                     None if app.board.is_scanning() => spinner_spans(app)
