@@ -128,7 +128,7 @@ label = "Jupyter runtime"
 [[cleaner]]
 id = "dev-unused-toolchains"
 name = "Unused Language Runtimes"
-description = "Node, Python, Ruby, Java, Go, Flutter and other runtimes installed by nvm, fnm, pyenv, rbenv, sdkman, mise, asdf, fvm or Go's toolchain downloads that nothing has run for 120+ days (judged by the newest file inside; `current`/`default` stay) [CAUTION: reinstall takes time]"
+description = "Node, Python, Ruby, Java, Go, Flutter, Haskell (ghcup), Julia (juliaup), Zig and Swift runtimes installed by nvm, fnm, pyenv, rbenv, sdkman, mise, asdf, fvm, zvm or Go's toolchain downloads that nothing has run for 120+ days (judged by the newest file inside; `current`/`default` stay) [CAUTION: reinstall takes time]"
 category = "Developer Caches"
 risk = "caution"
 [[cleaner.action]]
@@ -144,8 +144,13 @@ paths = [
   "~/.asdf/installs/*/*",
   "~/fvm/versions/*",
   "${GOPATH:-~/go}/pkg/mod/golang.org/toolchain@*",
+  "~/.ghcup/ghc/*",
+  "~/.julia/juliaup/julia-*",
+  "~/.zvm/*",
+  "~/.local/share/zigup/*",
+  "~/.local/share/swiftly/toolchains/*",
 ]
-not_name_regex = "^(current|default|system|latest)$"
+not_name_regex = "^(current|default|system|latest|self|bin)$"
 min_age_days = 120
 age_by_contents = true
 label = "Runtime"

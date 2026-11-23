@@ -281,3 +281,102 @@ type = "project_artifacts"
 markers = ["setup.py", "pyproject.toml"]
 artifacts = ["build", "dist", ".eggs"]
 label = "Python packaging"
+
+[[cleaner]]
+id = "proj-ruby-bundle"
+name = "Ruby Bundler Gems"
+description = "vendor/bundle and .bundle/ of Bundler projects (restore with bundle install)"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["Gemfile"]
+artifacts = ["vendor/bundle", ".bundle"]
+label = "Ruby gems"
+
+[[cleaner]]
+id = "proj-php-vendor"
+name = "PHP Composer vendor/"
+description = "vendor/ of Composer projects (restore with composer install)"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["composer.json"]
+artifacts = ["vendor"]
+label = "PHP vendor"
+
+[[cleaner]]
+id = "proj-erlang-rebar"
+name = "Erlang rebar3 _build"
+description = "_build/ of rebar3 projects"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["rebar.config"]
+artifacts = ["_build"]
+label = "Erlang build"
+
+[[cleaner]]
+id = "proj-elixir-deps"
+name = "Elixir deps/"
+description = "Fetched dependencies deps/ of Mix projects (restore with mix deps.get)"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["mix.exs"]
+artifacts = ["deps"]
+label = "Elixir deps"
+
+[[cleaner]]
+id = "proj-crystal"
+name = "Crystal Shards"
+description = "lib/ and .shards/ of Crystal projects (restore with shards install)"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["shard.yml"]
+artifacts = ["lib", ".shards"]
+label = "Crystal shards"
+
+[[cleaner]]
+id = "proj-dlang"
+name = "D dub Output"
+description = "Build cache .dub/ of dub projects"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["dub.json", "dub.sdl"]
+artifacts = [".dub"]
+label = "D build"
+
+[[cleaner]]
+id = "proj-unreal"
+name = "Unreal Engine Intermediates"
+description = "Intermediate/, Binaries/, Saved/ and DerivedDataCache/ of Unreal projects (regenerated on build)"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["*.uproject"]
+artifacts = ["Intermediate", "Binaries", "Saved", "DerivedDataCache"]
+label = "Unreal build"
+
+[[cleaner]]
+id = "proj-r"
+name = "R Project Caches"
+description = "renv/library and .Rproj.user/ of R projects"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["*.Rproj", "renv.lock"]
+artifacts = ["renv/library", ".Rproj.user"]
+label = "R cache"
+
+[[cleaner]]
+id = "proj-lua"
+name = "LuaRocks Trees"
+description = "lua_modules/ and .luarocks/ of LuaRocks projects"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["*.rockspec"]
+artifacts = ["lua_modules", ".luarocks"]
+label = "Lua rocks"
