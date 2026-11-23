@@ -834,27 +834,32 @@ fn short_name(name: &str) -> String {
     short.to_string()
 }
 
-/// Treemap (tui-chart) of reclaimable space per category. Slices under 3% of the
-/// total are folded into one "Other" tile so no tile is an unreadable sliver.
+/// Treemap (tui-chart) of reclaimable space per category.
+///
+/// Tile area follows the square root of the bytes: on a linear scale one huge
+/// category (build output) leaves the others as unreadable slivers. Categories
+/// under 6% of the total area are folded into one "Other" tile.
 fn render_space_treemap(f: &mut Frame, app: &App, area: Rect) {
-    let mut sizes = category_sizes(app);
-    let total: u64 = sizes.iter().map(|(_, b)| b).sum();
-    let (mut big, small): (Vec<_>, Vec<_>) = sizes
-        .drain(..)
-        .partition(|(_, b)| *b as f64 >= total as f64 * 0.03);
-    let rest: u64 = small.iter().map(|(_, b)| b).sum();
-    if small.len() > 1 && rest > 0 {
-        big.push(("Other".to_string(), rest));
+    let scaled: Vec<(String, f64, u64)> = category_sizes(app)
+        .into_iter()
+        .map(|(n, b)| (short_name(&n), (b as f64).sqrt(), b))
+        .collect();
+    let total: f64 = scaled.iter().map(|(_, w, _)| w).sum();
+    let (mut big, small): (Vec<_>, Vec<_>) =
+        scaled.into_iter().partition(|(_, w, _)| *w >= total * 0.06);
+    let rest: f64 = small.iter().map(|(_, _, b)| *b as f64).sum::<f64>().sqrt();
+    if small.len() > 1 && rest > 0.0 {
+        big.push(("Other".to_string(), rest, 0));
     } else {
         big.extend(small);
     }
     let items = big
         .into_iter()
-        .map(|(n, b)| tui_chart::TreemapItem::new(short_name(&n), b as f64));
+        .map(|(n, w, _)| tui_chart::TreemapItem::new(n, w));
     let chart = tui_chart::Treemap::new(items)
         .gradient(crate::theme::th().border, crate::theme::th().success)
         .show_values(false)
-        .block(panel("Space"));
+        .block(panel("Space (area ~ √size)"));
     f.render_widget(chart, area);
 }
 
