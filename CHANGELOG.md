@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.15.4](https://github.com/sorinirimies/cleansys/compare/v0.15.3...v0.15.4) — 2026-11-23
+
+### ✨ Features
+
+- **tui:** Space panel back to a treemap with short names and an Other tile (tui-chart 0.6.8) ([`115c805`](https://github.com/sorinirimies/cleansys/commit/115c805f1848f1021c649c01f3ed6bdf3e69488c))
+
 ## [0.15.3](https://github.com/sorinirimies/cleansys/compare/v0.15.2...v0.15.3) — 2026-11-23
 
 ### ✨ Features
