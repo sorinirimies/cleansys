@@ -21,7 +21,7 @@ Type "./target/release/cleansys"
 Enter
 Sleep 5s
 
-Type "S"
+Type "C"
 Sleep 2s
 
 # Repeat: weekly -> monthly -> daily

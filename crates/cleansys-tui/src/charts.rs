@@ -725,7 +725,7 @@ pub fn render_dashboard(f: &mut Frame, app: &App, area: Rect) {
         94,
         h_pct,
         " System dashboard ",
-        " Esc/D close · R rescan ",
+        " Esc/D close · S scan ",
     );
     let roomy = inner.height >= 22;
     let rows = Layout::default()

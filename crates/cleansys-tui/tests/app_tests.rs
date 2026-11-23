@@ -1079,10 +1079,10 @@ fn s_key_opts_the_cleaner_out_of_scanning_and_back_in() {
     let mut app = app_with_two_categories();
     app.persist = false;
     app.item_list_state.select(Some(0));
-    key(&mut app, KeyCode::Char('s'));
+    key(&mut app, KeyCode::Char('x'));
     assert_eq!(app.disabled_cleaners, vec!["Browser Caches".to_string()]);
     assert!(app.board.is_off(0, 0) && app.board.get(0, 0).is_none());
-    key(&mut app, KeyCode::Char('s'));
+    key(&mut app, KeyCode::Char('x'));
     assert!(app.disabled_cleaners.is_empty() && !app.board.is_off(0, 0));
 }
 

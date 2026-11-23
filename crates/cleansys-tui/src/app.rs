@@ -1689,7 +1689,7 @@ impl App {
                 KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q' | 'D') => {
                     self.dashboard_open = false;
                 }
-                KeyCode::Char('R') if !self.is_running => self.start_scan(),
+                KeyCode::Char('S' | 'R') if !self.is_running => self.start_scan(),
                 _ => {}
             }
             return Ok(false);
@@ -1944,7 +1944,7 @@ impl App {
                 }
             }
             // Schedule automatic cleaning
-            (KeyCode::Char('S'), _) => {
+            (KeyCode::Char('C'), _) => {
                 if !self.show_help && !self.is_running {
                     self.open_schedule();
                 }
@@ -1992,13 +1992,13 @@ impl App {
                 }
             }
             // Opt the highlighted cleaner in / out of scanning
-            (KeyCode::Char('s'), _) => {
+            (KeyCode::Char('x'), _) => {
                 if !self.show_help && !self.is_running {
                     self.toggle_scan_enabled();
                 }
             }
-            // Re-measure everything
-            (KeyCode::Char('R'), _) => {
+            // Scan: measure everything (`R` is the old key, kept as an alias)
+            (KeyCode::Char('S' | 'R'), _) => {
                 if !self.show_help && !self.is_running {
                     self.start_scan();
                 }

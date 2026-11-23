@@ -172,7 +172,7 @@ pub fn shortcut_hint() -> String {
         "F11".to_string()
     };
     format!(
-        "{m}1–4 presets · {m}0 reset · {m}+ / {m}− grow / shrink · {m}⇧M maximise · {fs} full screen · {m}R rescan · {m}. stop scan"
+        "{m}1–4 presets · {m}0 reset · {m}+ / {m}− grow / shrink · {m}⇧M maximise · {fs} full screen · {m}R scan · {m}. stop scan"
     )
 }
 

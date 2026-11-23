@@ -311,7 +311,7 @@ fn render_options(f: &mut Frame, app: &App, area: Rect) {
             "More",
             vec![
                 option_row("o", "settings", val("›".into()), w),
-                option_row("S", "schedule", val("›".into()), w),
+                option_row("C", "schedule", val("›".into()), w),
                 option_row("i", "about", val("›".into()), w),
             ],
         ),
@@ -1216,7 +1216,7 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
                     }
                     Some(_) => Span::styled("—", Style::default().fg(crate::theme::th().muted)),
                     None if app.board.is_off(ci, ii) => Span::styled(
-                        "scan off · s to enable",
+                        "scan off · x to enable",
                         Style::default().fg(crate::theme::th().warning),
                     ),
                     None if app.board.is_scanning() => spinner_spans(app)
@@ -1546,8 +1546,9 @@ fn render_action_bar(f: &mut Frame, app: &App, area: Rect) {
         ("Tab", if long { "category" } else { "cat" }, t.accent),
         ("r", if long { "recommended" } else { "rec" }, t.accent),
         ("/", "search", t.accent),
-        ("s", if long { "scan on/off" } else { "scan" }, t.accent),
-        ("S", if long { "schedule" } else { "" }, t.accent),
+        ("S", "scan", t.accent),
+        ("x", if long { "scan on/off" } else { "off" }, t.accent),
+        ("C", if long { "schedule" } else { "" }, t.accent),
         ("D", if long { "storage chart" } else { "" }, t.accent),
         ("U", if long { "disk usage" } else { "" }, t.accent),
         ("v", if long { "details" } else { "" }, t.accent),
@@ -1597,7 +1598,7 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
                 ("D", "Dash", th.accent),
                 ("U", "Usage", th.accent),
                 ("v", "Detail", th.accent),
-                ("S", "Sched", th.accent),
+                ("C", "Sched", th.accent),
                 ("L", "Log", th.accent),
             ],
             inner_area.width as usize,
@@ -1718,7 +1719,7 @@ fn render_footer(f: &mut Frame, app: &App, area: Rect) {
             ),
             Span::raw(": Rec  "),
             Span::styled(
-                "S",
+                "C",
                 Style::default()
                     .fg(crate::theme::th().accent)
                     .add_modifier(Modifier::BOLD),
@@ -1813,7 +1814,7 @@ fn render_help(f: &mut Frame, area: Rect, scroll: u16) -> u16 {
         l("  Enter: Run the selected cleaners (asks for confirmation; y toggles that)"),
         l("  Progress, the outcome and the activity log appear under the list;"),
         l("  q / Esc cancels a running clean, Esc dismisses the summary, L toggles the log"),
-        l("  R: Re-scan sizes      S: Schedule automatic cleaning"),
+        l("  S: Scan sizes (R too)   x: scan on/off   C: Schedule automatic cleaning"),
         l("  s: Scan on/off for the highlighted cleaner (saved; a clean never waits for the scan)"),
         l("  D: Dashboard (disk, space by category/risk)   v: Charts for the highlighted cleaner"),
         l("  U: Disk usage — where did my disk go? (↑/↓, Enter opens a folder, ← goes up)"),

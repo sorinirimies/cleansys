@@ -944,7 +944,7 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
             button(
                 row![
                     ring(&c, state.anim_tick, 13.0),
-                    text(if compact { "" } else { "Rescan" }).size(12)
+                    text(if compact { "" } else { "Scan" }).size(12)
                 ]
                 .spacing(if compact { 0 } else { 6 })
                 .align_y(Alignment::Center),
@@ -959,7 +959,7 @@ fn action_bar<'a>(state: &'a CleanSysGui, c: &ThemeColors, layout: Layout) -> El
         .into()
     } else {
         small(
-            if compact { "⟳" } else { "⟳ Rescan" },
+            if compact { "⟳" } else { "⟳ Scan" },
             "Measure what every cleaner can free again",
             Message::ScanAll,
             !busy,
