@@ -1215,9 +1215,10 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
                         Span::styled(format_size(s.bytes), size_style(s.bytes))
                     }
                     Some(_) => Span::styled("—", Style::default().fg(crate::theme::th().muted)),
-                    None if app.board.is_off(ci, ii) => {
-                        Span::styled("scan off", Style::default().fg(crate::theme::th().muted))
-                    }
+                    None if app.board.is_off(ci, ii) => Span::styled(
+                        "scan off · s to enable",
+                        Style::default().fg(crate::theme::th().warning),
+                    ),
                     None if app.board.is_scanning() => spinner_spans(app)
                         .into_iter()
                         .next()
