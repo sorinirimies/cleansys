@@ -4,6 +4,13 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.15.6](https://github.com/sorinirimies/cleansys/compare/v0.15.5...v0.15.6) — 2026-11-23
+
+### 📚 Documentation
+
+- **demo:** System land shows mock data too (CLEANSYS_FS_ROOT re-roots literal system paths into the demo home) ([`bb0e21a`](https://github.com/sorinirimies/cleansys/commit/bb0e21a26b4d18c8a82de1684b3817e32da33f5f))
+- **demo:** Tapes type plain cleansys and open the TUI on mock data only (Linux fixture, TMPDIR honoured, CLEANSYS_USER_ONLY) ([`c70f465`](https://github.com/sorinirimies/cleansys/commit/c70f46548b34808378efb095c1297ebe95511032))
+
 ## [0.15.5](https://github.com/sorinirimies/cleansys/compare/v0.15.4...v0.15.5) — 2026-11-23
 
 ### ✨ Features
