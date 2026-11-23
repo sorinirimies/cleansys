@@ -815,15 +815,18 @@ fn category_sizes(app: &App) -> Vec<(String, u64)> {
         .collect()
 }
 
-/// Treemap (tui-chart) of reclaimable space per category.
+/// Lollipop chart (tui-chart) of reclaimable space per category, largest first.
+/// One row per category, so long names and tiny slices never collide the way
+/// treemap tiles did. Values are in GB.
 fn render_space_treemap(f: &mut Frame, app: &App, area: Rect) {
+    const GB: f64 = 1_073_741_824.0;
+    let th = crate::theme::th();
     let items = category_sizes(app)
         .into_iter()
-        .map(|(n, b)| tui_chart::TreemapItem::new(n, b as f64));
-    let chart = tui_chart::Treemap::new(items)
-        .gradient(crate::theme::th().border, crate::theme::th().success)
-        .show_values(false)
-        .block(panel("Space"));
+        .map(|(n, b)| tui_chart::LollipopItem::new(n, b as f64 / GB).color(th.success));
+    let chart = tui_chart::LollipopChart::new(items)
+        .sorted(true)
+        .block(panel("Space (GB)"));
     f.render_widget(chart, area);
 }
 
