@@ -33,6 +33,31 @@ paths = ["~/.rustup/downloads/*", "~/.rustup/tmp/*"]
 label = "Rustup temp"
 
 [[cleaner]]
+id = "dev-cargo-target-dir"
+name = "Cargo Shared Target Directory"
+description = "Build output of a custom CARGO_TARGET_DIR (or ~/.cargo/target, ~/.cache/cargo-target), shared by all your Rust projects [re-download/rebuild takes time]"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["${CARGO_TARGET_DIR:-}", "~/.cargo/target", "~/.cache/cargo-target"]
+label = "Cargo target dir"
+
+[[cleaner]]
+id = "dev-rustup-old-toolchains"
+name = "Rustup Pinned Toolchains"
+description = "Pinned toolchains (nightly-YYYY-MM-DD, beta-…, 1.xx.y) not used for 30+ days; stable, nightly and beta channels stay. Rustup reinstalls one on demand [re-download takes time]"
+category = "Developer Caches"
+risk = "moderate"
+[[cleaner.action]]
+type = "delete"
+paths = ["${RUSTUP_HOME:-~/.rustup}/toolchains/*"]
+name_regex = "^((nightly|beta)-\\d{4}-\\d{2}-\\d{2}|\\d+\\.\\d+(\\.\\d+)?)-"
+min_age_days = 30
+age_by_contents = true
+label = "Rustup toolchain"
+
+[[cleaner]]
 id = "dev-elixir-erlang"
 name = "Elixir / Erlang Caches"
 description = "Hex package cache and Mix archives cache"
@@ -99,3 +124,28 @@ linux = ["$XDG_DATA_HOME/jupyter/runtime/*", "~/.ipython/profile_default/history
 macos = ["~/Library/Jupyter/runtime/*", "~/.ipython/profile_default/history.sqlite"]
 windows = ["$APPDATA/jupyter/runtime/*", "$USERPROFILE/.ipython/profile_default/history.sqlite"]
 label = "Jupyter runtime"
+
+[[cleaner]]
+id = "dev-unused-toolchains"
+name = "Unused Language Runtimes"
+description = "Node, Python, Ruby, Java, Go, Flutter and other runtimes installed by nvm, fnm, pyenv, rbenv, sdkman, mise, asdf, fvm or Go's toolchain downloads that nothing has run for 120+ days (judged by the newest file inside; `current`/`default` stay) [CAUTION: reinstall takes time]"
+category = "Developer Caches"
+risk = "caution"
+[[cleaner.action]]
+type = "delete"
+paths = [
+  "~/.nvm/versions/node/*",
+  "$XDG_DATA_HOME/fnm/node-versions/*",
+  "~/.fnm/node-versions/*",
+  "~/.pyenv/versions/*",
+  "~/.rbenv/versions/*",
+  "~/.sdkman/candidates/*/*",
+  "$XDG_DATA_HOME/mise/installs/*/*",
+  "~/.asdf/installs/*/*",
+  "~/fvm/versions/*",
+  "${GOPATH:-~/go}/pkg/mod/golang.org/toolchain@*",
+]
+not_name_regex = "^(current|default|system|latest)$"
+min_age_days = 120
+age_by_contents = true
+label = "Runtime"

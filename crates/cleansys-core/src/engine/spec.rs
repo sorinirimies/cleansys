@@ -96,6 +96,11 @@ pub enum Action {
         /// Only items neither modified nor read for this many days (0 = any age).
         #[serde(default)]
         min_age_days: u64,
+        /// Judge `min_age_days` by the newest file *inside* each directory instead of
+        /// the directory itself (a toolchain in daily use never touches its own
+        /// directory, only the binaries below it).
+        #[serde(default)]
+        age_by_contents: bool,
         /// Remove via `sudo rm -rf` when not already root. Defaults to the
         /// cleaner's `requires_root`.
         #[serde(default)]

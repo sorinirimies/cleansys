@@ -155,6 +155,7 @@ pub fn build_specs(mut found: Vec<PathBuf>, covered: &[PathBuf]) -> Vec<CleanerS
                 recreate: false,
                 files_only: false,
                 min_age_days: 0,
+                age_by_contents: false,
                 name_regex: None,
                 not_name_regex: None,
                 path_regex: None,

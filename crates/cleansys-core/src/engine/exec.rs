@@ -49,6 +49,7 @@ pub fn run_spec_with(
                 path_regex,
                 not_path_regex,
                 min_age_days,
+                age_by_contents,
                 ..
             } => {
                 let label = label.as_deref().unwrap_or(&spec.name);
@@ -62,7 +63,9 @@ pub fn run_spec_with(
                     warn!("{}: invalid regex in cleaner; skipping action", spec.id);
                     continue;
                 };
-                let filter = filter.older_than_days(*min_age_days);
+                let filter = filter
+                    .older_than_days(*min_age_days)
+                    .by_contents(*age_by_contents);
                 for template in action.delete_templates() {
                     for path in paths::resolve(template, &paths::lookup_env) {
                         let targets: Vec<PathBuf> = if *files_only {
@@ -193,6 +196,8 @@ struct PathFilter {
     not_path: Option<regex::Regex>,
     /// Newest of modified/accessed must be before this moment.
     cutoff: Option<std::time::SystemTime>,
+    /// Age a directory by the newest file below it (see `Action::Delete::age_by_contents`).
+    by_contents: bool,
 }
 
 impl PathFilter {
@@ -211,6 +216,7 @@ impl PathFilter {
             path: c(path).ok()?,
             not_path: c(not_path).ok()?,
             cutoff: None,
+            by_contents: false,
         })
     }
 
@@ -219,6 +225,41 @@ impl PathFilter {
         self.cutoff =
             (days > 0).then(|| std::time::SystemTime::now() - Duration::from_secs(days * 86_400));
         self
+    }
+
+    fn by_contents(mut self, on: bool) -> Self {
+        self.by_contents = on;
+        self
+    }
+
+    /// Any file below `dir` touched at or after `cutoff`? Stops at the first one;
+    /// bounded so a huge tree cannot stall the scan (too big to judge = in use).
+    fn touched_below(dir: &Path, cutoff: std::time::SystemTime) -> bool {
+        let mut stack = vec![dir.to_path_buf()];
+        let mut seen = 0usize;
+        while let Some(d) = stack.pop() {
+            let Ok(rd) = fs::read_dir(&d) else { continue };
+            for e in rd.flatten() {
+                seen += 1;
+                if seen > 200_000 {
+                    return true;
+                }
+                let Ok(meta) = fs::symlink_metadata(e.path()) else {
+                    continue;
+                };
+                if meta.is_dir() {
+                    stack.push(e.path());
+                }
+                let newest = [meta.modified(), meta.accessed()]
+                    .into_iter()
+                    .flatten()
+                    .max();
+                if newest.is_none_or(|t| t >= cutoff) {
+                    return true;
+                }
+            }
+        }
+        false
     }
 
     fn is_old_enough(&self, p: &Path) -> bool {
@@ -233,6 +274,7 @@ impl PathFilter {
             .flatten()
             .max();
         newest.is_some_and(|t| t < cutoff)
+            && !(self.by_contents && meta.is_dir() && Self::touched_below(p, cutoff))
     }
 
     fn accepts(&self, p: &Path) -> bool {
@@ -784,6 +826,42 @@ mod tests {
         assert!(aged.accepts(&old));
         assert!(!aged.accepts(&fresh));
         assert_eq!(files_below(d.path(), &aged), vec![old]);
+    }
+
+    #[test]
+    fn age_by_contents_keeps_a_directory_whose_files_are_in_use() {
+        let d = tempfile::tempdir().unwrap();
+        let tool = d.path().join("tool-1.0");
+        fs::create_dir_all(tool.join("bin")).unwrap();
+        write(&tool.join("bin/run"), 10);
+        let old = SystemTime::now() - Duration::from_secs(200 * 86_400);
+        let times = fs::FileTimes::new().set_modified(old).set_accessed(old);
+        // The directories look idle, the binary inside was just used.
+        for dir in [tool.join("bin"), tool.clone()] {
+            fs::File::open(&dir).unwrap().set_times(times).unwrap();
+        }
+        let by_dir = PathFilter::new(None, None, None, None)
+            .unwrap()
+            .older_than_days(30);
+        assert!(
+            by_dir.accepts(&tool),
+            "judged by the directory alone it looks idle"
+        );
+        let by_contents = PathFilter::new(None, None, None, None)
+            .unwrap()
+            .older_than_days(30)
+            .by_contents(true);
+        assert!(
+            !by_contents.accepts(&tool),
+            "a freshly used file inside keeps it"
+        );
+        fs::File::options()
+            .write(true)
+            .open(tool.join("bin/run"))
+            .unwrap()
+            .set_times(times)
+            .unwrap();
+        assert!(by_contents.accepts(&tool), "everything inside is idle too");
     }
 
     #[test]

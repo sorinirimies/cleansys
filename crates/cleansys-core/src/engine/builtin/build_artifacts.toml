@@ -182,3 +182,102 @@ type = "project_artifacts"
 markers = ["*.tf"]
 artifacts = [".terraform"]
 label = "Terraform"
+
+[[cleaner]]
+id = "proj-haskell"
+name = "Haskell Build Directories"
+description = ".stack-work/ and dist-newstyle/ of Stack and Cabal projects"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["stack.yaml", "cabal.project", "*.cabal"]
+artifacts = [".stack-work", "dist-newstyle"]
+label = "Haskell build"
+
+[[cleaner]]
+id = "proj-sbt"
+name = "Scala / sbt target/ Directories"
+description = "target/, project/target/ and Bloop/Metals indexes of sbt projects"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["build.sbt"]
+artifacts = ["target", "project/target", "project/project", ".bloop", ".metals", ".bsp"]
+label = "sbt build"
+
+[[cleaner]]
+id = "proj-clojure"
+name = "Clojure Build Directories"
+description = "target/ and .cpcache/ of Leiningen and deps.edn projects"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["project.clj", "deps.edn"]
+artifacts = ["target", ".cpcache"]
+label = "Clojure build"
+
+[[cleaner]]
+id = "proj-ocaml-dune"
+name = "OCaml dune _build"
+description = "_build/ next to dune-project"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["dune-project"]
+artifacts = ["_build"]
+label = "dune build"
+
+[[cleaner]]
+id = "proj-gleam"
+name = "Gleam build"
+description = "build/ next to gleam.toml"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["gleam.toml"]
+artifacts = ["build"]
+label = "Gleam build"
+
+[[cleaner]]
+id = "proj-elm"
+name = "Elm elm-stuff"
+description = "elm-stuff/ next to elm.json"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["elm.json"]
+artifacts = ["elm-stuff"]
+label = "Elm build"
+
+[[cleaner]]
+id = "proj-godot"
+name = "Godot .godot Cache"
+description = "Imported-asset cache .godot/ next to project.godot (rebuilt on open)"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["project.godot"]
+artifacts = [".godot"]
+label = "Godot cache"
+
+[[cleaner]]
+id = "proj-nim"
+name = "Nim nimcache"
+description = "nimcache/ of Nim projects"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["*.nimble"]
+artifacts = ["nimcache"]
+label = "Nim cache"
+
+[[cleaner]]
+id = "proj-python-dist"
+name = "Python Packaging Output"
+description = "build/, dist/ and .eggs/ of Python packages (built wheels and sdists)"
+category = "Project Build Artifacts"
+[[cleaner.action]]
+type = "project_artifacts"
+markers = ["setup.py", "pyproject.toml"]
+artifacts = ["build", "dist", ".eggs"]
+label = "Python packaging"
