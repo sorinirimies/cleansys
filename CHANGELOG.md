@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.15.2](https://github.com/sorinirimies/cleansys/compare/v0.15.1...v0.15.2) — 2026-11-23
+
+### ✨ Features
+
+- **tui:** S scans, x toggles scan on/off, C opens the schedule; Rescan is now Scan everywhere ([`02e9dea`](https://github.com/sorinirimies/cleansys/commit/02e9dea00d0b6b6570d07db2660e51ab309d92b2))
+
 ## [0.15.1](https://github.com/sorinirimies/cleansys/compare/v0.15.0...v0.15.1) — 2026-11-23
 
 ### ✨ Features
