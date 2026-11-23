@@ -4,6 +4,16 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.18.0](https://github.com/sorinirimies/cleansys/compare/v0.17.0...v0.18.0) — 2026-11-23
+
+### ✨ Features
+
+- **core:** Never remove the selected runtime version (current/default symlinks, bin shims, version files); more version managers; Scala/Go/Kotlin/Swift/Xcode/JVM tooling; unused conda/virtualenvs; gem cleanup ([`7c25472`](https://github.com/sorinirimies/cleansys/commit/7c254720cee6ac5a4dff35f7b322e3e242096a5c))
+
+### 💄 Style
+
+- **core:** Collapse nested if (clippy) ([`ae791ca`](https://github.com/sorinirimies/cleansys/commit/ae791ca7b26ac8ff6615f0f653dae9b41eac5715))
+
 ## [0.17.0](https://github.com/sorinirimies/cleansys/compare/v0.16.1...v0.17.0) — 2026-11-23
 
 ### ✨ Features
