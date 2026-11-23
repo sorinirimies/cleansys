@@ -921,6 +921,20 @@ impl App {
     }
 
     pub fn toggle_selected(&mut self) {
+        // On the category list, Space ticks every cleaner in the category
+        // (all ticked → untick all), not just the first one.
+        if self.focus == Focus::Categories {
+            let items = self.view_items();
+            let all_on = !items.is_empty()
+                && items
+                    .iter()
+                    .all(|&(c, i)| self.categories[c].items[i].selected);
+            for (c, i) in items {
+                self.categories[c].items[i].selected = !all_on;
+            }
+            self.board.sync_all_entries_to_items(&self.categories);
+            return;
+        }
         if let Some((ci, ii)) = self.current_item() {
             // Allow selection even for root items, will prompt for password later
             let item = &mut self.categories[ci].items[ii];

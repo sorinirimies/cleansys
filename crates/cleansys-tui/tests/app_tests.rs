@@ -1111,3 +1111,23 @@ fn tab_walks_all_then_its_categories_then_the_next_area() {
     }
     assert_eq!(seen, vec![0, 1, 2, 3, 0]);
 }
+
+#[test]
+fn space_on_category_list_ticks_every_cleaner_in_it() {
+    let mut app = app_with_categories();
+    app.focus = cleansys_tui::app::Focus::Categories;
+    let n = app.view_items().len();
+    assert!(n > 1);
+    app.toggle_selected();
+    assert!(
+        app.view_items()
+            .iter()
+            .all(|&(c, i)| app.categories[c].items[i].selected)
+    );
+    app.toggle_selected();
+    assert!(
+        app.view_items()
+            .iter()
+            .all(|&(c, i)| !app.categories[c].items[i].selected)
+    );
+}
