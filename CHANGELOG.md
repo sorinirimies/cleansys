@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.24.1](https://github.com/sorinirimies/cleansys/compare/v0.24.0...v0.24.1) — 2026-11-24
+
+### ⚡ Performance
+
+- **scan:** Deep scan skips ~/Library (macOS) and AppData/OneDrive (Windows) and never enters document bundles; macOS uses one scan thread per core; Kotlin cleaner no longer re-sizes Gradle's build folders (was counted twice); pin files share the project walk ([`4301d1e`](https://github.com/sorinirimies/cleansys/commit/4301d1eb5765e2af4ee3f4de493c3055f36a7046))
+
 ## [0.24.0](https://github.com/sorinirimies/cleansys/compare/v0.23.2...v0.24.0) — 2026-11-24
 
 ### ✨ Features
