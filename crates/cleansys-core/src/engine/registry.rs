@@ -430,6 +430,25 @@ mod tests {
     }
 
     #[test]
+    fn commands_that_remove_only_part_of_their_folder_preview_only_that_part() {
+        use crate::engine::spec::Action;
+        for id in ["sys-lin-pacman-orphans-cache", "sys-lin-snap-old-revisions"] {
+            let spec = all_specs()
+                .into_iter()
+                .find(|s| s.id == id)
+                .unwrap_or_else(|| panic!("{id} missing"));
+            let has = spec.actions.iter().any(|a| {
+                matches!(a, Action::Command { measure, preview_args, .. }
+                    if !measure.is_empty() && !preview_args.is_empty())
+            });
+            assert!(
+                has,
+                "{id} must list its candidates in preview (preview_args)"
+            );
+        }
+    }
+
+    #[test]
     fn project_artifacts_stay_inside_their_project() {
         use crate::engine::spec::Action;
         for spec in load_all_unfiltered(None) {

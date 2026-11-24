@@ -110,10 +110,18 @@ pub fn run_spec_with(
                 args,
                 sudo,
                 measure,
+                preview_args,
                 label,
             } => {
                 let label = label.as_deref().unwrap_or(&spec.name);
-                run_command(&mut result, program, args, *sudo, measure, label, opts)?;
+                let cmd = CommandSpec {
+                    program,
+                    args,
+                    sudo: *sudo,
+                    measure,
+                    preview_args,
+                };
+                run_command(&mut result, &cmd, label, opts)?;
             }
             Action::SqliteRows { tables, label, .. } => {
                 let label = label.as_deref().unwrap_or(&spec.name);
@@ -803,15 +811,55 @@ fn project_index(cfg: &EngineConfig, needed: &[String]) -> Index {
 }
 
 /// Run an external program, reporting bytes freed from `measure` paths.
+/// The parts of an [`Action::Command`] that `run_command` needs.
+struct CommandSpec<'a> {
+    program: &'a str,
+    args: &'a [String],
+    sudo: bool,
+    measure: &'a [String],
+    preview_args: &'a [String],
+}
+
+/// What a dry run of a command would remove: the absolute paths in its output.
+/// `None` when the dry run could not be run or failed.
+fn dry_run_candidates(program: &str, preview_args: &[String]) -> Option<Vec<PathBuf>> {
+    let args: Vec<String> = preview_args
+        .iter()
+        .map(|a| paths::expand(a, &paths::lookup_env))
+        .collect();
+    let out = std::process::Command::new(program)
+        .args(&args)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    if !out.status.success() {
+        debug!("dry run of {program} failed");
+        return None;
+    }
+    let mut seen = std::collections::HashSet::new();
+    Some(
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(str::trim)
+            .map(PathBuf::from)
+            .filter(|p| p.is_absolute() && p.exists() && seen.insert(p.clone()))
+            .collect(),
+    )
+}
+
 fn run_command(
     result: &mut CleaningResult,
-    program: &str,
-    args: &[String],
-    sudo: bool,
-    measure: &[String],
+    cmd: &CommandSpec<'_>,
     label: &str,
     opts: RunOptions,
 ) -> Result<()> {
+    let CommandSpec {
+        program,
+        args,
+        sudo,
+        measure,
+        preview_args,
+    } = *cmd;
     if paths::find_program(program).is_none() {
         debug!("{program} not found; skipping {label}");
         return Ok(());
@@ -821,6 +869,23 @@ fn run_command(
         .flat_map(|t| paths::resolve(t, &paths::lookup_env))
         .filter(|p| !is_protected(p))
         .collect();
+    if opts.dry_run && !preview_args.is_empty() {
+        // Report exactly what the command would remove, not the whole folder around it.
+        for p in dry_run_candidates(program, preview_args).unwrap_or_default() {
+            if is_protected(&p) {
+                continue;
+            }
+            let size = get_size(&p.to_string_lossy()).unwrap_or(0);
+            if size > 0 {
+                result.add_item(if p.is_dir() {
+                    CleanedItem::directory(p, size, label)
+                } else {
+                    CleanedItem::file(p, size, label)
+                });
+            }
+        }
+        return Ok(());
+    }
     let before: Vec<u64> = measured
         .iter()
         .map(|p| get_size(&p.to_string_lossy()).unwrap_or(0))
@@ -1318,6 +1383,98 @@ tables = {tables}
         ] {
             assert!(!is_sql_identifier(bad), "{bad}");
         }
+    }
+
+    /// A command that removes only part of a folder: preview must report just that part.
+    #[cfg(unix)]
+    fn partial_command_spec(dir: &Path, preview: &str, run: &str) -> CleanerSpec {
+        let src = format!(
+            r#"
+[[cleaner]]
+id = "t-cmd"
+name = "Partial"
+description = "d"
+[[cleaner.action]]
+type = "command"
+program = "sh"
+args = ["-c", "{run}"]
+measure = ["{dir}"]
+preview_args = ["-c", "{preview}"]
+"#,
+            dir = dir.display(),
+        );
+        crate::engine::registry::parse_spec_file(&src)
+            .unwrap()
+            .remove(0)
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn command_preview_reports_only_what_the_dry_run_lists_and_a_real_run_what_it_freed() {
+        let d = tempfile::tempdir().unwrap();
+        let dir = d.path();
+        write(&dir.join("gone.pkg"), 1000);
+        write(&dir.join("kept.pkg"), 9000);
+        let spec = partial_command_spec(
+            dir,
+            &format!("printf '%s\\n' '{}/gone.pkg'", dir.display()),
+            &format!("rm {}/gone.pkg", dir.display()),
+        );
+        let cfg = EngineConfig::default();
+
+        let preview = run_spec_with(&spec, RunOptions::preview(), &cfg).unwrap();
+        assert_eq!(
+            preview.total_bytes, 1000,
+            "only the listed file, not the 10000 bytes of the folder: {:?}",
+            preview.items
+        );
+        assert_eq!(preview.items.len(), 1);
+        assert!(dir.join("gone.pkg").exists(), "preview removes nothing");
+
+        let real = run_spec_with(&spec, RunOptions::execute(), &cfg).unwrap();
+        assert_eq!(real.total_bytes, 1000, "freed = what really disappeared");
+        assert!(!dir.join("gone.pkg").exists() && dir.join("kept.pkg").exists());
+
+        // Nothing left to remove: the same dry run now lists nothing, and previews 0.
+        let again = run_spec_with(&spec, RunOptions::preview(), &cfg).unwrap();
+        assert_eq!(again.total_bytes, 0);
+    }
+
+    #[cfg(unix)]
+    #[test]
+    fn a_failing_or_silent_dry_run_reports_nothing_instead_of_the_whole_folder() {
+        let d = tempfile::tempdir().unwrap();
+        write(&d.path().join("a.pkg"), 5000);
+        let cfg = EngineConfig::default();
+        let failing = partial_command_spec(d.path(), "exit 3", "true");
+        assert_eq!(
+            run_spec_with(&failing, RunOptions::preview(), &cfg)
+                .unwrap()
+                .total_bytes,
+            0
+        );
+        let silent = partial_command_spec(d.path(), "true", "true");
+        assert_eq!(
+            run_spec_with(&silent, RunOptions::preview(), &cfg)
+                .unwrap()
+                .total_bytes,
+            0
+        );
+        // Relative lines, missing files and duplicates are ignored; real files count once.
+        let noisy = partial_command_spec(
+            d.path(),
+            &format!(
+                "printf '%s\\n' 'relative.pkg' '/no/such/file' '{p}/a.pkg' '{p}/a.pkg' '==> header'",
+                p = d.path().display()
+            ),
+            "true",
+        );
+        assert_eq!(
+            run_spec_with(&noisy, RunOptions::preview(), &cfg)
+                .unwrap()
+                .total_bytes,
+            5000
+        );
     }
 
     #[test]

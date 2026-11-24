@@ -58,6 +58,8 @@ program = "paccache"
 args = ["-ruk0"]
 sudo = true
 measure = ["/var/cache/pacman/pkg"]
+# Dry run (-d) with -vv lists the exact candidate files; preview reports only those.
+preview_args = ["-d", "-u", "-k0", "-vv"]
 label = "paccache"
 
 [[cleaner]]
@@ -89,6 +91,8 @@ program = "sh"
 args = ["-c", "snap list --all | awk '/disabled/{print $1, $3}' | while read n r; do snap remove \"$n\" --revision=\"$r\"; done"]
 sudo = true
 measure = ["/var/lib/snapd/snaps"]
+# Only the disabled revisions go; list their files instead of the whole snaps folder.
+preview_args = ["-c", "snap list --all 2>/dev/null | awk '/disabled/{printf \"/var/lib/snapd/snaps/%s_%s.snap\\n\", $1, $3}'"]
 label = "snap old revisions"
 
 [[cleaner]]

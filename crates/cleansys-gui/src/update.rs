@@ -1746,6 +1746,52 @@ mod tests {
     }
 
     #[test]
+    fn when_the_last_cleaner_finishes_the_sizes_are_measured_again() {
+        let mut state = tiny_state();
+        // A finished first scan: item 0 shows a big size.
+        let _ = start_scan(&mut state);
+        let first = state.scan_gen;
+        let big = |b| cleansys_core::ScanInfo {
+            bytes: b,
+            items: 1,
+            ..Default::default()
+        };
+        let _ = update(
+            &mut state,
+            Message::ScanItemFinished(first, 0, 0, big(6_000_000)),
+        );
+        let _ = update(&mut state, Message::ScanItemFinished(first, 0, 1, big(1)));
+        assert_eq!(state.board.get(0, 0).map(|s| s.bytes), Some(6_000_000));
+
+        // Run item 0; two operations are pending, the second still running.
+        state.is_running = true;
+        state.categories[0].items[0].status = Some(Status::Running);
+        state.categories[0].items[1].status = Some(Status::Running);
+        let done = || Ok(cleansys_core::CleaningResult::new());
+        let _ = update(&mut state, Message::OperationFinished(0, 0, done()));
+        assert!(
+            state.is_running,
+            "one cleaner is still running: no rescan yet"
+        );
+        assert_eq!(state.scan_gen, first);
+
+        let _ = update(&mut state, Message::OperationFinished(0, 1, done()));
+        assert!(!state.is_running);
+        assert_ne!(state.scan_gen, first, "a new scan generation started");
+        assert!(state.board.is_scanning(), "sizes are being measured again");
+        assert!(
+            state.board.get(0, 0).is_none(),
+            "the old size is gone until the new measurement arrives"
+        );
+        // The new measurement replaces the stale 6 MB figure.
+        let now = state.scan_gen;
+        let _ = update(&mut state, Message::ScanItemFinished(now, 0, 0, big(0)));
+        let _ = update(&mut state, Message::ScanItemFinished(now, 0, 1, big(1)));
+        assert_eq!(state.board.get(0, 0).map(|s| s.bytes), Some(0));
+        assert!(state.board.complete());
+    }
+
+    #[test]
     fn starting_a_clean_stops_the_scan_and_late_results_are_dropped() {
         let mut state = tiny_state();
         let _ = start_scan(&mut state);

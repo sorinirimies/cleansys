@@ -390,7 +390,7 @@ linux = ["$XDG_CACHE_HOME/myapp"]  # per-OS lists: linux / macos / windows
 ```
 
 Other actions: `command` (`program`, `args`, `sudo`, `measure = [paths]` to report freed bytes) and
-`sqlite_rows` (clear named tables of a SQLite file — browser cookies, site storage — without deleting the file; needs the system `sqlite3`, skipped when absent), `project_artifacts` (`markers`, `artifacts`) and `large_files` (deep scan: `extensions` and/or `names` — exact, `*suffix`, `prefix*`; either list may match). `delete` also supports `contents_only`, `files_only`, `recreate`, regex filters
+`command` (run a program; `measure` folders report the real bytes freed, and `preview_args` is a read-only dry run whose listed files are what a preview reports — without it a preview can only show the whole folder), `sqlite_rows` (clear named tables of a SQLite file — browser cookies, site storage — without deleting the file; needs the system `sqlite3`, skipped when absent), `project_artifacts` (`markers`, `artifacts`) and `large_files` (deep scan: `extensions` and/or `names` — exact, `*suffix`, `prefix*`; either list may match). `delete` also supports `contents_only`, `files_only`, `recreate`, regex filters
 (`name_regex`, `not_name_regex`, `path_regex`, `not_path_regex`) and `min_age_days` (only items neither written nor
 read for that many days; with `age_by_contents = true` a directory is judged by the newest file *inside* it, and the version a manager has selected — a `current`/`default` symlink, a `bin/` shim, a `version` or `alias/default` file — is never removed). Set `requires_root = true` for anything that
 needs elevation — it will appear in the System · root section.

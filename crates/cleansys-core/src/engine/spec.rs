@@ -124,6 +124,14 @@ pub enum Action {
         /// report the real bytes freed.
         #[serde(default)]
         measure: Vec<String>,
+        /// A read-only dry run of the same program, run as the current user in preview:
+        /// every absolute path it prints (one per line) is what the real run would remove,
+        /// and only those files are reported. Without it a preview can only report the
+        /// whole `measure` folder, which is far too much for a command that removes just
+        /// part of it (`paccache -ruk0` leaves every installed package's file behind).
+        /// If the dry run fails, nothing is reported rather than guessing.
+        #[serde(default)]
+        preview_args: Vec<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
