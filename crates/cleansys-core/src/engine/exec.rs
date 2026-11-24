@@ -1170,7 +1170,7 @@ paths = ["{}/versions/node/*"]
 min_age_days = 120
 age_by_contents = true
 "#,
-            root.display()
+            root.display().to_string().replace('\\', "/")
         );
         let spec = crate::engine::registry::parse_spec_file(&src)
             .unwrap()
