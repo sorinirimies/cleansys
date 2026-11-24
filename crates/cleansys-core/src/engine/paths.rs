@@ -1,4 +1,8 @@
 //! Path templating (`~`, `$VAR`, `${VAR:-default}`, `%VAR%`) and glob expansion.
+//!
+//! A variable name starts with a letter (`$HOME`, `%LOCALAPPDATA%`), so shell and
+//! PowerShell code in command arguments keeps `$1`, `$_` and `%s` as they are; write
+//! `$$` for a literal `$` that is followed by a letter (`"$$n"` in a shell loop).
 
 use std::path::PathBuf;
 
@@ -68,6 +72,11 @@ fn expand_vars(input: &str, env: &dyn Fn(&str) -> Option<String>) -> String {
     let mut i = 0;
     while i < chars.len() {
         let c = chars[i];
+        if c == '$' && chars.get(i + 1) == Some(&'$') {
+            out.push('$');
+            i += 2;
+            continue;
+        }
         if c == '$' && i + 1 < chars.len() && chars[i + 1] == '{' {
             if let Some(end) = chars[i + 2..].iter().position(|&c| c == '}') {
                 let inner: String = chars[i + 2..i + 2 + end].iter().collect();
@@ -86,7 +95,7 @@ fn expand_vars(input: &str, env: &dyn Fn(&str) -> Option<String>) -> String {
                 i += end + 3;
                 continue;
             }
-        } else if c == '$' && i + 1 < chars.len() && is_name_char(chars[i + 1]) {
+        } else if c == '$' && chars.get(i + 1).is_some_and(char::is_ascii_alphabetic) {
             let mut j = i + 1;
             while j < chars.len() && is_name_char(chars[j]) {
                 j += 1;
@@ -99,10 +108,11 @@ fn expand_vars(input: &str, env: &dyn Fn(&str) -> Option<String>) -> String {
             && let Some(end) = chars[i + 1..].iter().position(|&c| c == '%')
         {
             let name: String = chars[i + 1..i + 1 + end].iter().collect();
-            if !name.is_empty()
-                && name
-                    .chars()
-                    .all(|c| is_name_char(c) || c == '(' || c == ')')
+            // Windows names are upper-case (`%LOCALAPPDATA%`); `%s_%` is a printf format.
+            if name.starts_with(|c: char| c.is_ascii_uppercase())
+                && name.chars().all(|c| {
+                    c.is_ascii_uppercase() || c.is_ascii_digit() || matches!(c, '_' | '(' | ')')
+                })
             {
                 out.push_str(&env(&name).unwrap_or_default());
                 i += end + 2;
@@ -225,5 +235,31 @@ mod tests {
         );
         assert_eq!(expand_in("~/.cache", &env, root), "/home/u/.cache");
         assert_eq!(expand_in("/var/log/*.gz", &env, None), "/var/log/*.gz");
+    }
+
+    #[test]
+    fn shell_and_powershell_code_in_arguments_survives_templating() {
+        let env = |n: &str| (n == "HOME").then(|| "/home/u".to_string());
+        // awk fields, PowerShell's pipeline variable and printf formats are not env vars.
+        assert_eq!(
+            expand_vars("awk '{print $1, $3}'", &env),
+            "awk '{print $1, $3}'"
+        );
+        assert_eq!(
+            expand_vars("ForEach-Object { x $_ }", &env),
+            "ForEach-Object { x $_ }"
+        );
+        assert_eq!(expand_vars("printf '%s_%s'", &env), "printf '%s_%s'");
+        // `$$` is a literal dollar for shell variables that start with a letter.
+        assert_eq!(
+            expand_vars(r#"read n; echo "$$n""#, &env),
+            r#"read n; echo "$n""#
+        );
+        // Real variables still expand.
+        assert_eq!(
+            expand_vars("$HOME/x ${HOME}/y", &env),
+            "/home/u/x /home/u/y"
+        );
+        assert_eq!(expand_vars("%HOME%\\z", &env), "/home/u\\z");
     }
 }

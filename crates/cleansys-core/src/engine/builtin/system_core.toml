@@ -47,6 +47,9 @@ program = "purge-old-kernels"
 args = ["--keep", "1"]
 sudo = true
 measure = ["/boot"]
+# Every kernel but the newest and the running one: list their files in /boot.
+preview_program = "sh"
+preview_args = ["-c", "b=/boot; cur=$$(uname -r); ls -1 $$b/vmlinuz-* 2>/dev/null | sed \"s|^$$b/vmlinuz-||\" | sort -V | head -n -1 | while read v; do [ \"$$v\" = \"$$cur\" ] || ls -d $$b/*-\"$$v\" 2>/dev/null; done"]
 label = "old kernels"
 
 [[cleaner]]

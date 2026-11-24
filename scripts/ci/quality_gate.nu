@@ -8,7 +8,8 @@
 #   2. cargo clippy (workspace, all targets, -D warnings)
 #   3. cargo test --workspace
 #   4. cargo doc with warnings as errors (broken intra-doc links fail docs.rs)
-#   5. versions agree (Cargo.toml == EXTRA_MANIFESTS)
+#   5. versions agree (Cargo.toml == EXTRA_MANIFESTS), generated cleaner packs match
+#      their generator (scripts/gen_content_packs.nu --check)
 #   6. no unused dependencies (cargo machete, installed when missing)
 #   7. nushell script tests
 # Project-specific steps (a wasm build, a web bundle, …) go in as extra run_step
@@ -41,12 +42,24 @@ def main [--skip-fmt, --skip-test, --skip-nu] {
         cargo clippy --workspace --all-targets --all-features -- -D warnings
     }) and $ok
     if not $skip_test {
-        $ok = (run_step "cargo test --workspace" { cargo test --workspace --all-features }) and $ok
+        $ok = (run_step "cargo test --workspace" {
+            # Test like CI: CI sets no CARGO_TARGET_DIR, and some cleaners read it
+            # (`${CARGO_TARGET_DIR:-}`), so a local value hid bugs that CI then found.
+            # Keep the build cache where it is through CARGO_BUILD_TARGET_DIR.
+            if ($env.CARGO_TARGET_DIR? | is-not-empty) {
+                $env.CARGO_BUILD_TARGET_DIR = $env.CARGO_TARGET_DIR
+                hide-env CARGO_TARGET_DIR
+            }
+            cargo test --workspace --all-features
+        }) and $ok
     }
     $ok = (run_step "cargo doc (warnings are errors)" {
         with-env { RUSTDOCFLAGS: "-D warnings" } { cargo doc --no-deps --workspace --quiet }
     }) and $ok
     $ok = (run_step "versions agree" { nu scripts/ci/check_versions.nu }) and $ok
+    $ok = (run_step "generated cleaner packs are up to date" {
+        nu scripts/gen_content_packs.nu --check
+    }) and $ok
     $ok = (run_step "unused dependencies (cargo machete)" {
         nu scripts/tools.nu ensure cargo-machete
         cargo machete

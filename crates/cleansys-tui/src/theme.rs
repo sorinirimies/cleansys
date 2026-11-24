@@ -295,7 +295,7 @@ mod tests {
     }
 
     #[test]
-    fn generated_extras_keep_text_readable_on_their_background() {
+    fn every_theme_keeps_text_status_and_chart_colours_readable() {
         let lum = |c: cleansys_core::Rgb| {
             let f = |v: u8| {
                 let v = f64::from(v) / 255.0;
@@ -312,22 +312,42 @@ mod tests {
             (x.max(y) + 0.05) / (x.min(y) + 0.05)
         };
         let mut bad = Vec::new();
-        for i in cleansys_core::CURATED_THEME_COUNT..cleansys_core::theme_count() {
+        for i in 0..cleansys_core::theme_count() {
             let t = cleansys_core::theme_by_index(i);
             let name = cleansys_core::theme_names()[i];
-            if ratio(t.text_primary, t.background) < 4.5 {
-                bad.push(format!("{name}: body text"));
+            let bg = t.background;
+            // (what, colour, against, minimum contrast)
+            let checks = [
+                ("body text", t.text_primary, bg, 4.5),
+                ("secondary text", t.text_secondary, bg, 3.0),
+                ("hints", t.text_muted, bg, 1.5),
+                ("accent", t.accent, bg, 2.0),
+                ("selected row text", t.text_primary, t.selection, 3.0),
+                ("success", t.success, bg, 2.0),
+                ("warning", t.warning, bg, 2.0),
+                ("error", t.error, bg, 2.0),
+            ];
+            for (what, fg, against, min) in checks {
+                let r = ratio(fg, against);
+                if r < min {
+                    bad.push(format!("{name}: {what} {r:.2} < {min}"));
+                }
             }
-            if ratio(t.accent, t.background) < 2.0 {
-                bad.push(format!("{name}: accent"));
-            }
-            if ratio(t.text_muted, t.background) < 1.5 {
-                bad.push(format!("{name}: hints"));
+            for (k, g) in t.graph_colors.iter().enumerate() {
+                let r = ratio(*g, bg);
+                if r < 1.3 {
+                    bad.push(format!("{name}: chart colour {k} {r:.2} < 1.3"));
+                }
             }
             // the dark flag agrees with the actual background
-            assert_eq!(t.is_dark, lum(t.background) < 0.5, "{name}");
+            assert_eq!(t.is_dark, lum(bg) < 0.5, "{name}");
         }
-        assert!(bad.is_empty(), "unreadable generated themes: {bad:?}");
+        assert!(
+            bad.is_empty(),
+            "{} unreadable colour(s):\n{}",
+            bad.len(),
+            bad.join("\n")
+        );
     }
 
     #[test]

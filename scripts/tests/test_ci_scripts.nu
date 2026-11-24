@@ -11,6 +11,38 @@ use ../ci/check_static.nu [is_static]
 use ../ci/gitea_release.nu [release_payload]
 use ../ci/auto_merge.nu [decide checks_green sweep_action]
 use ../ci/actions_update.nu [uses major_of bump PINNED]
+use ../ci/release_after_ci.nu [ci_verdict]
+use ../ci/retry_cancelled.nu [should_retry]
+
+def "test release_after_ci: the tag waits until CI on the commit has finished" [] {
+    assert equal (ci_verdict []) "pending" "CI not started yet"
+    assert equal (ci_verdict [{status: in_progress, conclusion: "", event: push}]) "pending"
+    assert equal (ci_verdict [{status: completed, conclusion: success, event: push}]) "success"
+}
+
+def "test release_after_ci: red, cancelled or timed-out CI never tags" [] {
+    for c in [failure cancelled timed_out] {
+        assert equal (ci_verdict [{status: completed, conclusion: $c, event: push}]) "failure" $c
+    }
+}
+
+def "test release_after_ci: the newest push run decides, pull-request runs do not" [] {
+    let runs = [
+        {status: completed, conclusion: success, event: push}
+        {status: completed, conclusion: failure, event: push}
+    ]
+    assert equal (ci_verdict $runs) "success" "a re-run that passed wins"
+    assert equal (ci_verdict [{status: completed, conclusion: success, event: pull_request}]) "pending"
+}
+
+def "test retry_cancelled: only cancelled jobs are retried, and only twice" [] {
+    let cancelled = [{name: a, conclusion: success} {name: mac, conclusion: cancelled} {name: rel, conclusion: skipped}]
+    assert (should_retry $cancelled 1)
+    assert (should_retry $cancelled 2)
+    assert not (should_retry $cancelled 3) "out of attempts"
+    assert not (should_retry [{name: t, conclusion: failure} {name: mac, conclusion: cancelled}] 1) "a real failure is not retried"
+    assert not (should_retry [{name: a, conclusion: success}] 1) "nothing cancelled"
+}
 
 def "test deps_update: commit message is a dated chore deps" [] {
     assert equal (commit_message "2026-01-02") "chore(deps): nightly cargo update 2026-01-02"

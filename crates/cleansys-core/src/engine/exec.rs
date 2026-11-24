@@ -63,9 +63,12 @@ pub fn run_spec_with(
                     warn!("{}: invalid regex in cleaner; skipping action", spec.id);
                     continue;
                 };
-                let filter = filter
+                let mut filter = filter
                     .older_than_days(*min_age_days)
                     .by_contents(*age_by_contents);
+                if *age_by_contents {
+                    filter = filter.pinned(pinned_versions(cfg));
+                }
                 for template in action.delete_templates() {
                     for path in paths::resolve(template, &paths::lookup_env) {
                         let targets: Vec<PathBuf> = if *files_only {
@@ -111,6 +114,7 @@ pub fn run_spec_with(
                 sudo,
                 measure,
                 preview_args,
+                preview_program,
                 label,
             } => {
                 let label = label.as_deref().unwrap_or(&spec.name);
@@ -120,6 +124,7 @@ pub fn run_spec_with(
                     sudo: *sudo,
                     measure,
                     preview_args,
+                    preview_program: preview_program.as_deref().unwrap_or(program),
                 };
                 run_command(&mut result, &cmd, label, opts)?;
             }
@@ -219,6 +224,8 @@ struct PathFilter {
     cutoff: Option<std::time::SystemTime>,
     /// Age a directory by the newest file below it (see `Action::Delete::age_by_contents`).
     by_contents: bool,
+    /// Versions projects pin (`.nvmrc`, `.tool-versions`, …); never removed.
+    pinned: std::sync::Arc<std::collections::HashSet<String>>,
 }
 
 impl PathFilter {
@@ -238,6 +245,7 @@ impl PathFilter {
             not_path: c(not_path).ok()?,
             cutoff: None,
             by_contents: false,
+            pinned: std::sync::Arc::default(),
         })
     }
 
@@ -251,6 +259,22 @@ impl PathFilter {
     fn by_contents(mut self, on: bool) -> Self {
         self.by_contents = on;
         self
+    }
+
+    fn pinned(mut self, pins: std::sync::Arc<std::collections::HashSet<String>>) -> Self {
+        self.pinned = pins;
+        self
+    }
+
+    /// Is `dir` (or its parent, for `dists/gradle-8.5-bin/<hash>`) a version some project pins?
+    fn is_pinned(&self, dir: &Path) -> bool {
+        if self.pinned.is_empty() {
+            return false;
+        }
+        [dir.file_name(), dir.parent().and_then(Path::file_name)]
+            .into_iter()
+            .flatten()
+            .any(|n| version_matches_pin(&n.to_string_lossy(), &self.pinned))
     }
 
     /// Any file below `dir` touched at or after `cutoff`? Stops at the first one;
@@ -363,7 +387,9 @@ impl PathFilter {
         newest.is_some_and(|t| t < cutoff)
             && !(self.by_contents
                 && meta.is_dir()
-                && (Self::is_selected_version(p) || Self::touched_below(p, cutoff)))
+                && (Self::is_selected_version(p)
+                    || self.is_pinned(p)
+                    || Self::touched_below(p, cutoff)))
     }
 
     fn accepts(&self, p: &Path) -> bool {
@@ -416,12 +442,10 @@ pub fn spec_has_targets(spec: &CleanerSpec) -> bool {
             true
         }
         Action::Command { program, .. } => paths::find_program(program).is_some(),
-        Action::SqliteRows { .. } => {
-            paths::find_program("sqlite3").is_some()
-                && a.delete_templates()
-                    .iter()
-                    .any(|t| !paths::resolve(t, &paths::lookup_env).is_empty())
-        }
+        Action::SqliteRows { .. } => a
+            .delete_templates()
+            .iter()
+            .any(|t| !paths::resolve(t, &paths::lookup_env).is_empty()),
         Action::Delete { .. } => a
             .delete_templates()
             .iter()
@@ -437,25 +461,8 @@ pub(crate) fn is_sql_identifier(name: &str) -> bool {
         && !name.starts_with(|c: char| c.is_ascii_digit())
 }
 
-/// Run one SQL script on `db` with the system `sqlite3`; stdout on success.
-fn sqlite3(db: &Path, sql: &str, readonly: bool) -> Option<String> {
-    let mut cmd = std::process::Command::new("sqlite3");
-    if readonly {
-        cmd.arg("-readonly");
-    }
-    let out = cmd
-        .arg("-batch")
-        .arg(db)
-        .arg(sql)
-        .stdin(std::process::Stdio::null())
-        .output()
-        .ok()?;
-    out.status
-        .success()
-        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
-}
-
 /// Preview or delete the rows of `tables` in the SQLite file `db` (the file stays).
+/// SQLite is compiled in, so this works on every platform without a `sqlite3` program.
 fn sqlite_rows(
     result: &mut CleaningResult,
     db: &Path,
@@ -464,80 +471,96 @@ fn sqlite_rows(
     opts: RunOptions,
     cfg: &EngineConfig,
 ) -> Result<()> {
+    use rusqlite::{Connection, OpenFlags};
     if is_protected(db) || is_excluded(db, &cfg.exclude) || !db.is_file() {
-        return Ok(());
-    }
-    if paths::find_program("sqlite3").is_none() {
-        debug!("sqlite3 not found; skipping {label}");
         return Ok(());
     }
     let tables: Vec<&String> = tables.iter().filter(|t| is_sql_identifier(t)).collect();
     if tables.is_empty() {
         return Ok(());
     }
-    // Approximate payload: the size of every text/blob/number cell in the table. Cheap and
-    // read-only; a table that does not exist in this schema version is simply skipped.
-    let mut total = 0u64;
+    let flags = if opts.dry_run {
+        OpenFlags::SQLITE_OPEN_READ_ONLY
+    } else {
+        OpenFlags::SQLITE_OPEN_READ_WRITE
+    } | OpenFlags::SQLITE_OPEN_NO_MUTEX;
+    let Ok(conn) = Connection::open_with_flags(db, flags) else {
+        return Ok(());
+    };
+    let _ = conn.busy_timeout(Duration::from_secs(2));
+    // Measure the row payload; a table this schema version lacks is skipped, and a file
+    // that is not a database at all fails here and is left alone.
     let mut rows = 0u64;
+    let mut bytes = 0u64;
     let mut present = Vec::new();
     for t in &tables {
-        let exists = sqlite3(
-            db,
-            &format!("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='{t}';"),
-            true,
+        let exists: Result<i64, _> = conn.query_row(
+            "SELECT count(*) FROM sqlite_master WHERE type='table' AND name=?1",
+            [t.as_str()],
+            |r| r.get(0),
         );
-        if exists.as_deref() != Some("1") {
-            continue;
+        match exists {
+            Ok(1) => {}
+            Ok(_) => continue,
+            Err(e) => {
+                debug!("{label}: {db:?} is not a readable database: {e}");
+                return Ok(());
+            }
         }
-        present.push(t.as_str());
-        let n: u64 = sqlite3(db, &format!("SELECT count(*) FROM \"{t}\";"), true)
-            .and_then(|s| s.parse().ok())
+        let cols: Vec<String> = conn
+            .prepare(&format!("SELECT name FROM pragma_table_info('{t}')"))
+            .and_then(|mut st| {
+                st.query_map([], |r| r.get::<_, String>(0))?
+                    .collect::<Result<Vec<_>, _>>()
+            })
+            .unwrap_or_default();
+        let n: i64 = conn
+            .query_row(&format!("SELECT count(*) FROM \"{t}\""), [], |r| r.get(0))
             .unwrap_or(0);
-        rows += n;
-        // length(CAST(x AS BLOB)) per column, summed through a row-wise concatenation.
-        let cols = sqlite3(
-            db,
-            &format!("SELECT group_concat('length(CAST(\"' || name || '\" AS BLOB))', '+') FROM pragma_table_info('{t}');"),
-            true,
-        )
-        .unwrap_or_default();
         if n > 0 && !cols.is_empty() {
-            let bytes: u64 = sqlite3(
-                db,
-                &format!("SELECT coalesce(sum({cols}),0) FROM \"{t}\";"),
-                true,
-            )
-            .and_then(|s| s.parse().ok())
-            .unwrap_or(0);
-            total += bytes;
+            let sum = cols
+                .iter()
+                .map(|c| {
+                    format!(
+                        "coalesce(length(CAST(\"{}\" AS BLOB)),0)",
+                        c.replace('"', "")
+                    )
+                })
+                .collect::<Vec<_>>()
+                .join("+");
+            let b: i64 = conn
+                .query_row(
+                    &format!("SELECT coalesce(sum({sum}),0) FROM \"{t}\""),
+                    [],
+                    |r| r.get(0),
+                )
+                .unwrap_or(0);
+            bytes += u64::try_from(b).unwrap_or(0);
         }
+        rows += u64::try_from(n).unwrap_or(0);
+        present.push(t.as_str());
     }
-    if rows == 0 || present.is_empty() {
+    if rows == 0 {
         return Ok(());
     }
     let item_label = format!("{label}: {rows} row(s)");
-    if opts.dry_run {
-        result.add_item(CleanedItem::file(
-            db.to_path_buf(),
-            total.max(rows),
-            &item_label,
-        ));
-        return Ok(());
+    if !opts.dry_run {
+        let sql = present
+            .iter()
+            .map(|t| format!("DELETE FROM \"{t}\";"))
+            .collect::<Vec<_>>()
+            .join(" ");
+        if let Err(e) = conn.execute_batch(&format!("BEGIN; {sql} COMMIT;")) {
+            warn!("could not clear rows in {db:?} (database busy or locked?): {e}");
+            return Ok(());
+        }
+        let _ = conn.execute_batch("VACUUM;");
     }
-    let sql: String = present
-        .iter()
-        .map(|t| format!("DELETE FROM \"{t}\";"))
-        .collect::<Vec<_>>()
-        .join(" ");
-    if sqlite3(db, &format!("BEGIN; {sql} COMMIT; VACUUM;"), false).is_some() {
-        result.add_item(CleanedItem::file(
-            db.to_path_buf(),
-            total.max(rows),
-            &item_label,
-        ));
-    } else {
-        warn!("could not clear rows in {db:?} (database busy or locked?)");
-    }
+    result.add_item(CleanedItem::file(
+        db.to_path_buf(),
+        bytes.max(rows),
+        &item_label,
+    ));
     Ok(())
 }
 
@@ -818,6 +841,7 @@ struct CommandSpec<'a> {
     sudo: bool,
     measure: &'a [String],
     preview_args: &'a [String],
+    preview_program: &'a str,
 }
 
 /// What a dry run of a command would remove: the absolute paths in its output.
@@ -859,6 +883,7 @@ fn run_command(
         sudo,
         measure,
         preview_args,
+        preview_program,
     } = *cmd;
     if paths::find_program(program).is_none() {
         debug!("{program} not found; skipping {label}");
@@ -871,7 +896,7 @@ fn run_command(
         .collect();
     if opts.dry_run && !preview_args.is_empty() {
         // Report exactly what the command would remove, not the whole folder around it.
-        for p in dry_run_candidates(program, preview_args).unwrap_or_default() {
+        for p in dry_run_candidates(preview_program, preview_args).unwrap_or_default() {
             if is_protected(&p) {
                 continue;
             }
@@ -967,14 +992,132 @@ pub fn find_project_artifacts(
             artifacts.iter().filter_map(move |art| {
                 let candidate = d.path.join(art);
                 let is_real_dir = fs::symlink_metadata(&candidate).is_ok_and(|m| m.is_dir());
-                (is_real_dir && is_stale(d, &candidate, min_age))
-                    .then(|| (d.path.clone(), candidate))
+                (is_real_dir
+                    && is_stale(d, &candidate, min_age)
+                    && !holds_tracked_files(&d.path, art))
+                .then(|| (d.path.clone(), candidate))
             })
         })
         .collect();
     found.sort();
     found.dedup();
     found
+}
+
+/// Files in which projects pin a tool version.
+const PIN_FILES: &[&str] = &[
+    ".nvmrc",
+    ".node-version",
+    ".python-version",
+    ".ruby-version",
+    ".go-version",
+    ".java-version",
+    ".terraform-version",
+    ".tool-versions",
+    ".sdkmanrc",
+    "rust-toolchain",
+    "rust-toolchain.toml",
+    "gradle-wrapper.properties",
+    "go.mod",
+];
+
+/// Channel names that select "whatever is newest", not one installed version.
+const FLOATING: &[&str] = &[
+    "stable", "beta", "nightly", "latest", "system", "node", "lts", "lts/*", "current",
+];
+
+/// The version strings a pin file names (normalised: no leading `v`).
+fn pins_in(file_name: &str, text: &str) -> Vec<String> {
+    let mut out = Vec::new();
+    for line in text.lines().map(str::trim) {
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let values: Vec<String> = match file_name {
+            ".tool-versions" => line
+                .split_whitespace()
+                .skip(1)
+                .map(str::to_string)
+                .collect(),
+            ".sdkmanrc" => line
+                .split_once('=')
+                .map(|(_, v)| vec![v.trim().to_string()])
+                .unwrap_or_default(),
+            "rust-toolchain.toml" => line
+                .strip_prefix("channel")
+                .and_then(|r| r.split_once('='))
+                .map(|(_, v)| vec![v.trim().trim_matches('"').to_string()])
+                .unwrap_or_default(),
+            "gradle-wrapper.properties" => line
+                .strip_prefix("distributionUrl")
+                .and_then(|r| r.rsplit('/').next())
+                .and_then(|zip| zip.strip_suffix(".zip"))
+                .map(|dist| {
+                    // gradle-8.5-bin -> both the dist folder name and the bare version
+                    let bare = dist
+                        .trim_start_matches("gradle-")
+                        .trim_end_matches("-bin")
+                        .trim_end_matches("-all");
+                    vec![dist.to_string(), bare.to_string()]
+                })
+                .unwrap_or_default(),
+            "go.mod" => line
+                .strip_prefix("toolchain ")
+                .map(|v| vec![v.trim().to_string()])
+                .unwrap_or_default(),
+            _ => vec![line.to_string()],
+        };
+        out.extend(
+            values
+                .into_iter()
+                .map(|v| v.trim_start_matches('v').to_string())
+                .filter(|v| !v.is_empty() && !FLOATING.contains(&v.as_str())),
+        );
+    }
+    out
+}
+
+/// Every version pinned by a project under the scan roots (cached with the project index).
+fn pinned_versions(cfg: &EngineConfig) -> std::sync::Arc<std::collections::HashSet<String>> {
+    let needed: Vec<String> = PIN_FILES.iter().map(|s| (*s).to_string()).collect();
+    let index = project_index(cfg, &needed);
+    let mut pins = std::collections::HashSet::new();
+    for d in &index.dirs {
+        for f in d.files.iter().filter(|f| PIN_FILES.contains(&f.as_str())) {
+            if let Ok(text) = fs::read_to_string(d.path.join(f)) {
+                pins.extend(pins_in(f, &text));
+            }
+        }
+    }
+    std::sync::Arc::new(pins)
+}
+
+/// Does installed version folder `name` (`v20.11.0`, `3.12.1`, `21.0.11-zulu`,
+/// `nightly-2026-09-15-x86_64-…`, `toolchain@v0.0.1-go1.22.1.linux-amd64`) satisfy a pin?
+/// A pin may be partial (`20`, `3.12`): it matches at a `.`/`-`/`_` boundary.
+fn version_matches_pin(name: &str, pins: &std::collections::HashSet<String>) -> bool {
+    let n = name.trim_start_matches('v');
+    pins.iter().any(|p| {
+        n == p
+            || [".", "-", "_"]
+                .iter()
+                .any(|sep| n.starts_with(&format!("{p}{sep}")))
+            || n.contains(&format!("-{p}."))
+    })
+}
+
+/// Does git track anything inside `project/artifact`? Some projects commit what is
+/// usually build output (`vendor/`, `build/`, Unreal's `Binaries/`); those must never be
+/// cleaned. Without git, or outside a repository, nothing counts as tracked.
+fn holds_tracked_files(project: &Path, artifact: &str) -> bool {
+    std::process::Command::new("git")
+        .arg("-C")
+        .arg(project)
+        .args(["ls-files", "-z", "--", artifact])
+        .stdin(std::process::Stdio::null())
+        .stderr(std::process::Stdio::null())
+        .output()
+        .is_ok_and(|o| o.status.success() && !o.stdout.is_empty())
 }
 
 /// A project is "stale" when nothing in it (its files, the artifact dir,
@@ -1256,33 +1399,27 @@ age_by_contents = true
         assert!(root.join("versions/node/v22.0.0").exists(), "recently used");
     }
 
-    fn have_sqlite3() -> bool {
-        paths::find_program("sqlite3").is_some()
-    }
-
     /// A Ladybird-shaped database: cookies + storage + a table that must survive.
     fn ladybird_db(path: &Path) {
-        let sql = "CREATE TABLE Cookies (name TEXT, value TEXT, domain TEXT);\
-            CREATE TABLE WebStorage (k TEXT, v TEXT);\
-            CREATE TABLE SchemaVersions (store TEXT PRIMARY KEY, version INTEGER NOT NULL);\
-            INSERT INTO Cookies VALUES ('sid','abcdef','example.org'),('t','xyz','example.com');\
-            INSERT INTO WebStorage VALUES ('theme','dark');\
-            INSERT INTO SchemaVersions VALUES ('cookies', 4);";
-        let st = std::process::Command::new("sqlite3")
-            .arg(path)
-            .arg(sql)
-            .status()
-            .unwrap();
-        assert!(st.success());
+        let c = rusqlite::Connection::open(path).unwrap();
+        c.execute_batch(
+            "CREATE TABLE Cookies (name TEXT, value TEXT, domain TEXT);
+             CREATE TABLE WebStorage (k TEXT, v TEXT);
+             CREATE TABLE SchemaVersions (store TEXT PRIMARY KEY, version INTEGER NOT NULL);
+             INSERT INTO Cookies VALUES ('sid','abcdef','example.org'),('t','xyz','example.com');
+             INSERT INTO WebStorage VALUES ('theme','dark');
+             INSERT INTO SchemaVersions VALUES ('cookies', 4);",
+        )
+        .unwrap();
     }
 
     fn count(db: &Path, table: &str) -> String {
-        let o = std::process::Command::new("sqlite3")
-            .arg(db)
-            .arg(format!("SELECT count(*) FROM {table};"))
-            .output()
-            .unwrap();
-        String::from_utf8_lossy(&o.stdout).trim().to_string()
+        let c = rusqlite::Connection::open(db).unwrap();
+        c.query_row(&format!("SELECT count(*) FROM {table}"), [], |r| {
+            r.get::<_, i64>(0)
+        })
+        .unwrap()
+        .to_string()
     }
 
     fn sqlite_spec(db: &Path, tables: &str) -> CleanerSpec {
@@ -1297,7 +1434,7 @@ type = "sqlite_rows"
 paths = ["{}"]
 tables = {tables}
 "#,
-            db.display()
+            db.display().to_string().replace('\\', "/")
         );
         crate::engine::registry::parse_spec_file(&src)
             .unwrap()
@@ -1306,14 +1443,12 @@ tables = {tables}
 
     #[test]
     fn sqlite_rows_previews_then_deletes_only_the_named_tables() {
-        if !have_sqlite3() {
-            return; // the action needs the system sqlite3; nothing to test without it
-        }
         let d = tempfile::tempdir().unwrap();
         let db = d.path().join("Ladybird.db");
         ladybird_db(&db);
         let spec = sqlite_spec(&db, r#"["Cookies"]"#);
         let cfg = EngineConfig::default();
+        // Windows paths in TOML: forward slashes (backslashes would be escapes).
 
         let preview = run_spec_with(&spec, RunOptions::preview(), &cfg).unwrap();
         assert_eq!(preview.items.len(), 1, "one database, one item");
@@ -1337,9 +1472,6 @@ tables = {tables}
 
     #[test]
     fn sqlite_rows_skips_missing_tables_and_missing_files() {
-        if !have_sqlite3() {
-            return;
-        }
         let d = tempfile::tempdir().unwrap();
         let db = d.path().join("Ladybird.db");
         ladybird_db(&db);
@@ -1474,6 +1606,155 @@ preview_args = ["-c", "{preview}"]
                 .unwrap()
                 .total_bytes,
             5000
+        );
+    }
+
+    /// `git init` + `git add` a file (the index is what "tracked" means).
+    fn git(dir: &Path, args: &[&str]) -> bool {
+        std::process::Command::new("git")
+            .arg("-C")
+            .arg(dir)
+            .args(args)
+            .output()
+            .is_ok_and(|o| o.status.success())
+    }
+
+    #[test]
+    fn pin_files_are_read_the_way_their_tools_write_them() {
+        let p = |f, t| pins_in(f, t);
+        assert_eq!(p(".nvmrc", "v20.11.0\n"), ["20.11.0"]);
+        assert_eq!(p(".nvmrc", "lts/*\n"), Vec::<String>::new(), "floating");
+        assert_eq!(p(".python-version", "3.12\n3.11.4\n"), ["3.12", "3.11.4"]);
+        assert_eq!(
+            p(
+                ".tool-versions",
+                "nodejs 20.1.0\n# c\npython 3.12.1 3.11.0\n"
+            ),
+            ["20.1.0", "3.12.1", "3.11.0"]
+        );
+        assert_eq!(p(".sdkmanrc", "java=21.0.11-zulu\n"), ["21.0.11-zulu"]);
+        assert_eq!(
+            p(
+                "rust-toolchain.toml",
+                "[toolchain]\nchannel = \"nightly-2026-09-15\"\n"
+            ),
+            ["nightly-2026-09-15"]
+        );
+        assert_eq!(
+            p("rust-toolchain.toml", "[toolchain]\nchannel = \"stable\"\n"),
+            Vec::<String>::new()
+        );
+        assert_eq!(
+            p(
+                "gradle-wrapper.properties",
+                "distributionUrl=https\\://services.gradle.org/distributions/gradle-8.5-bin.zip\n"
+            ),
+            ["gradle-8.5-bin", "8.5"]
+        );
+        assert_eq!(
+            p("go.mod", "module x\ngo 1.22\ntoolchain go1.22.1\n"),
+            ["go1.22.1"]
+        );
+    }
+
+    #[test]
+    fn installed_folders_match_partial_and_exact_pins_at_boundaries() {
+        let pins: std::collections::HashSet<String> = [
+            "20",
+            "3.12",
+            "21.0.11-zulu",
+            "nightly-2026-09-15",
+            "go1.22.1",
+            "gradle-8.5-bin",
+        ]
+        .into_iter()
+        .map(String::from)
+        .collect();
+        for yes in [
+            "v20.11.0",
+            "3.12.1",
+            "21.0.11-zulu",
+            "nightly-2026-09-15-x86_64-unknown-linux-gnu",
+            "toolchain@v0.0.1-go1.22.1.linux-amd64",
+            "gradle-8.5-bin",
+        ] {
+            assert!(version_matches_pin(yes, &pins), "{yes}");
+        }
+        for no in [
+            "v200.1.0",
+            "3.120.0",
+            "21.0.10-zulu",
+            "nightly-2026-10-15-x86_64",
+            "v18.0.0",
+        ] {
+            assert!(!version_matches_pin(no, &pins), "{no}");
+        }
+    }
+
+    #[test]
+    fn a_runtime_a_project_pins_is_kept_even_when_idle() {
+        let d = tempfile::tempdir().unwrap();
+        let home = d.path().join("home");
+        let proj = d.path().join("projects/app");
+        write(&proj.join("package.json"), 1);
+        fs::write(proj.join(".nvmrc"), "18\n").unwrap();
+        let old = SystemTime::now() - Duration::from_secs(400 * 86_400);
+        let times = fs::FileTimes::new().set_modified(old).set_accessed(old);
+        for v in ["v16.0.0", "v18.20.0"] {
+            let dir = home.join(format!("node/{v}"));
+            write(&dir.join("bin/node"), 10);
+            // Deepest first: touching a file would otherwise refresh its folder again.
+            for p in [dir.join("bin/node"), dir.join("bin"), dir] {
+                set_times_of(&p, times);
+            }
+        }
+        let src = format!(
+            r#"
+[[cleaner]]
+id = "t-pin"
+name = "Runtimes"
+description = "d"
+[[cleaner.action]]
+type = "delete"
+paths = ["{}/node/*"]
+min_age_days = 120
+age_by_contents = true
+"#,
+            home.display().to_string().replace('\\', "/")
+        );
+        let spec = crate::engine::registry::parse_spec_file(&src)
+            .unwrap()
+            .remove(0);
+        let cfg = cfg_for(&d.path().join("projects"));
+        let preview = run_spec_with(&spec, RunOptions::preview(), &cfg).unwrap();
+        let hit: Vec<_> = preview.items.iter().map(|i| i.path.clone()).collect();
+        assert!(hit.iter().any(|p| p.ends_with("v16.0.0")), "{hit:?}");
+        assert!(
+            !hit.iter().any(|p| p.ends_with("v18.20.0")),
+            "pinned by .nvmrc: {hit:?}"
+        );
+    }
+
+    #[test]
+    fn committed_build_folders_are_never_offered() {
+        let d = tempfile::tempdir().unwrap();
+        let r = d.path();
+        if !git(r, &["init", "-q"]) {
+            return; // no git on this machine
+        }
+        // Two projects in one repo: one commits its vendor/, the other ignores it.
+        write(&r.join("kept/composer.json"), 1);
+        write(&r.join("kept/vendor/lib.php"), 100);
+        write(&r.join("free/composer.json"), 1);
+        write(&r.join("free/vendor/lib.php"), 100);
+        assert!(git(r, &["add", "-f", "kept/vendor/lib.php"]));
+        let found =
+            find_project_artifacts(&["composer.json".into()], &["vendor".into()], &cfg_for(r));
+        let arts: Vec<&Path> = found.iter().map(|(_, a)| a.as_path()).collect();
+        assert!(arts.iter().any(|a| a.ends_with("free/vendor")), "{arts:?}");
+        assert!(
+            !arts.iter().any(|a| a.ends_with("kept/vendor")),
+            "a vendor/ with tracked files must stay: {arts:?}"
         );
     }
 

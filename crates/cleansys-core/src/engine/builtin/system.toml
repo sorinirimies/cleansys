@@ -82,6 +82,11 @@ program = "journalctl"
 args = ["--vacuum-size=200M"]
 sudo = true
 measure = ["/var/log/journal"]
+# The vacuum deletes archived journal files, oldest first, until 200 MB of disk usage
+# are left; list exactly those (the active journal is never removed). Disk usage, like
+# journalctl: `du -B1` and `%b` blocks, not apparent sizes.
+preview_program = "sh"
+preview_args = ["-c", "d=/var/log/journal; t=$$(du -s -B1 $$d 2>/dev/null | cut -f1); find $$d -type f \\( -name '*@*.journal' -o -name '*.journal~' \\) -printf '%T@ %b %p\\n' 2>/dev/null | sort -n | awk -v keep=209715200 -v total=\"$${t:-0}\" '{ if (total <= keep) exit; total -= $2 * 512; print $3 }'"]
 label = "journal vacuum"
 
 [[cleaner]]

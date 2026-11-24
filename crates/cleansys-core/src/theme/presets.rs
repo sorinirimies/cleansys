@@ -86,15 +86,18 @@ pub fn theme_count() -> usize {
     theme_names().len()
 }
 
-/// Get a theme by index (0-based). Returns `default()` for out-of-range.
+/// Get a theme by index (0-based). Returns `default()` for out-of-range. Every theme
+/// is passed through [`AppTheme::readable`], so no palette ships unreadable text.
 pub fn theme_by_index(index: usize) -> AppTheme {
-    if let Some(t) = curated_theme_by_index(index) {
-        return t;
-    }
-    index
-        .checked_sub(CURATED_THEME_COUNT)
-        .and_then(|i| EXTRA.get(i))
-        .map_or_else(default, |e| from_hex(e.dark, e.colors, e.graph))
+    curated_theme_by_index(index)
+        .or_else(|| {
+            index
+                .checked_sub(CURATED_THEME_COUNT)
+                .and_then(|i| EXTRA.get(i))
+                .map(|e| from_hex(e.dark, e.colors, e.graph))
+        })
+        .unwrap_or_else(default)
+        .readable()
 }
 
 /// Find theme index by name (case-insensitive ASCII). Returns `0` (Default) if

@@ -132,6 +132,10 @@ pub enum Action {
         /// If the dry run fails, nothing is reported rather than guessing.
         #[serde(default)]
         preview_args: Vec<String>,
+        /// Program for that dry run when it is not `program` itself (e.g. `sh` for a
+        /// small script that lists what `journalctl --vacuum-size` would remove).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        preview_program: Option<String>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },

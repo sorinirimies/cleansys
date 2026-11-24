@@ -199,10 +199,14 @@ publish-dry:
 bump version: _check-git-cliff check-all
     nu scripts/bump_version.nu --yes --skip-checks {{ version }}
 
-# Bump, tag and push to GitHub — starts the Release workflow
+# Bump and tag, push the commit, wait for GitHub CI (Linux, macOS, Windows) to pass on
+# it, then push the tag — starts the Release workflow. A red CI pushes no tag.
 release version: (bump version)
-    git push --follow-tags origin (git branch --show-current)
-    @print "✅ v{{ version }} pushed — the Release workflow builds the binaries."
+    nu scripts/ci/release_after_ci.nu {{ version }}
+
+# After `release` stopped on red CI and the fix is committed: wait for CI on HEAD, then tag and push
+release-tag version:
+    nu scripts/ci/release_after_ci.nu tag {{ version }}
 
 # First release of the version already in Cargo.toml (no bump), pushed to GitHub
 release-initial: _check-git-cliff check-all
@@ -210,7 +214,9 @@ release-initial: _check-git-cliff check-all
     git push --follow-tags origin (git branch --show-current)
 
 # Bump, tag and push to every remote — starts the Release workflows on both hosts
-release-all version: (bump version) push-all
+release-all version: (bump version)
+    nu scripts/ci/release_after_ci.nu {{ version }}
+    nu scripts/remotes.nu push
 
 # Bump, tag and push to Gitea only
 release-gitea-starscream version: (bump version)

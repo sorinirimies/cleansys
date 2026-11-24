@@ -286,7 +286,7 @@ impl Shared {
         rescan: bool,
         change: impl FnOnce(&mut cleansys_core::engine::EngineConfig) -> Result<(), String>,
     ) -> Result<(), String> {
-        let mut cfg = cleansys_core::engine::EngineConfig::load();
+        let mut cfg = cleansys_core::engine::EngineConfig::load_saved();
         change(&mut cfg)?;
         cfg.save().map_err(|e| e.to_string())?;
         if rescan {

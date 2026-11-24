@@ -29,7 +29,13 @@ and nothing calls `sudo` for real.
 - Themes are one catalogue in `cleansys-core` (43 hand-tuned + 61 generated from `tui-nuances` into `theme/extra.rs`). `theme_tables_core_extras_match_tui_nuances` fails when the table drifts from the crate; regenerate with `UPDATE_THEMES=1 cargo test -p cleansys theme_tables`. Generated themes are checked for readable text/accents, and each front-end is tested against an extra theme (`Pip Boy`).
 - TUI themes (`cleansys-tui/src/theme.rs`): the picker lists every `tui-nuances` palette; every shared core theme resolves to a real palette (three used to fall back to Default silently); saved names round-trip (shared names for GUI/web sync, slugs for TUI-only themes); cycling visits each theme once.
 - `engine::exec::tests::unused_runtime_cleaner_keeps_selected_and_recent_versions_end_to_end`: TOML cleaner → preview → real run keeps the selected (`alias/default`, `current`, `bin/` shim) and recently used versions.
-- `engine::exec::tests::sqlite_rows_*` / `sql_identifiers_*`: the `sqlite_rows` action previews the row payload, deletes only the named tables, keeps the file and other tables, skips missing tables/files/non-databases, and only splices plain identifiers into SQL (tests are skipped where `sqlite3` is not installed). Two cleaners may share one database file only with disjoint tables.
+- `engine::exec::tests::sqlite_rows_*` / `sql_identifiers_*`: the `sqlite_rows` action previews the row payload, deletes only the named tables, keeps the file and other tables, skips missing tables/files/non-databases, and only splices plain identifiers into SQL (SQLite is built in; they run everywhere). Two cleaners may share one database file only with disjoint tables.
+- `cleansys-tui/tests/cleaner_paths_tests.rs`: every plain home cleaner (≈180) on the OS the tests run on (Linux, macOS, Windows in CI): a file is planted at each of its path templates in a fake home (`CLEANSYS_HOME`, `LOCALAPPDATA`, `XDG_*`) and `cleansys scan --json` must report it. Catches templating, glob, OS-selection and protection bugs per platform — not whether a template matches where an app really stores its data.
+- `cleansys-tui/tests/cli_tests.rs`: the CLI end to end in a fake home — scan/clean/auto JSON, dry runs, a real clean that keeps neighbouring files, usage, themes, config and schedule. Config and deleting tests are Linux-only (only there can the config folder be redirected). `config_changes_are_saved_and_shown` guards that a session's `CLEANSYS_SCAN_ROOTS` is never written to `engine.json`.
+- Safety guards (`engine::exec::tests`): `committed_build_folders_are_never_offered` (git-tracked artifact folders), `pin_files_*` / `installed_folders_match_*` / `a_runtime_a_project_pins_*` (project-pinned runtime versions are kept).
+- Command previews: `journal_preview_*` and `old_kernel_preview_*` run the real dry-run scripts against fake folders; `shell_scripts_in_command_cleaners_reach_the_shell_intact` and `paths::tests::shell_and_powershell_code_*` guard that `$1`, `$_` and `%s` in scripts are not mistaken for variables (they once emptied the snap and Windows event-log commands).
+- Themes: `every_theme_keeps_text_status_and_chart_colours_readable` checks body/secondary text, hints, accent, selected-row text, status and chart colours of all 104 themes (core passes every palette through `AppTheme::readable`); TUI `the_selected_row_is_readable_in_every_theme` renders each theme.
+- Scripts: `test_gen_content_packs.nu` (the generated packs match their generator; also a quality-gate step), `release_after_ci` / `retry_cancelled` decisions in `test_ci_scripts.nu`.
 - `engine::exec::tests::command_preview_*` / `a_failing_or_silent_dry_run_*`: a command that removes only part of a folder previews just the files its dry run lists (not the whole folder), a failing or silent dry run previews 0, and a real run reports what was actually freed. Registry guard: pacman and snap must carry `preview_args`. GUI `when_the_last_cleaner_finishes_the_sizes_are_measured_again`: finishing a clean drops the old size and starts a rescan whose result replaces it.
 - `engine::deep::tests::names_and_extensions_are_alternatives`: deep-scan `names` / `extensions` matching.
 - `browsers.toml`, `apps.toml`, `games.toml` are generated — add hand-written browser cleaners to `browsers_extra.toml`, never to the generated file (`just gen-packs` overwrites it).
@@ -41,3 +47,13 @@ and nothing calls `sudo` for real.
 CI runs the gate on Linux and tests on macOS and Windows (`gh workflow run ci.yml -f full_matrix=true`).
 Linux/Windows cleaner paths are type-checked and unit-tested there, but are only exercised against
 real system folders on the developer's machine.
+
+## Releasing
+
+`just release X.Y.Z` runs the gate, bumps and tags locally, pushes the commit, **waits for
+GitHub CI (Linux, macOS, Windows) to pass on it**, and only then pushes the tag that starts
+`release.yml` (`scripts/ci/release_after_ci.nu`). Red, cancelled or timed-out CI pushes no
+tag and removes the local one; after the fix is pushed, `just release-tag X.Y.Z` waits for
+CI on HEAD and tags it. A Release run whose jobs a hosted runner cancelled is re-run
+automatically, at most twice (`retry-release.yml`). The gate runs tests without
+`CARGO_TARGET_DIR`, like CI, keeping the build cache through `CARGO_BUILD_TARGET_DIR`.

@@ -302,7 +302,7 @@ label = "Ladybird crash reports"
 [[cleaner]]
 id = "br-ladybird-cookies"
 name = "Ladybird Cookies"
-description = "Cookies of Ladybird (signs you out of sites); the rest of Ladybird.db is kept. Needs the sqlite3 program"
+description = "Cookies of Ladybird (signs you out of sites); the rest of Ladybird.db is kept."
 category = "Web Browsers"
 risk = "moderate"
 os = ["linux", "macos", "windows"]
@@ -318,7 +318,7 @@ label = "Ladybird cookies"
 [[cleaner]]
 id = "br-ladybird-site-data"
 name = "Ladybird Site Data & HSTS"
-description = "Local storage of websites and remembered HSTS policies in Ladybird.db, plus its download list; cookies are kept. Needs the sqlite3 program"
+description = "Local storage of websites and remembered HSTS policies in Ladybird.db, plus its download list; cookies are kept."
 category = "Web Browsers"
 risk = "moderate"
 os = ["linux", "macos", "windows"]

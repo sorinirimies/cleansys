@@ -879,6 +879,18 @@ fn treemap_weights(sizes: Vec<(String, u64)>) -> Vec<(String, f64)> {
     big.into_iter().map(|(n, w, _)| (n, w)).collect()
 }
 
+/// Style of the highlighted cleaner row: the theme's selection colours for every cell.
+/// Keeping each span's own colour (dim descriptions, coloured sizes) left text unreadable
+/// on the selection in about 40 themes (High Contrast: white on white); `selection_fg` is
+/// the colour tui-nuances keeps readable on `selection_bg`.
+fn selected_row_style() -> Style {
+    let t = crate::theme::th();
+    Style::default()
+        .add_modifier(Modifier::BOLD)
+        .fg(t.selection_fg)
+        .bg(t.selection_bg)
+}
+
 fn render_categories(f: &mut Frame, app: &App, area: Rect) {
     let inner_w = area.width.saturating_sub(2) as usize;
     let mut items: Vec<ListItem> = Vec::new();
@@ -1387,11 +1399,7 @@ fn render_cleaners(f: &mut Frame, app: &mut App, area: Rect) {
 
     let items_list = List::new(items)
         .block(block)
-        .highlight_style(
-            Style::default()
-                .add_modifier(Modifier::BOLD)
-                .bg(crate::theme::th().selection_bg),
-        )
+        .highlight_style(selected_row_style())
         .highlight_symbol("▎");
 
     f.render_stateful_widget(items_list, area, &mut app.list_view_state);

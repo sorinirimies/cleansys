@@ -23,6 +23,8 @@ repository = "https://github.com/sorinirimies/cleansys"
 winresource = { version = "0.1", default-features = false }  # the .exe icon (cleansys-gui build script)
 # Core / shared
 anyhow      = "1.0"
+# SQLite compiled in (no sqlite3 program needed, so Windows works too)
+rusqlite    = { version = "0.43", features = ["bundled"] }
 colored     = "3.1"
 log         = "0.4"
 env_logger  = "0.11"

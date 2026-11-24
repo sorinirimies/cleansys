@@ -432,7 +432,12 @@ mod tests {
     #[test]
     fn commands_that_remove_only_part_of_their_folder_preview_only_that_part() {
         use crate::engine::spec::Action;
-        for id in ["sys-lin-pacman-orphans-cache", "sys-lin-snap-old-revisions"] {
+        for id in [
+            "sys-lin-pacman-orphans-cache",
+            "sys-lin-snap-old-revisions",
+            "sys-lin-journal",
+            "sys-lin-old-kernels",
+        ] {
             let spec = all_specs()
                 .into_iter()
                 .find(|s| s.id == id)
@@ -446,6 +451,133 @@ mod tests {
                 "{id} must list its candidates in preview (preview_args)"
             );
         }
+    }
+
+    #[test]
+    fn shell_scripts_in_command_cleaners_reach_the_shell_intact() {
+        use crate::engine::spec::Action;
+        let args_of = |id: &str| -> Vec<String> {
+            let s = all_specs().into_iter().find(|s| s.id == id).unwrap();
+            s.actions
+                .iter()
+                .flat_map(|a| match a {
+                    Action::Command {
+                        args, preview_args, ..
+                    } => args.iter().chain(preview_args).cloned().collect(),
+                    _ => Vec::new(),
+                })
+                .map(|a| crate::engine::paths::expand(&a, &crate::engine::paths::lookup_env))
+                .collect()
+        };
+        let snap = args_of("sys-lin-snap-old-revisions").join("\n");
+        assert!(snap.contains("print $1, $3"), "awk fields survive: {snap}");
+        assert!(
+            snap.contains(r#"snap remove "$n" --revision="$r""#),
+            "{snap}"
+        );
+        assert!(
+            snap.contains(r#"$1 "_" $3"#),
+            "preview builds the file name: {snap}"
+        );
+        let events = args_of("sys-win-event-logs").join("\n");
+        assert!(events.contains("wevtutil.exe cl $_"), "{events}");
+    }
+
+    /// The dry-run script of a built-in command cleaner, aimed at `dir` instead of the
+    /// real system folder, run with `sh`; its output lines.
+    #[cfg(target_os = "linux")]
+    fn run_preview_script(
+        id: &str,
+        real_dir: &str,
+        dir: &std::path::Path,
+        extra: &[(&str, &str)],
+    ) -> Vec<String> {
+        use crate::engine::spec::Action;
+        let spec = all_specs().into_iter().find(|s| s.id == id).unwrap();
+        let Some(Action::Command { preview_args, .. }) = spec.actions.first() else {
+            panic!("{id} is not a command cleaner");
+        };
+        let mut script = crate::engine::paths::expand(&preview_args[1], &|_| None);
+        script = script.replace(real_dir, &dir.to_string_lossy());
+        for (from, to) in extra {
+            script = script.replace(from, to);
+        }
+        let out = std::process::Command::new("sh")
+            .arg("-c")
+            .arg(&script)
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stdout)
+            .lines()
+            .map(str::to_string)
+            .collect()
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn journal_preview_lists_the_oldest_archives_until_the_limit_is_met() {
+        let d = tempfile::tempdir().unwrap();
+        let mid = d.path().join("machine");
+        std::fs::create_dir_all(&mid).unwrap();
+        // 1 MiB each, real bytes (disk usage counts, not apparent size).
+        let file = |name: &str, age_days: u64| {
+            let p = mid.join(name);
+            std::fs::write(&p, vec![7u8; 1 << 20]).unwrap();
+            let t =
+                std::time::SystemTime::now() - std::time::Duration::from_secs(age_days * 86_400);
+            std::fs::File::options()
+                .write(true)
+                .open(&p)
+                .unwrap()
+                .set_times(std::fs::FileTimes::new().set_modified(t))
+                .unwrap();
+        };
+        file("system.journal", 0); // active: never removed
+        file("system@a-1.journal", 30);
+        file("system@a-2.journal", 20);
+        file("user@b-3.journal", 10);
+        // keep 2.5 MiB of the 4 MiB: drop the two oldest archives (4 -> 3 -> 2).
+        let out = run_preview_script(
+            "sys-lin-journal",
+            "/var/log/journal",
+            d.path(),
+            &[("keep=209715200", "keep=2621440")],
+        );
+        let names: Vec<&str> = out.iter().map(|l| l.rsplit('/').next().unwrap()).collect();
+        assert_eq!(
+            names,
+            ["system@a-1.journal", "system@a-2.journal"],
+            "{out:?}"
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn old_kernel_preview_keeps_the_newest_and_the_running_kernel() {
+        let d = tempfile::tempdir().unwrap();
+        for v in ["6.8.0-9-generic", "6.8.0-40-generic", "6.8.0-45-generic"] {
+            for kind in ["vmlinuz", "initrd.img", "System.map"] {
+                std::fs::write(d.path().join(format!("{kind}-{v}")), b"k").unwrap();
+            }
+        }
+        // Pretend the oldest kernel is the one running.
+        let out = run_preview_script(
+            "sys-lin-old-kernels",
+            "/boot",
+            d.path(),
+            &[("$(uname -r)", "6.8.0-9-generic")],
+        );
+        let mut names: Vec<&str> = out.iter().map(|l| l.rsplit('/').next().unwrap()).collect();
+        names.sort_unstable();
+        assert_eq!(
+            names,
+            [
+                "System.map-6.8.0-40-generic",
+                "initrd.img-6.8.0-40-generic",
+                "vmlinuz-6.8.0-40-generic"
+            ],
+            "only the old kernel that is not running (6.8.0-9 is, 6.8.0-45 is newest)"
+        );
     }
 
     #[test]

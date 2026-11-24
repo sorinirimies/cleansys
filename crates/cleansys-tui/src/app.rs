@@ -517,12 +517,18 @@ impl App {
         }
         // Edit on top of what is on disk so a change made elsewhere (CLI, GUI) is not lost.
         let mine = self.engine_cfg.clone();
+        // Roots the environment overrides for this session are not the user's settings.
+        let (scan_env, deep_env) = cleansys_core::engine::EngineConfig::env_overrides();
         match cleansys_core::engine::EngineConfig::update(|c| {
-            c.scan_roots = mine.scan_roots;
+            if !scan_env {
+                c.scan_roots = mine.scan_roots;
+            }
             c.max_depth = mine.max_depth;
             c.min_age_days = mine.min_age_days;
             c.exclude = mine.exclude;
-            c.deep_roots = mine.deep_roots;
+            if !deep_env {
+                c.deep_roots = mine.deep_roots;
+            }
         }) {
             Ok(()) => true,
             Err(e) => {

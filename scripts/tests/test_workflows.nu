@@ -26,8 +26,11 @@ const NIGHTLIES = [[file github gitea];
     ["security.yml" "0 3 * * *" "0 3 * * *"]
     ["fuzz.yml" "0 4 * * *" "0 4 * * *"]]
 
+# GitHub-only: Dependabot's auto-merge, and re-running jobs a hosted runner cancelled.
+const GITHUB_ONLY = ["auto-merge.yml" "retry-release.yml"]
+
 def "test workflows: both hosts have the same workflows" [] {
-    let gh = (workflows ".github" | where $it != "auto-merge.yml")
+    let gh = (workflows ".github" | where $it not-in $GITHUB_ONLY)
     assert equal $gh (workflows ".gitea" | where $it != "actions-update.yml")
 }
 

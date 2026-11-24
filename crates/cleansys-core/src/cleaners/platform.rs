@@ -10,6 +10,11 @@ use std::path::PathBuf;
 
 /// Resolve the user's home directory, or `None` if it can't be determined.
 pub fn home_dir() -> Option<PathBuf> {
+    // `CLEANSYS_HOME` points every `~` at another folder: used by the cross-platform path
+    // test and demos (on Windows the profile folder cannot be redirected through env vars).
+    if let Some(h) = std::env::var_os("CLEANSYS_HOME").filter(|h| !h.is_empty()) {
+        return Some(PathBuf::from(h));
+    }
     BaseDirs::new().map(|b| b.home_dir().to_path_buf())
 }
 

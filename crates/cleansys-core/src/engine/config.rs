@@ -127,7 +127,8 @@ pub fn min_age_label(days: u64) -> String {
 impl EngineConfig {
     /// Load → change → save, so front-ends editing different fields never clobber each other.
     pub fn update<R>(change: impl FnOnce(&mut Self) -> R) -> Result<R> {
-        let mut cfg = Self::load();
+        // Edit what is saved, never the session's env overrides (they are not settings).
+        let mut cfg = Self::load_saved();
         let out = change(&mut cfg);
         cfg.save()?;
         Ok(out)
@@ -254,7 +255,7 @@ impl EngineConfig {
 
     /// Persist a new idle-day threshold (load → set → save).
     pub fn save_min_age_days(days: u64) -> Result<()> {
-        let mut cfg = Self::load();
+        let mut cfg = Self::load_saved();
         cfg.min_age_days = days;
         cfg.save()
     }
@@ -263,13 +264,27 @@ impl EngineConfig {
         Ok(crate::settings::settings_dir()?.join("engine.json"))
     }
 
-    /// Load config, falling back to defaults on any problem.
-    pub fn load() -> Self {
-        let mut cfg = Self::path()
+    /// The configuration as saved in `engine.json` (defaults on any problem), without the
+    /// environment overrides. Load → change → save must start from this, or a session's
+    /// `CLEANSYS_SCAN_ROOTS` / `CLEANSYS_DEEP_ROOTS` would be written to disk for good.
+    pub fn load_saved() -> Self {
+        Self::path()
             .ok()
             .and_then(|p| std::fs::read_to_string(p).ok())
             .and_then(|s| serde_json::from_str::<Self>(&s).ok())
-            .unwrap_or_default();
+            .unwrap_or_default()
+    }
+
+    /// Is a project / deep-clean root list overridden for this session by the environment?
+    pub fn env_overrides() -> (bool, bool) {
+        let set = |k| std::env::var_os(k).is_some_and(|v| !v.is_empty());
+        (set("CLEANSYS_SCAN_ROOTS"), set("CLEANSYS_DEEP_ROOTS"))
+    }
+
+    /// The configuration in effect: what is saved, with the environment overrides applied.
+    /// Use [`Self::load_saved`] to edit and save.
+    pub fn load() -> Self {
+        let mut cfg = Self::load_saved();
         if let Ok(v) = std::env::var("CLEANSYS_DEEP_ROOTS") {
             cfg.deep_roots = std::env::split_paths(&v)
                 .map(|p| p.to_string_lossy().into_owned())

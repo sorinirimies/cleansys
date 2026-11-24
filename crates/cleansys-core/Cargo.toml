@@ -23,6 +23,7 @@ glob        = { workspace = true }
 rayon       = { workspace = true }
 regex       = { workspace = true }
 tempfile    = { workspace = true }
+rusqlite    = { workspace = true }
 
 [target.'cfg(unix)'.dependencies]
 libc = { workspace = true }

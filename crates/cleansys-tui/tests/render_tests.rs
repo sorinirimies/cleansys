@@ -912,3 +912,56 @@ fn category_panel_counts_cleaners_with_scanning_off_once_the_scan_is_complete() 
         "the category panel title should name the count and the key:\n{after}"
     );
 }
+
+/// The selected cleaner row's text must be readable on the selection in every theme
+/// (High Contrast once selected white text on white).
+#[test]
+fn the_selected_row_is_readable_in_every_theme() {
+    use tui_nuances::color::contrast_ratio;
+    let mut unreadable = Vec::new();
+    for i in 0..cleansys_tui::theme::count() {
+        let theme = cleansys_tui::theme::by_index(i);
+        cleansys_tui::theme::set_current(std::sync::Arc::clone(&theme));
+        let mut app = app_with_categories();
+        app.theme = std::sync::Arc::clone(&theme);
+        app.focus = cleansys_tui::app::Focus::Items;
+        app.item_list_state.select(Some(0));
+        let backend = TestBackend::new(120, 40);
+        let mut terminal = Terminal::new(backend).unwrap();
+        terminal.draw(|f| ui(f, &mut app)).unwrap();
+        let buf = terminal.backend().buffer().clone();
+        // The rows of the highlighted cleaner (its name line and the lines under it that
+        // share the selection background), not other selection-coloured widgets.
+        let (ci, ii) = app.current_item().expect("a selected cleaner");
+        let name = app.categories[ci].items[ii].name.clone();
+        let row_text = |y: u16| -> String {
+            (0..buf.area.width)
+                .map(|x| buf[(x, y)].symbol().to_string())
+                .collect()
+        };
+        let first = (0..buf.area.height)
+            .find(|y| row_text(*y).contains(&name))
+            .expect("selected cleaner drawn");
+        let rows: Vec<u16> = (first..buf.area.height)
+            .take_while(|y| (0..buf.area.width).any(|x| buf[(x, *y)].bg == theme.selection_bg))
+            .collect();
+        let worst = rows
+            .iter()
+            .flat_map(|y| (0..buf.area.width).map(move |x| (x, *y)))
+            .map(|(x, y)| &buf[(x, y)])
+            .filter(|c| c.bg == theme.selection_bg && c.symbol().chars().any(char::is_alphanumeric))
+            .map(|c| contrast_ratio(c.fg, c.bg))
+            .fold(f64::INFINITY, f64::min);
+        if worst < 2.0 {
+            unreadable.push(format!(
+                "{}: {worst:.2}",
+                cleansys_tui::theme::entries()[i].label
+            ));
+        }
+    }
+    cleansys_tui::theme::set_current(cleansys_tui::theme::by_index(0));
+    assert!(
+        unreadable.is_empty(),
+        "selected-row text unreadable: {unreadable:?}"
+    );
+}

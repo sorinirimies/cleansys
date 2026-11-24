@@ -1,0 +1,37 @@
+# ──────────────────────────────────────────────────────────────────────────────
+# Retry release — re-run Release jobs a runner cancelled
+# ──────────────────────────────────────────────────────────────────────────────
+# A hosted runner sometimes drops a job (seen on the macOS Intel build); the release
+# is then skipped although nothing was wrong. Re-run only cancelled jobs, never real
+# failures, at most twice (scripts/ci/retry_cancelled.nu). GitHub-only: Gitea's
+# runners are our own.
+# ──────────────────────────────────────────────────────────────────────────────
+
+name: Retry release
+
+on:
+  workflow_run:
+    workflows: [Release]
+    types: [completed]
+
+permissions:
+  actions: write
+  contents: read
+
+jobs:
+  retry:
+    name: Retry cancelled jobs
+    runs-on: ubuntu-latest
+    if: github.event.workflow_run.conclusion != 'success'
+    steps:
+      - uses: actions/checkout@v7
+      - uses: hustcer/setup-nu@v3
+        with:
+          version: "0.116.1"
+      - name: Re-run cancelled jobs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          ATTEMPT: ${{ github.event.workflow_run.run_attempt }}
+        run: nu scripts/ci/retry_cancelled.nu "$RUN_ID" "$ATTEMPT"

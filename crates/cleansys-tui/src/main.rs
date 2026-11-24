@@ -494,19 +494,38 @@ fn run_usage_cmd(path: Option<String>, depth: usize, top: usize) -> Result<()> {
 
 fn run_config_cmd(action: ConfigCmd) -> Result<()> {
     use cleansys_core::engine::EngineConfig;
-    let mut cfg = EngineConfig::load();
+    // Edits start from what is saved; `show` reports what is in effect (env overrides too).
+    let mut cfg = if matches!(action, ConfigCmd::Show) {
+        EngineConfig::load()
+    } else {
+        EngineConfig::load_saved()
+    };
+    let (scan_env, deep_env) = EngineConfig::env_overrides();
     match action {
         ConfigCmd::Show => {
             print_header("ENGINE CONFIG");
             let roots = cfg.effective_roots();
             println!(
                 "Project scan roots ({}):",
-                if cfg.scan_roots.is_empty() {
+                if scan_env {
+                    "from CLEANSYS_SCAN_ROOTS for this session"
+                } else if cfg.scan_roots.is_empty() {
                     "auto-detected"
                 } else {
                     "configured"
                 }
             );
+            if scan_env {
+                let saved = EngineConfig::load_saved().scan_roots;
+                println!(
+                    "  saved in engine.json: {}",
+                    if saved.is_empty() {
+                        "(none — auto-detect)".to_string()
+                    } else {
+                        saved.join(", ")
+                    }
+                );
+            }
             if roots.is_empty() {
                 println!("  (none found — add one: cleansys config add-root ~/code)");
             }
@@ -515,7 +534,9 @@ fn run_config_cmd(action: ConfigCmd) -> Result<()> {
             }
             println!(
                 "Deep clean searches ({}):",
-                if cfg.deep_roots.is_empty() {
+                if deep_env {
+                    "from CLEANSYS_DEEP_ROOTS for this session"
+                } else if cfg.deep_roots.is_empty() {
                     "home folder"
                 } else {
                     "configured"
