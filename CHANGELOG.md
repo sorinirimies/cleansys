@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.24.0](https://github.com/sorinirimies/cleansys/compare/v0.23.2...v0.24.0) — 2026-11-24
+
+### ✨ Features
+
+- Safer cleaners, exact previews, cross-platform tests, CI-gated releases ([`7923706`](https://github.com/sorinirimies/cleansys/commit/79237067dfde954bf653b7e9f717549e06605198))
+
 ## [0.23.2](https://github.com/sorinirimies/cleansys/compare/v0.23.1...v0.23.2) — 2026-11-24
 
 ### 🐛 Bug fixes
