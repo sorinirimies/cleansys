@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.23.1](https://github.com/sorinirimies/cleansys/compare/v0.23.0...v0.23.1) — 2026-11-24
+
+### 🐛 Bug fixes
+
+- Pin the generated theme table to LF and compare it line-ending-insensitively (Windows CI saw CRLF) ([`f32783c`](https://github.com/sorinirimies/cleansys/commit/f32783c6241266b892f85eeffe07c069ec303b4e))
+
 ## [0.23.0](https://github.com/sorinirimies/cleansys/compare/v0.22.0...v0.23.0) — 2026-11-24
 
 ### ✨ Features
