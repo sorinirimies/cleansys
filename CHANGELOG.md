@@ -4,6 +4,22 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.21.1](https://github.com/sorinirimies/cleansys/compare/v0.21.0...v0.21.1) — 2026-11-24
+
+### 🐛 Bug fixes
+
+- **core:** Age-by-contents ignores a directory's own atime (relatime bumps it on listing) ([`5732c60`](https://github.com/sorinirimies/cleansys/commit/5732c608935c828309aeceb91893c1a784702dab))
+- **core:** Builtin path test skips unset optional env paths; drop stray file ([`fd7cf2b`](https://github.com/sorinirimies/cleansys/commit/fd7cf2b3aae08d819c75f17c4465fcafcdb2c11a))
+- **core:** Age-by-contents ignores directory atime; tests set directory times on Windows ([`a94a244`](https://github.com/sorinirimies/cleansys/commit/a94a2442614c6259172f8d2e68fbd7a376e10c35))
+
+### 🧪 Tests
+
+- **core:** Forward-slash the temp root in TOML so Windows paths parse ([`8123c9c`](https://github.com/sorinirimies/cleansys/commit/8123c9c5081a9508280f34afdd4dc28cd0c52af5))
+
+### 📦 Dependencies
+
+- Update cookie/url/rustix for RUSTSEC-2026-0594, -0592, -0486 ([`8a83b90`](https://github.com/sorinirimies/cleansys/commit/8a83b90aaac31707c102d0c92165ea3f23954903))
+
 ## [0.21.0](https://github.com/sorinirimies/cleansys/compare/v0.20.0...v0.21.0) — 2026-11-24
 
 ### ✨ Features
