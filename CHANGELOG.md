@@ -4,6 +4,16 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.23.0](https://github.com/sorinirimies/cleansys/compare/v0.22.0...v0.23.0) — 2026-11-24
+
+### ✨ Features
+
+- All 104 tui-nuances themes in the GUI and web too: one catalogue in cleansys-core (43 curated + 61 generated), shared names, drift test, parity tests ([`935aa7e`](https://github.com/sorinirimies/cleansys/commit/935aa7e955814c36627d0a83eb0990fc65b29901))
+
+### 📦 Dependencies
+
+- Nightly cargo update 2026-11-24 ([`c7916ae`](https://github.com/sorinirimies/cleansys/commit/c7916ae69c927c0a64473b5f1cc544988df42cc9))
+
 ## [0.22.0](https://github.com/sorinirimies/cleansys/compare/v0.21.1...v0.22.0) — 2026-11-24
 
 ### ✨ Features
