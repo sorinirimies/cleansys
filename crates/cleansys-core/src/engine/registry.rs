@@ -175,6 +175,9 @@ mod tests {
             for a in &s.actions {
                 for t in a.delete_templates() {
                     let expanded = paths::expand(t, &paths::lookup_env);
+                    if expanded.is_empty() {
+                        continue; // an optional env var such as ${CARGO_TARGET_DIR:-} is unset
+                    }
                     let is_glob = expanded.contains(['*', '?', '[']);
                     let p = std::path::PathBuf::from(
                         expanded.split(['*', '?', '[']).next().unwrap_or(""),

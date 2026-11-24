@@ -1148,7 +1148,7 @@ mod tests {
                 root.join(format!("versions/node/{v}/bin")),
                 root.join(format!("versions/node/{v}")),
             ] {
-                set_times_of(p, times);
+                set_times_of(&p, times);
             }
         }
         // v22 stays untouched-now (recent), v20 is selected, v18 is the only removable one.
