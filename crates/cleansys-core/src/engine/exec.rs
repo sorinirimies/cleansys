@@ -342,10 +342,16 @@ impl PathFilter {
         let Ok(meta) = fs::symlink_metadata(p) else {
             return false;
         };
-        let newest = [meta.modified(), meta.accessed()]
-            .into_iter()
-            .flatten()
-            .max();
+        // When judging by contents, a directory's own atime is meaningless: listing
+        // it (our own scan, with relatime) bumps it. Files inside decide instead.
+        let newest = if self.by_contents && meta.is_dir() {
+            meta.modified().ok()
+        } else {
+            [meta.modified(), meta.accessed()]
+                .into_iter()
+                .flatten()
+                .max()
+        };
         newest.is_some_and(|t| t < cutoff)
             && !(self.by_contents
                 && meta.is_dir()
