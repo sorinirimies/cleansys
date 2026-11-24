@@ -275,7 +275,8 @@ mod tests {
             std::fs::write(path, &want).unwrap();
             return;
         }
-        let have = std::fs::read_to_string(path).unwrap();
+        // Line endings are not content: a Windows checkout may have converted them.
+        let have = std::fs::read_to_string(path).unwrap().replace("\r\n", "\n");
         assert!(
             have == want,
             "core's generated theme table is stale: run `UPDATE_THEMES=1 cargo test -p cleansys theme_tables`"
