@@ -263,10 +263,16 @@ impl PathFilter {
                 if meta.is_dir() {
                     stack.push(e.path());
                 }
-                let newest = [meta.modified(), meta.accessed()]
-                    .into_iter()
-                    .flatten()
-                    .max();
+                // A directory's atime moves when this very scan lists it, so only
+                // files count by access time.
+                let newest = if meta.is_dir() {
+                    meta.modified().ok()
+                } else {
+                    [meta.modified(), meta.accessed()]
+                        .into_iter()
+                        .flatten()
+                        .max()
+                };
                 if newest.is_none_or(|t| t >= cutoff) {
                     return true;
                 }
@@ -941,6 +947,20 @@ mod tests {
         }
     }
 
+    /// Set both times on a file or directory. Windows only opens a directory with
+    /// backup semantics, and the handle needs write access to change times.
+    fn set_times_of(p: &Path, times: fs::FileTimes) {
+        let mut o = fs::OpenOptions::new();
+        #[cfg(windows)]
+        {
+            use std::os::windows::fs::OpenOptionsExt;
+            o.write(true).custom_flags(0x0200_0000); // FILE_FLAG_BACKUP_SEMANTICS
+        }
+        #[cfg(not(windows))]
+        o.read(true);
+        o.open(p).unwrap().set_times(times).unwrap();
+    }
+
     fn write(p: &Path, bytes: usize) {
         fs::create_dir_all(p.parent().unwrap()).unwrap();
         fs::write(p, vec![b'x'; bytes]).unwrap();
@@ -1029,7 +1049,7 @@ mod tests {
         let old = SystemTime::now() - Duration::from_secs(400 * 86_400);
         let times = fs::FileTimes::new().set_modified(old).set_accessed(old);
         for p in [&used, &spare, &used.join("release"), &spare.join("release")] {
-            fs::File::open(p).unwrap().set_times(times).unwrap();
+            set_times_of(p, times);
         }
         let f = PathFilter::new(None, None, None, None)
             .unwrap()
@@ -1059,7 +1079,7 @@ mod tests {
             zig.join("0.13.0/zig"),
             zig.join("0.12.0/zig"),
         ] {
-            fs::File::open(&p).unwrap().set_times(times).unwrap();
+            set_times_of(&p, times);
         }
         assert!(f.accepts(&zig.join("0.12.0")));
         #[cfg(unix)]
@@ -1082,7 +1102,7 @@ mod tests {
         let times = fs::FileTimes::new().set_modified(old).set_accessed(old);
         // The directories look idle, the binary inside was just used.
         for dir in [tool.join("bin"), tool.clone()] {
-            fs::File::open(&dir).unwrap().set_times(times).unwrap();
+            set_times_of(&dir, times);
         }
         let by_dir = PathFilter::new(None, None, None, None)
             .unwrap()
@@ -1128,7 +1148,7 @@ mod tests {
                 root.join(format!("versions/node/{v}/bin")),
                 root.join(format!("versions/node/{v}")),
             ] {
-                fs::File::open(p).unwrap().set_times(times).unwrap();
+                set_times_of(p, times);
             }
         }
         // v22 stays untouched-now (recent), v20 is selected, v18 is the only removable one.
