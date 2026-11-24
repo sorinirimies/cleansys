@@ -298,3 +298,35 @@ linux = ["$XDG_DATA_HOME/Ladybird/Profiles/*/CrashReports/*"]
 macos = ["~/Library/Application Support/Ladybird/Profiles/*/CrashReports/*"]
 windows = ["$LOCALAPPDATA/Ladybird/Profiles/*/CrashReports/*"]
 label = "Ladybird crash reports"
+
+[[cleaner]]
+id = "br-ladybird-cookies"
+name = "Ladybird Cookies"
+description = "Cookies of Ladybird (signs you out of sites); the rest of Ladybird.db is kept. Needs the sqlite3 program"
+category = "Web Browsers"
+risk = "moderate"
+os = ["linux", "macos", "windows"]
+process = ["Ladybird", "ladybird"]
+[[cleaner.action]]
+type = "sqlite_rows"
+linux = ["$XDG_DATA_HOME/Ladybird/Profiles/*/Ladybird.db"]
+macos = ["~/Library/Application Support/Ladybird/Profiles/*/Ladybird.db"]
+windows = ["$LOCALAPPDATA/Ladybird/Profiles/*/Ladybird.db"]
+tables = ["Cookies"]
+label = "Ladybird cookies"
+
+[[cleaner]]
+id = "br-ladybird-site-data"
+name = "Ladybird Site Data & HSTS"
+description = "Local storage of websites and remembered HSTS policies in Ladybird.db, plus its download list; cookies are kept. Needs the sqlite3 program"
+category = "Web Browsers"
+risk = "moderate"
+os = ["linux", "macos", "windows"]
+process = ["Ladybird", "ladybird"]
+[[cleaner.action]]
+type = "sqlite_rows"
+linux = ["$XDG_DATA_HOME/Ladybird/Profiles/*/Ladybird.db"]
+macos = ["~/Library/Application Support/Ladybird/Profiles/*/Ladybird.db"]
+windows = ["$LOCALAPPDATA/Ladybird/Profiles/*/Ladybird.db"]
+tables = ["WebStorage", "HSTSPolicies", "Downloads"]
+label = "Ladybird site data"

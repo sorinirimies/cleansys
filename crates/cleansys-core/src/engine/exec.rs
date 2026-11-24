@@ -115,6 +115,16 @@ pub fn run_spec_with(
                 let label = label.as_deref().unwrap_or(&spec.name);
                 run_command(&mut result, program, args, *sudo, measure, label, opts)?;
             }
+            Action::SqliteRows { tables, label, .. } => {
+                let label = label.as_deref().unwrap_or(&spec.name);
+                for db in action
+                    .delete_templates()
+                    .iter()
+                    .flat_map(|t| paths::resolve(t, &paths::lookup_env))
+                {
+                    sqlite_rows(&mut result, &db, tables, label, opts, cfg)?;
+                }
+            }
             Action::ProjectArtifacts {
                 markers,
                 artifacts,
@@ -386,11 +396,129 @@ pub fn spec_has_targets(spec: &CleanerSpec) -> bool {
             true
         }
         Action::Command { program, .. } => paths::find_program(program).is_some(),
+        Action::SqliteRows { .. } => {
+            paths::find_program("sqlite3").is_some()
+                && a.delete_templates()
+                    .iter()
+                    .any(|t| !paths::resolve(t, &paths::lookup_env).is_empty())
+        }
         Action::Delete { .. } => a
             .delete_templates()
             .iter()
             .any(|t| !paths::resolve(t, &paths::lookup_env).is_empty()),
     })
+}
+
+/// Is `name` a plain SQL identifier (so it can be spliced into a statement)?
+pub(crate) fn is_sql_identifier(name: &str) -> bool {
+    !name.is_empty()
+        && name.len() <= 64
+        && name.chars().all(|c| c.is_ascii_alphanumeric() || c == '_')
+        && !name.starts_with(|c: char| c.is_ascii_digit())
+}
+
+/// Run one SQL script on `db` with the system `sqlite3`; stdout on success.
+fn sqlite3(db: &Path, sql: &str, readonly: bool) -> Option<String> {
+    let mut cmd = std::process::Command::new("sqlite3");
+    if readonly {
+        cmd.arg("-readonly");
+    }
+    let out = cmd
+        .arg("-batch")
+        .arg(db)
+        .arg(sql)
+        .stdin(std::process::Stdio::null())
+        .output()
+        .ok()?;
+    out.status
+        .success()
+        .then(|| String::from_utf8_lossy(&out.stdout).trim().to_string())
+}
+
+/// Preview or delete the rows of `tables` in the SQLite file `db` (the file stays).
+fn sqlite_rows(
+    result: &mut CleaningResult,
+    db: &Path,
+    tables: &[String],
+    label: &str,
+    opts: RunOptions,
+    cfg: &EngineConfig,
+) -> Result<()> {
+    if is_protected(db) || is_excluded(db, &cfg.exclude) || !db.is_file() {
+        return Ok(());
+    }
+    if paths::find_program("sqlite3").is_none() {
+        debug!("sqlite3 not found; skipping {label}");
+        return Ok(());
+    }
+    let tables: Vec<&String> = tables.iter().filter(|t| is_sql_identifier(t)).collect();
+    if tables.is_empty() {
+        return Ok(());
+    }
+    // Approximate payload: the size of every text/blob/number cell in the table. Cheap and
+    // read-only; a table that does not exist in this schema version is simply skipped.
+    let mut total = 0u64;
+    let mut rows = 0u64;
+    let mut present = Vec::new();
+    for t in &tables {
+        let exists = sqlite3(
+            db,
+            &format!("SELECT count(*) FROM sqlite_master WHERE type='table' AND name='{t}';"),
+            true,
+        );
+        if exists.as_deref() != Some("1") {
+            continue;
+        }
+        present.push(t.as_str());
+        let n: u64 = sqlite3(db, &format!("SELECT count(*) FROM \"{t}\";"), true)
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
+        rows += n;
+        // length(CAST(x AS BLOB)) per column, summed through a row-wise concatenation.
+        let cols = sqlite3(
+            db,
+            &format!("SELECT group_concat('length(CAST(\"' || name || '\" AS BLOB))', '+') FROM pragma_table_info('{t}');"),
+            true,
+        )
+        .unwrap_or_default();
+        if n > 0 && !cols.is_empty() {
+            let bytes: u64 = sqlite3(
+                db,
+                &format!("SELECT coalesce(sum({cols}),0) FROM \"{t}\";"),
+                true,
+            )
+            .and_then(|s| s.parse().ok())
+            .unwrap_or(0);
+            total += bytes;
+        }
+    }
+    if rows == 0 || present.is_empty() {
+        return Ok(());
+    }
+    let item_label = format!("{label}: {rows} row(s)");
+    if opts.dry_run {
+        result.add_item(CleanedItem::file(
+            db.to_path_buf(),
+            total.max(rows),
+            &item_label,
+        ));
+        return Ok(());
+    }
+    let sql: String = present
+        .iter()
+        .map(|t| format!("DELETE FROM \"{t}\";"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    if sqlite3(db, &format!("BEGIN; {sql} COMMIT; VACUUM;"), false).is_some() {
+        result.add_item(CleanedItem::file(
+            db.to_path_buf(),
+            total.max(rows),
+            &item_label,
+        ));
+    } else {
+        warn!("could not clear rows in {db:?} (database busy or locked?)");
+    }
+    Ok(())
 }
 
 /// Remove (or, in preview mode, merely record) one path.
@@ -1035,6 +1163,135 @@ age_by_contents = true
             "selected via alias/default"
         );
         assert!(root.join("versions/node/v22.0.0").exists(), "recently used");
+    }
+
+    fn have_sqlite3() -> bool {
+        paths::find_program("sqlite3").is_some()
+    }
+
+    /// A Ladybird-shaped database: cookies + storage + a table that must survive.
+    fn ladybird_db(path: &Path) {
+        let sql = "CREATE TABLE Cookies (name TEXT, value TEXT, domain TEXT);\
+            CREATE TABLE WebStorage (k TEXT, v TEXT);\
+            CREATE TABLE SchemaVersions (store TEXT PRIMARY KEY, version INTEGER NOT NULL);\
+            INSERT INTO Cookies VALUES ('sid','abcdef','example.org'),('t','xyz','example.com');\
+            INSERT INTO WebStorage VALUES ('theme','dark');\
+            INSERT INTO SchemaVersions VALUES ('cookies', 4);";
+        let st = std::process::Command::new("sqlite3")
+            .arg(path)
+            .arg(sql)
+            .status()
+            .unwrap();
+        assert!(st.success());
+    }
+
+    fn count(db: &Path, table: &str) -> String {
+        let o = std::process::Command::new("sqlite3")
+            .arg(db)
+            .arg(format!("SELECT count(*) FROM {table};"))
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&o.stdout).trim().to_string()
+    }
+
+    fn sqlite_spec(db: &Path, tables: &str) -> CleanerSpec {
+        let src = format!(
+            r#"
+[[cleaner]]
+id = "t-sql"
+name = "Cookies"
+description = "d"
+[[cleaner.action]]
+type = "sqlite_rows"
+paths = ["{}"]
+tables = {tables}
+"#,
+            db.display()
+        );
+        crate::engine::registry::parse_spec_file(&src)
+            .unwrap()
+            .remove(0)
+    }
+
+    #[test]
+    fn sqlite_rows_previews_then_deletes_only_the_named_tables() {
+        if !have_sqlite3() {
+            return; // the action needs the system sqlite3; nothing to test without it
+        }
+        let d = tempfile::tempdir().unwrap();
+        let db = d.path().join("Ladybird.db");
+        ladybird_db(&db);
+        let spec = sqlite_spec(&db, r#"["Cookies"]"#);
+        let cfg = EngineConfig::default();
+
+        let preview = run_spec_with(&spec, RunOptions::preview(), &cfg).unwrap();
+        assert_eq!(preview.items.len(), 1, "one database, one item");
+        assert!(preview.total_bytes > 0, "the row payload is measured");
+        assert_eq!(count(&db, "Cookies"), "2", "preview deletes nothing");
+
+        run_spec_with(&spec, RunOptions::execute(), &cfg).unwrap();
+        assert_eq!(count(&db, "Cookies"), "0", "cookies are gone");
+        assert_eq!(count(&db, "WebStorage"), "1", "other tables are untouched");
+        assert_eq!(
+            count(&db, "SchemaVersions"),
+            "1",
+            "the schema table survives"
+        );
+        assert!(db.exists(), "the database file itself stays");
+
+        // Nothing left to clear: no item, no error.
+        let again = run_spec_with(&spec, RunOptions::preview(), &cfg).unwrap();
+        assert!(again.items.is_empty());
+    }
+
+    #[test]
+    fn sqlite_rows_skips_missing_tables_and_missing_files() {
+        if !have_sqlite3() {
+            return;
+        }
+        let d = tempfile::tempdir().unwrap();
+        let db = d.path().join("Ladybird.db");
+        ladybird_db(&db);
+        let cfg = EngineConfig::default();
+        let spec = sqlite_spec(&db, r#"["NoSuchTable"]"#);
+        assert!(
+            run_spec_with(&spec, RunOptions::preview(), &cfg)
+                .unwrap()
+                .items
+                .is_empty()
+        );
+        let gone = sqlite_spec(&d.path().join("absent.db"), r#"["Cookies"]"#);
+        assert!(
+            run_spec_with(&gone, RunOptions::execute(), &cfg)
+                .unwrap()
+                .items
+                .is_empty()
+        );
+        // A non-database file is left alone and does not abort the run.
+        let junk = d.path().join("junk.db");
+        fs::write(&junk, b"not sqlite").unwrap();
+        let spec = sqlite_spec(&junk, r#"["Cookies"]"#);
+        run_spec_with(&spec, RunOptions::execute(), &cfg).unwrap();
+        assert_eq!(fs::read(&junk).unwrap(), b"not sqlite");
+    }
+
+    #[test]
+    fn sql_identifiers_reject_anything_that_could_inject() {
+        for ok in ["Cookies", "web_storage", "T1"] {
+            assert!(is_sql_identifier(ok), "{ok}");
+        }
+        for bad in [
+            "",
+            "1abc",
+            "a b",
+            "a;b",
+            "a\"b",
+            "x'--",
+            "a-b",
+            &"x".repeat(65),
+        ] {
+            assert!(!is_sql_identifier(bad), "{bad}");
+        }
     }
 
     #[test]

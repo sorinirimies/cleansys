@@ -183,7 +183,7 @@ Cleaners are grouped by theme; the UIs list a **User land** section first (every
 | **Project Build Artifacts** | ~55 ecosystems, found next to their marker file and only when idle: Rust `target/`, Gradle/Kotlin Multiplatform/Android, Maven, sbt/Mill/scala-cli, Haskell, Clojure, Elixir/Erlang, OCaml, Gleam, Elm, Crystal, D, `node_modules` + Astro/Nx/Vercel/Next/Nuxt/Vite output, React Native, Python caches/venvs/packaging, Ruby, PHP, Swift/Xcode/Tuist, CocoaPods, .NET, Visual Studio, C/C++ (Meson, clangd), ESP-IDF, PlatformIO, Unreal, Godot, Flutter, Zig, CMake, Terraform/CDK, Jekyll/Hugo/MkDocs/Sphinx, ML experiment output |
 | **AI & LLM Caches** | Hugging Face, PyTorch/Keras, Ollama, LM Studio/GPT4All/Jan, Claude Code, Codex/Gemini CLI, agent session histories, code-index caches |
 | **Detected App Caches** | Cache folders of apps installed here that have no dedicated cleaner (`~/.cache/*`, `~/Library/Caches/*`, `%LOCALAPPDATA%\*\Cache`): found automatically, one cleaner per app, moderate risk. Turn it off in Settings (next start) or with `CLEANSYS_NO_DISCOVER=1`. |
-| **Web Browsers** | Cache, cookies & site data, history, sessions — Chrome, Chromium, Brave, Edge, Vivaldi, Opera, Arc, Firefox, LibreWolf, Zen, Safari, **Ladybird** · autofill, site preferences and saved passwords (caution, refused while the browser runs) |
+| **Web Browsers** | Cache, cookies & site data, history, sessions — Chrome, Chromium, Brave, Edge, Vivaldi, Opera, Arc, Firefox, LibreWolf, Zen, Safari, **Ladybird** (cache, history, sessions, crash reports, cookies, site data) · autofill, site preferences and saved passwords (caution, refused while the browser runs) |
 | **Applications / Games** | Slack, Discord, Teams, Signal, Spotify, Zoom, Telegram, Office, Adobe, JetBrains logs · Steam shader cache, Epic, Lutris/Heroic, Wine, GPU shader caches |
 | **Installers & Backups** | Installer files in `~/Downloads`, old *Install macOS* apps, iOS/iPadOS firmware & device backups, Mail downloads |
 | **Large & Old Files** | Files over 500 MB, untouched for a year, old downloads, disk images, archives, dumps, duplicates (nothing ticked by default) |
@@ -390,7 +390,7 @@ linux = ["$XDG_CACHE_HOME/myapp"]  # per-OS lists: linux / macos / windows
 ```
 
 Other actions: `command` (`program`, `args`, `sudo`, `measure = [paths]` to report freed bytes) and
-`project_artifacts` (`markers`, `artifacts`) and `large_files` (deep scan: `extensions` and/or `names` — exact, `*suffix`, `prefix*`; either list may match). `delete` also supports `contents_only`, `files_only`, `recreate`, regex filters
+`sqlite_rows` (clear named tables of a SQLite file — browser cookies, site storage — without deleting the file; needs the system `sqlite3`, skipped when absent), `project_artifacts` (`markers`, `artifacts`) and `large_files` (deep scan: `extensions` and/or `names` — exact, `*suffix`, `prefix*`; either list may match). `delete` also supports `contents_only`, `files_only`, `recreate`, regex filters
 (`name_regex`, `not_name_regex`, `path_regex`, `not_path_regex`) and `min_age_days` (only items neither written nor
 read for that many days; with `age_by_contents = true` a directory is judged by the newest file *inside* it, and the version a manager has selected — a `current`/`default` symlink, a `bin/` shim, a `version` or `alias/default` file — is never removed). Set `requires_root = true` for anything that
 needs elevation — it will appear in the System · root section.

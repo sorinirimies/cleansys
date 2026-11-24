@@ -127,6 +127,25 @@ pub enum Action {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         label: Option<String>,
     },
+    /// Delete rows from tables of SQLite database files (browser cookies, site storage…)
+    /// without removing the file itself. Uses the system `sqlite3` program and does nothing
+    /// when it is missing. Preview reports the bytes of the affected rows; a real run
+    /// deletes them and vacuums the file.
+    SqliteRows {
+        /// Database file templates (same templating as `delete` paths), per OS.
+        #[serde(default)]
+        paths: Vec<String>,
+        #[serde(default)]
+        linux: Vec<String>,
+        #[serde(default)]
+        macos: Vec<String>,
+        #[serde(default)]
+        windows: Vec<String>,
+        /// Tables whose rows go. Names are plain identifiers (validated at load).
+        tables: Vec<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        label: Option<String>,
+    },
     /// Find build output next to marker files inside the configured
     /// project roots (see [`crate::engine::EngineConfig`]).
     ProjectArtifacts {
@@ -219,6 +238,13 @@ impl Action {
     pub fn delete_templates_for(&self, os: &str) -> Vec<&str> {
         match self {
             Action::Delete {
+                paths,
+                linux,
+                macos,
+                windows,
+                ..
+            }
+            | Action::SqliteRows {
                 paths,
                 linux,
                 macos,

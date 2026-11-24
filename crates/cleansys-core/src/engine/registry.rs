@@ -399,6 +399,34 @@ mod tests {
     }
 
     #[test]
+    fn sqlite_cleaners_name_only_plain_tables_and_refuse_while_the_app_runs() {
+        use crate::engine::exec::is_sql_identifier;
+        use crate::engine::spec::Action;
+        let mut seen = 0;
+        for s in all_specs() {
+            for a in &s.actions {
+                if let Action::SqliteRows { tables, .. } = a {
+                    seen += 1;
+                    assert!(!tables.is_empty(), "{}: no tables", s.id);
+                    for t in tables {
+                        assert!(
+                            is_sql_identifier(t),
+                            "{}: `{t}` is not a plain identifier",
+                            s.id
+                        );
+                    }
+                    assert!(
+                        !s.process.is_empty(),
+                        "{}: must refuse while the app runs",
+                        s.id
+                    );
+                }
+            }
+        }
+        assert!(seen >= 2, "expected the Ladybird sqlite cleaners");
+    }
+
+    #[test]
     fn project_artifacts_stay_inside_their_project() {
         use crate::engine::spec::Action;
         for spec in load_all_unfiltered(None) {
@@ -435,12 +463,21 @@ mod tests {
                 }
                 for a in &s.actions {
                     for t in a.delete_templates_for(os) {
-                        if let Some(prev) = owner.insert(t.to_string(), s.id.clone()) {
-                            assert!(
-                                prev == s.id,
-                                "{os}: {t} is deleted by both {prev} and {} (double-counted)",
-                                s.id
-                            );
+                        // Two cleaners may share one SQLite file as long as their tables differ.
+                        let keys: Vec<String> = match a {
+                            crate::engine::spec::Action::SqliteRows { tables, .. } => {
+                                tables.iter().map(|tb| format!("{t}#{tb}")).collect()
+                            }
+                            _ => vec![t.to_string()],
+                        };
+                        for key in keys {
+                            if let Some(prev) = owner.insert(key.clone(), s.id.clone()) {
+                                assert!(
+                                    prev == s.id,
+                                    "{os}: {key} is deleted by both {prev} and {} (double-counted)",
+                                    s.id
+                                );
+                            }
                         }
                     }
                 }
