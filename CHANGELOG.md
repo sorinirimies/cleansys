@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.21.0](https://github.com/sorinirimies/cleansys/compare/v0.20.0...v0.21.0) — 2026-11-24
+
+### ✨ Features
+
+- **core:** Sqlite_rows action; Ladybird cookies and site data cleaners (rows only, Ladybird.db stays) ([`efa36b3`](https://github.com/sorinirimies/cleansys/commit/efa36b3942d139ef910d8d8edf2101f387df4690))
+
 ## [0.20.0](https://github.com/sorinirimies/cleansys/compare/v0.19.2...v0.20.0) — 2026-11-23
 
 ### ✨ Features
