@@ -584,8 +584,8 @@ fn main() -> Result<()> {
 
     if cli.list_themes {
         println!("{}", cleansys_core::SYSTEM_THEME_NAME);
-        for n in cleansys_core::THEME_NAMES {
-            println!("{n}");
+        for e in cleansys_tui::theme::entries() {
+            println!("{}", e.label);
         }
         return Ok(());
     }
@@ -593,7 +593,7 @@ fn main() -> Result<()> {
         if let Some(choice) = cleansys_tui::theme::find(name) {
             let saved = match choice {
                 None => cleansys_core::SYSTEM_THEME_NAME.to_string(),
-                Some(i) => cleansys_core::THEME_NAMES[i].to_string(),
+                Some(i) => cleansys_tui::theme::name_for_save(i),
             };
             let _ = cleansys_core::update_settings(|s| s.theme_name = Some(saved));
         } else {

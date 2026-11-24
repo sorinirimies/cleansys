@@ -905,7 +905,7 @@ fn capital_t_opens_picker_keys_navigate_and_esc_closes() {
     key(&mut app, KeyCode::Down);
     assert_eq!(
         app.picker_index(),
-        (before + 1) % cleansys_tui::theme::PICKER_LEN
+        (before + 1) % cleansys_tui::theme::picker_len()
     );
     key(&mut app, KeyCode::Home);
     assert!(app.follow_system);

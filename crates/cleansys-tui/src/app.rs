@@ -548,7 +548,7 @@ impl App {
     }
 
     fn apply_theme_index(&mut self, index: usize) {
-        self.theme_index = index.min(cleansys_core::THEME_COUNT - 1);
+        self.theme_index = index.min(crate::theme::count() - 1);
         self.theme = crate::theme::by_index(self.theme_index);
     }
 
@@ -562,7 +562,9 @@ impl App {
     /// Follow the OS light/dark setting and remember that.
     pub fn set_follow_system(&mut self) {
         self.follow_system = true;
-        self.apply_theme_index(cleansys_core::current_system_theme_index());
+        self.apply_theme_index(crate::theme::index_of_core(
+            cleansys_core::current_system_theme_index(),
+        ));
         self.save_theme();
     }
 
@@ -577,7 +579,7 @@ impl App {
 
     /// Select picker entry `i` (`0` = System, `n + 1` = preset `n`).
     pub fn select_picker(&mut self, i: usize) {
-        let i = i.min(crate::theme::PICKER_LEN - 1);
+        let i = i.min(crate::theme::picker_len() - 1);
         if i == 0 {
             self.set_follow_system();
         } else {
@@ -587,7 +589,7 @@ impl App {
 
     /// Move `delta` entries through the picker, wrapping.
     pub fn cycle_theme(&mut self, delta: isize) {
-        let n = crate::theme::PICKER_LEN as isize;
+        let n = crate::theme::picker_len() as isize;
         let next = (self.picker_index() as isize + delta).rem_euclid(n) as usize;
         self.select_picker(next);
     }
@@ -598,7 +600,9 @@ impl App {
             return;
         }
         self.last_system_check = Instant::now();
-        self.apply_theme_index(cleansys_core::current_system_theme_index());
+        self.apply_theme_index(crate::theme::index_of_core(
+            cleansys_core::current_system_theme_index(),
+        ));
     }
 
     /// Persist the theme choice (no-op unless [`App::persist`]).
@@ -609,7 +613,7 @@ impl App {
         let name = if self.follow_system {
             cleansys_core::SYSTEM_THEME_NAME.to_string()
         } else {
-            cleansys_core::THEME_NAMES[self.theme_index].to_string()
+            crate::theme::name_for_save(self.theme_index)
         };
         if let Err(e) = cleansys_core::update_settings(|s| s.theme_name = Some(name)) {
             self.log(format!("✗ Could not save theme: {e}"));
@@ -619,7 +623,11 @@ impl App {
     /// Apply saved UI preferences (called once at start-up).
     pub fn apply_settings(&mut self, s: &cleansys_core::Settings) {
         self.follow_system = s.follow_system_theme();
-        self.apply_theme_index(s.theme_index());
+        self.apply_theme_index(if self.follow_system {
+            crate::theme::index_of_core(s.theme_index())
+        } else {
+            crate::theme::index_for_settings(s)
+        });
         self.hide_empty = s.hide_empty();
         self.confirmation_mode = s.confirm_before_run();
         self.disabled_cleaners.clone_from(&s.disabled_cleaners);
@@ -1644,7 +1652,7 @@ impl App {
                 KeyCode::PageUp => self.cycle_theme(-10),
                 KeyCode::Home | KeyCode::Char('g') => self.select_picker(0),
                 KeyCode::End | KeyCode::Char('G') => {
-                    self.select_picker(crate::theme::PICKER_LEN - 1);
+                    self.select_picker(crate::theme::picker_len() - 1);
                 }
                 KeyCode::Esc | KeyCode::Enter | KeyCode::Char('T' | 'q') => {
                     self.theme_picker_open = false;
@@ -2126,19 +2134,54 @@ mod theme_tests {
         app.cycle_theme(-1);
         assert!(app.follow_system);
         app.cycle_theme(-1);
-        assert_eq!(app.theme_index, cleansys_core::THEME_COUNT - 1);
+        assert_eq!(app.theme_index, crate::theme::count() - 1);
         assert_eq!(app.theme, crate::theme::by_index(app.theme_index));
+    }
+
+    #[test]
+    fn the_picker_can_reach_every_theme_and_cycling_visits_each_once() {
+        let mut app = App::new();
+        app.persist = false;
+        app.select_picker(0);
+        let mut seen = std::collections::HashSet::new();
+        for _ in 0..crate::theme::count() {
+            app.cycle_theme(1);
+            assert!(
+                seen.insert(app.theme_index),
+                "theme {} visited twice",
+                app.theme_index
+            );
+        }
+        assert_eq!(seen.len(), crate::theme::count());
+        app.cycle_theme(1);
+        assert!(app.follow_system, "one more step wraps back to System");
     }
 
     #[test]
     fn apply_settings_restores_theme_and_system() {
         let mut app = App::new();
-        let nord = cleansys_core::theme_index_by_name("Nord");
+        let nord = crate::theme::index_for_name("Nord").unwrap();
         app.apply_settings(&cleansys_core::Settings {
             theme_name: Some("Nord".into()),
             ..Default::default()
         });
         assert_eq!((app.theme_index, app.follow_system), (nord, false));
+        // A theme only tui-nuances has round-trips by its slug.
+        let pip = crate::theme::index_for_name("pip-boy").unwrap();
+        app.apply_settings(&cleansys_core::Settings {
+            theme_name: Some("pip-boy".into()),
+            ..Default::default()
+        });
+        assert_eq!((app.theme_index, app.follow_system), (pip, false));
+        // An old settings file naming a theme tui-nuances spelled differently still works.
+        app.apply_settings(&cleansys_core::Settings {
+            theme_name: Some("Gruvbox Dark".into()),
+            ..Default::default()
+        });
+        assert_eq!(
+            app.theme_index,
+            crate::theme::index_for_name("gruvbox").unwrap()
+        );
         app.apply_settings(&cleansys_core::Settings {
             theme_name: Some("System".into()),
             ..Default::default()

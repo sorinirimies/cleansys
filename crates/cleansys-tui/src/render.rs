@@ -2536,16 +2536,16 @@ fn render_theme_picker(f: &mut Frame, app: &App, area: Rect) {
     );
     clear_popup(f, popup);
 
-    let items: Vec<ListItem> = (0..crate::theme::PICKER_LEN)
+    let items: Vec<ListItem> = (0..crate::theme::picker_len())
         .map(|i| {
-            let swatch = |c: cleansys_core::Rgb| {
-                Span::styled("■", Style::default().fg(Color::Rgb(c.r, c.g, c.b)))
-            };
-            // "System" previews the preset it currently resolves to.
+            let swatch = |c: Color| Span::styled("■", Style::default().fg(c));
+            // "System" previews the theme it currently resolves to.
             let preview = if i == 0 {
-                cleansys_core::theme_by_index(cleansys_core::current_system_theme_index())
+                crate::theme::by_index(crate::theme::index_of_core(
+                    cleansys_core::current_system_theme_index(),
+                ))
             } else {
-                cleansys_core::theme_by_index(i - 1)
+                crate::theme::by_index(i - 1)
             };
             let active = i == app.picker_index();
             ListItem::new(Line::from(vec![
@@ -2570,7 +2570,7 @@ fn render_theme_picker(f: &mut Frame, app: &App, area: Rect) {
             format!(
                 " Theme · {}/{} ",
                 app.picker_index() + 1,
-                crate::theme::PICKER_LEN
+                crate::theme::picker_len()
             ),
             Style::default().fg(t.accent).add_modifier(Modifier::BOLD),
         ))

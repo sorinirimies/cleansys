@@ -563,7 +563,7 @@ fn draw(app: &mut App) -> ratatui::buffer::Buffer {
 #[test]
 fn every_theme_renders_with_its_background() {
     let mut app = app_with_categories();
-    for i in 0..cleansys_core::THEME_COUNT {
+    for i in 0..cleansys_tui::theme::count() {
         app.set_theme(i);
         let buf = draw(&mut app);
         assert_eq!(
