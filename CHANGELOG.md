@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.23.2](https://github.com/sorinirimies/cleansys/compare/v0.23.1...v0.23.2) — 2026-11-24
+
+### 🐛 Bug fixes
+
+- **core:** Command cleaners preview only what a dry run lists (preview_args): pacman cache no longer claims the whole package folder; snap old revisions likewise; GUI rescan test ([`2c5b44c`](https://github.com/sorinirimies/cleansys/commit/2c5b44c086e7cd65b3b3c180af27e88627549eeb))
+
 ## [0.23.1](https://github.com/sorinirimies/cleansys/compare/v0.23.0...v0.23.1) — 2026-11-24
 
 ### 🐛 Bug fixes
