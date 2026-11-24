@@ -387,10 +387,19 @@ pub fn scan_thread_count() -> usize {
                 .and_then(|s| s.scan_threads)
         })
         .filter(|n| *n > 0)
-        .map_or_else(
-            || std::thread::available_parallelism().map_or(8, |n| (n.get() * 2).clamp(4, 32)),
-            |n| n.min(256),
-        )
+        .map_or_else(default_scan_threads, |n| n.min(256))
+}
+
+/// Twice the cores on Linux/Windows (the work is mostly waiting on the disk). On macOS
+/// APFS serialises much of its metadata work, so extra threads queue instead of helping:
+/// one per core, at most 16. `CLEANSYS_SCAN_THREADS` or the setting overrides both.
+fn default_scan_threads() -> usize {
+    let cores = std::thread::available_parallelism().map_or(8, std::num::NonZero::get);
+    if cfg!(target_os = "macos") {
+        cores.clamp(4, 16)
+    } else {
+        (cores * 2).clamp(4, 32)
+    }
 }
 
 /// The single pool every scan runs on: cleaner jobs *and* the directory walks inside

@@ -798,10 +798,16 @@ fn project_index(cfg: &EngineConfig, needed: &[String]) -> Index {
         guard.take();
     }
 
+    // The pin files go into every walk too: otherwise the runtimes cleaner's first
+    // request misses the shared index and forces a second full walk of the projects.
     let mut patterns: Vec<String> = super::registry::known_project_markers();
-    for n in needed {
-        if !patterns.contains(n) {
-            patterns.push(n.clone());
+    for n in PIN_FILES
+        .iter()
+        .map(|s| (*s).to_string())
+        .chain(needed.iter().cloned())
+    {
+        if !patterns.contains(&n) {
+            patterns.push(n);
         }
     }
     let compiled: Vec<glob::Pattern> = patterns

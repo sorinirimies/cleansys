@@ -636,13 +636,13 @@ label = "scala-cli build"
 
 [[cleaner]]
 id = "proj-kotlin-native-js"
-name = "Kotlin Multiplatform Native / JS Output"
-description = "build/, .kotlin/ and kotlin-js-store caches of KMP projects (also Compose Multiplatform)"
+name = "Kotlin Multiplatform JS Store"
+description = "kotlin-js-store/ (Kotlin/JS & Wasm npm lock and cache) of Kotlin Multiplatform projects; their build/ and .kotlin/ are the Gradle cleaner's"
 category = "Project Build Artifacts"
 [[cleaner.action]]
 type = "project_artifacts"
 markers = ["settings.gradle.kts", "build.gradle.kts"]
-artifacts = ["build", ".kotlin", "kotlin-js-store"]
+artifacts = ["kotlin-js-store"]
 label = "Kotlin MPP build"
 
 [[cleaner]]

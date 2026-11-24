@@ -32,6 +32,53 @@ const APP_TREES: &[&str] = &[
     "Windows",
 ];
 
+/// Folders directly in the home folder that the deep scan never enters: the OS's own
+/// per-app data (`~/Library` on macOS — app containers, Mail, Messages, iCloud Drive in
+/// `Mobile Documents`, Dropbox/OneDrive/Google Drive in `CloudStorage`; `AppData` on
+/// Windows). They hold hundreds of thousands of small files, so walking them made the
+/// deep scan slow, and the caches in them are handled by dedicated cleaners. Deleting a
+/// "large file" in a cloud folder would also delete it from the cloud.
+const HOME_SYSTEM_TREES: &[&str] = if cfg!(target_os = "macos") {
+    &["Library"]
+} else if cfg!(windows) {
+    &["AppData", "OneDrive"]
+} else {
+    &[]
+};
+
+/// Document bundles (folders that macOS shows as one file). Removing a file inside one
+/// corrupts it — a Photos or Final Cut library — so the deep scan never looks inside.
+const BUNDLE_SUFFIXES: &[&str] = &[
+    ".app",
+    ".photoslibrary",
+    ".photolibrary",
+    ".musiclibrary",
+    ".tvlibrary",
+    ".aplibrary",
+    ".imovielibrary",
+    ".fcpbundle",
+    ".logicx",
+    ".band",
+    ".lrlibrary",
+    ".lrdata",
+    ".bundle",
+    ".framework",
+    ".xcarchive",
+    ".sparsebundle",
+];
+
+/// Does the deep scan skip directory `name` found in `parent`?
+fn skip_deep_dir(parent: &Path, name: &str) -> bool {
+    let lower = name.to_ascii_lowercase();
+    if BUNDLE_SUFFIXES.iter().any(|s| lower.ends_with(s)) {
+        return true;
+    }
+    if HOME_SYSTEM_TREES.contains(&name) || (cfg!(windows) && name.starts_with("OneDrive")) {
+        return crate::cleaners::platform::home_dir().is_some_and(|h| h == parent);
+    }
+    false
+}
+
 /// What to look for.
 #[derive(Debug, Clone)]
 pub struct Query {
@@ -207,7 +254,7 @@ fn scan_dir(dir: &Path, q: &Query) -> (Vec<Entry>, Vec<PathBuf>) {
             && !name.starts_with('.')
             && !SKIP_DESCENT.contains(&name)
             && !APP_TREES.contains(&name)
-            && !name.to_ascii_lowercase().ends_with(".app")
+            && !skip_deep_dir(dir, name)
             && (name != "mod" || dir.file_name().is_none_or(|d| d != "pkg")) // Go module cache
             && same_device(here, &e)
         {
@@ -487,5 +534,31 @@ mod tests {
             .collect();
         names.sort();
         assert_eq!(names, ["copy.bin", "copy2.bin"]);
+    }
+
+    #[test]
+    fn bundles_are_never_entered_and_os_trees_only_at_the_home_root() {
+        let home = crate::cleaners::platform::home_dir().unwrap_or_default();
+        for bundle in [
+            "Photos Library.photoslibrary",
+            "Movie.fcpbundle",
+            "Xcode.app",
+            "song.LOGICX",
+        ] {
+            assert!(skip_deep_dir(Path::new("/x/Pictures"), bundle), "{bundle}");
+        }
+        assert!(!skip_deep_dir(Path::new("/x"), "Movies"));
+        // `Library` / `AppData` count only right in the home folder (a project may have
+        // its own `Library` folder, e.g. Unity's, and those are still searched).
+        if cfg!(target_os = "macos") {
+            assert!(skip_deep_dir(&home, "Library"));
+        }
+        if cfg!(windows) {
+            assert!(skip_deep_dir(&home, "AppData") && skip_deep_dir(&home, "OneDrive - Acme"));
+        }
+        assert!(!skip_deep_dir(&home.join("game"), "Library"));
+        if cfg!(target_os = "linux") {
+            assert!(!skip_deep_dir(&home, "Library"), "nothing special on Linux");
+        }
     }
 }

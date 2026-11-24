@@ -581,6 +581,34 @@ mod tests {
     }
 
     #[test]
+    fn no_two_project_cleaners_measure_the_same_folder() {
+        use crate::engine::spec::Action;
+        let mut owner: std::collections::HashMap<(String, String), String> =
+            std::collections::HashMap::new();
+        for s in all_specs() {
+            for a in &s.actions {
+                if let Action::ProjectArtifacts {
+                    markers, artifacts, ..
+                } = a
+                {
+                    for m in markers {
+                        for art in artifacts {
+                            if let Some(prev) = owner.insert((m.clone(), art.clone()), s.id.clone())
+                            {
+                                assert!(
+                                    prev == s.id,
+                                    "`{art}` next to `{m}` is counted by both {prev} and {}",
+                                    s.id
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    #[test]
     fn project_artifacts_stay_inside_their_project() {
         use crate::engine::spec::Action;
         for spec in load_all_unfiltered(None) {
