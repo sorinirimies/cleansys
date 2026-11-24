@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.22.0](https://github.com/sorinirimies/cleansys/compare/v0.21.1...v0.22.0) — 2026-11-24
+
+### ✨ Features
+
+- **tui:** Offer every tui-nuances theme (104, was 43); fix 3 core themes that silently rendered as Default; picker previews real palettes; docs and tests ([`a3dbc24`](https://github.com/sorinirimies/cleansys/commit/a3dbc248c0736913ed2bbda74037dfebfd7bbccd))
+
 ## [0.21.1](https://github.com/sorinirimies/cleansys/compare/v0.21.0...v0.21.1) — 2026-11-24
 
 ### 🐛 Bug fixes
