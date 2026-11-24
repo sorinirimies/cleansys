@@ -35,7 +35,7 @@ from a **terminal UI**, a **desktop GUI**, a **local web UI** or the **command l
 - **Risk levels** — `safe`, `moderate` (`~`), `caution` (`!`, never in bulk or unattended runs); root cleaners sit in a separate section and nothing asks for sudo until you run it.
 - **Safe by design** — skips open apps, never follows symlinks, refuses `$HOME`, `/usr`, `.ssh`…, honours your exclusions. See [Safety](#️-safety).
 - **Automatic cleaning** — daily/weekly/monthly via systemd/cron, launchd or Task Scheduler.
-- **Four front-ends, one engine** — TUI, GUI, [web UI](crates/cleansys-web) and CLI share cleaners, scanner, scheduler and safety rules; the UIs share [Settings & About](#settings--about), responsive layouts and progress animation (43 themes in GUI/web; the TUI offers all 104 palettes of [`tui-nuances`](https://crates.io/crates/tui-nuances) — `cleansys --list-themes`, `T` in the TUI, `--theme pip-boy`. A theme that GUI/web also have is saved by its shared name so all front-ends stay in sync).
+- **Four front-ends, one engine** — TUI, GUI, [web UI](crates/cleansys-web) and CLI share cleaners, scanner, scheduler and safety rules; the UIs share [Settings & About](#settings--about), responsive layouts and progress animation (104 themes in all three: the 43 hand-tuned ones plus every other palette of [`tui-nuances`](https://crates.io/crates/tui-nuances) — `cleansys --list-themes`, `T` in the TUI, `--theme "Pip Boy"`, the theme pick-list in the GUI and web. One shared name is saved in `settings.json`, so a theme picked in one front-end is the theme in the others).
 - **Scriptable** — `--json`, stable cleaner ids, exit codes, your own cleaners in TOML.
 
 ## 🎬 Demo

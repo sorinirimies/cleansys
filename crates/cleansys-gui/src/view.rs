@@ -2481,7 +2481,7 @@ mod tests {
     #[test]
     fn view_does_not_panic_for_every_theme() {
         let mut state = CleanSysGui::new();
-        for i in 0..cleansys_core::THEME_COUNT {
+        for i in 0..cleansys_core::theme_count() {
             state.theme_index = i;
             let _ = view(&state);
         }

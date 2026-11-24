@@ -91,7 +91,7 @@ pub(crate) async fn top_bar(
             <a class="btn" href="/about" title="About CleanSys"><span class="ico">"ℹ"</span><span class="lbl">"ℹ About"</span></a>
             <form method="get" action=(back)>
                 <select name="theme" onchange="this.form.submit()" aria-label="Theme">
-                    <option value="System" selected=(theme == theme::SYSTEM_INDEX)>"System"</option>
+                    <option value="System" selected=(theme == theme::system_index())>"System"</option>
                     for (i, n) in theme::names().iter().enumerate() {
                         <option value=(*n) selected=(i == theme)>(*n)</option>
                     }

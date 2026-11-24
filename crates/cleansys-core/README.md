@@ -2,7 +2,7 @@
 
 Shared, framework-free core logic for [CleanSys](https://github.com/sorinirimies/cleansys):
 system/user cleaner implementations, the domain model (`CleanerItem`,
-`CleanerCategory`, `Status`), sudo authentication helpers, a 43-preset UI
+`CleanerCategory`, `Status`), sudo authentication helpers, a 104-preset UI
 theme catalogue (`AppTheme`, shared by the GUI), JSON settings persistence,
 and small utility functions (permission checks, byte-size formatting,
 confirmation prompts).

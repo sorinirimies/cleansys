@@ -462,12 +462,12 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
         }
 
         Message::ThemeChanged(idx) => {
-            if idx == cleansys_core::THEME_COUNT {
+            if idx == cleansys_core::theme_count() {
                 // The "System" entry: follow the OS light/dark setting.
                 state.follow_system = true;
                 state.theme_index = cleansys_core::current_system_theme_index();
                 state.save_theme();
-            } else if idx < cleansys_core::THEME_COUNT {
+            } else if idx < cleansys_core::theme_count() {
                 state.follow_system = false;
                 state.theme_index = idx;
                 state.save_theme();
@@ -1348,14 +1348,25 @@ mod tests {
     }
 
     #[test]
+    fn picking_a_theme_beyond_the_curated_set_works() {
+        let mut state = CleanSysGui::new();
+        let pip = cleansys_core::theme_index_by_name("Pip Boy");
+        assert!(pip >= cleansys_core::CURATED_THEME_COUNT);
+        let _ = update(&mut state, Message::ThemeChanged(pip));
+        assert!(!state.follow_system);
+        assert_eq!(state.theme_index, pip);
+        let _ = crate::theme::iced_theme_for(state.theme_index);
+    }
+
+    #[test]
     fn theme_changed_to_system_follows_and_picking_preset_stops() {
         let mut state = CleanSysGui::new();
         let _ = update(
             &mut state,
-            Message::ThemeChanged(cleansys_core::THEME_COUNT),
+            Message::ThemeChanged(cleansys_core::theme_count()),
         );
         assert!(state.follow_system);
-        assert!(state.theme_index < cleansys_core::THEME_COUNT);
+        assert!(state.theme_index < cleansys_core::theme_count());
         let nord = cleansys_core::theme_index_by_name("Nord");
         let _ = update(&mut state, Message::ThemeChanged(nord));
         assert!(!state.follow_system);

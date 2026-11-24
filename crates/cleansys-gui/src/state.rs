@@ -61,7 +61,7 @@ pub struct CleanSysGui {
     pub active_tab: usize,
     /// `Some(system)` while an "All" menu entry is open (then `active_tab` is ignored).
     pub active_all: Option<bool>,
-    /// Index of the currently selected UI theme (see `cleansys_core::THEME_NAMES`).
+    /// Index of the currently selected UI theme (see `cleansys_core::theme_names`).
     pub theme_index: usize,
     /// Follow the OS light/dark setting (`theme_index` is then derived, not chosen).
     pub follow_system: bool,
@@ -454,7 +454,7 @@ impl CleanSysGui {
 
     /// The display name of the currently active theme.
     pub fn current_theme_name(&self) -> &'static str {
-        cleansys_core::THEME_NAMES
+        cleansys_core::theme_names()
             .get(self.theme_index)
             .copied()
             .unwrap_or("Default")
@@ -675,7 +675,7 @@ mod tests {
     #[test]
     fn theme_index_defaults_in_range() {
         let state = CleanSysGui::new();
-        assert!(state.theme_index < cleansys_core::THEME_COUNT);
+        assert!(state.theme_index < cleansys_core::theme_count());
     }
 
     #[test]
@@ -695,7 +695,7 @@ mod tests {
     #[test]
     fn colors_does_not_panic_for_any_theme() {
         let mut state = CleanSysGui::new();
-        for i in 0..cleansys_core::THEME_COUNT {
+        for i in 0..cleansys_core::theme_count() {
             state.theme_index = i;
             let _ = state.colors();
             let _ = state.iced_theme();

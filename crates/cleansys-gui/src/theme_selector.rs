@@ -24,17 +24,17 @@ impl std::fmt::Display for ThemeChoice {
 /// All available themes as [`ThemeChoice`] values, derived from the canonical
 /// core definitions.
 pub fn all_themes() -> Vec<ThemeChoice> {
-    cleansys_core::THEME_NAMES
+    cleansys_core::theme_names()
         .iter()
         .enumerate()
         .map(|(i, name)| ThemeChoice { index: i, name })
         .collect()
 }
 
-/// [`all_themes`] preceded by a "System" entry (index [`cleansys_core::THEME_COUNT`]).
+/// [`all_themes`] preceded by a "System" entry (index [`cleansys_core::theme_count`]).
 pub fn theme_choices() -> Vec<ThemeChoice> {
     let mut v = vec![ThemeChoice {
-        index: cleansys_core::THEME_COUNT,
+        index: cleansys_core::theme_count(),
         name: cleansys_core::SYSTEM_THEME_NAME,
     }];
     v.extend(all_themes());
@@ -73,14 +73,25 @@ mod tests {
 
     #[test]
     fn all_themes_matches_core_count() {
-        assert_eq!(all_themes().len(), cleansys_core::THEME_COUNT);
+        assert_eq!(all_themes().len(), cleansys_core::theme_count());
+    }
+
+    #[test]
+    fn the_selector_lists_the_extra_themes_too() {
+        let all = all_themes();
+        assert!(all.len() > cleansys_core::CURATED_THEME_COUNT);
+        let pip = all
+            .iter()
+            .find(|c| c.name == "Pip Boy")
+            .expect("Pip Boy listed");
+        assert_eq!(pip.index, cleansys_core::theme_index_by_name("Pip Boy"));
     }
 
     #[test]
     fn theme_choices_lead_with_system() {
         let c = theme_choices();
-        assert_eq!(c.len(), cleansys_core::THEME_COUNT + 1);
-        assert_eq!(c[0].index, cleansys_core::THEME_COUNT);
+        assert_eq!(c.len(), cleansys_core::theme_count() + 1);
+        assert_eq!(c[0].index, cleansys_core::theme_count());
         assert_eq!(c[0].name, "System");
         assert_eq!(c[1].index, 0);
     }

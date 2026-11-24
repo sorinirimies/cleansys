@@ -83,7 +83,7 @@ impl ThemeColors {
 /// each one needing an explicit `.style()` override.
 pub fn iced_theme_for(index: usize) -> Theme {
     let core = cleansys_core::theme_by_index(index);
-    let name = cleansys_core::THEME_NAMES
+    let name = cleansys_core::theme_names()
         .get(index)
         .copied()
         .unwrap_or("Default")
@@ -107,7 +107,7 @@ mod tests {
 
     #[test]
     fn from_core_produces_valid_colors() {
-        for i in 0..cleansys_core::THEME_COUNT {
+        for i in 0..cleansys_core::theme_count() {
             let core = cleansys_core::theme_by_index(i);
             let colors = ThemeColors::from_core(&core);
             // Just make sure nothing panics and alpha stays sane.
@@ -118,7 +118,7 @@ mod tests {
 
     #[test]
     fn iced_theme_for_all_indices_does_not_panic() {
-        for i in 0..cleansys_core::THEME_COUNT {
+        for i in 0..cleansys_core::theme_count() {
             let _ = iced_theme_for(i);
         }
     }

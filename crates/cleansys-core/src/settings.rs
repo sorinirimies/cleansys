@@ -12,7 +12,7 @@ use std::path::{Path, PathBuf};
 /// Persisted user preferences.
 #[derive(Debug, Clone, Default, Serialize, Deserialize)]
 pub struct Settings {
-    /// Name of the selected theme (see [`crate::theme::THEME_NAMES`]).
+    /// Name of the selected theme (see [`crate::theme::theme_names`]).
     /// Stored by name (not index) so preset reordering across releases
     /// doesn't silently change a user's saved theme.
     #[serde(default)]
@@ -231,7 +231,7 @@ mod tests {
             ..Default::default()
         };
         assert!(s.follow_system_theme());
-        assert!(s.theme_index() < crate::theme::THEME_COUNT);
+        assert!(s.theme_index() < crate::theme::theme_count());
         assert!(!Settings::default().follow_system_theme());
     }
 
@@ -253,6 +253,17 @@ mod tests {
             s.theme_index(),
             crate::theme::theme_index_by_name("Dracula")
         );
+    }
+
+    #[test]
+    fn themes_beyond_the_curated_set_resolve_by_name_too() {
+        // "Pip Boy" exists only in the generated (tui-nuances) part of the catalogue.
+        let s = Settings {
+            theme_name: Some("Pip Boy".to_string()),
+            ..Default::default()
+        };
+        assert!(s.theme_index() >= crate::theme::CURATED_THEME_COUNT);
+        assert_eq!(crate::theme::theme_names()[s.theme_index()], "Pip Boy");
     }
 
     #[test]

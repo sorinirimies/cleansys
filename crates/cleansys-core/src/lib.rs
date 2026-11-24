@@ -64,7 +64,10 @@ pub use theme::system::{
     SYSTEM_THEME_NAME, current_system_theme_index, detect_system_dark, is_system_name,
     system_theme_index,
 };
-pub use theme::{AppTheme, Rgb, THEME_COUNT, THEME_NAMES, theme_by_index, theme_index_by_name};
+pub use theme::{
+    AppTheme, CURATED_THEME_COUNT, CURATED_THEME_NAMES, Rgb, theme_by_index, theme_count,
+    theme_index_by_name, theme_names,
+};
 pub use utils::{
     check_root, confirm, format_size, get_size, print_error, print_header, remove_dir_all_parallel,
 };

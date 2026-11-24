@@ -3,9 +3,9 @@
 /// Persisted `theme_name` meaning "follow the operating system's light/dark setting".
 pub const SYSTEM_THEME_NAME: &str = "System";
 
-/// Preset used while the system is in dark mode (index into `THEME_NAMES`).
+/// Preset used while the system is in dark mode (index into [`super::theme_names`]).
 pub const SYSTEM_DARK_INDEX: usize = 0; // "Default"
-/// Preset used while the system is in light mode (index into `THEME_NAMES`).
+/// Preset used while the system is in light mode (index into [`super::theme_names`]).
 pub const SYSTEM_LIGHT_INDEX: usize = 1; // "Default Light"
 
 /// Whether `name` is the "follow system" pseudo-theme (case-insensitive).
@@ -103,7 +103,11 @@ mod tests {
     fn system_name_is_case_insensitive_and_not_a_preset() {
         assert!(is_system_name("System") && is_system_name("system"));
         assert!(!is_system_name("Nord"));
-        assert!(!super::super::THEME_NAMES.iter().any(|n| is_system_name(n)));
+        assert!(
+            !super::super::theme_names()
+                .iter()
+                .any(|n| is_system_name(n))
+        );
     }
 
     #[test]

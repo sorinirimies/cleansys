@@ -138,7 +138,7 @@ pub struct App {
     pub show_help: bool,
     /// First visible line of the help screen.
     pub help_scroll: u16,
-    /// Index of the active preset in [`cleansys_core::THEME_NAMES`] (derived while following the system).
+    /// Index of the active theme in [`crate::theme::entries`] (derived while following the system).
     pub theme_index: usize,
     /// Follow the OS light/dark setting instead of a fixed preset.
     pub follow_system: bool,

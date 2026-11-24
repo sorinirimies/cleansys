@@ -1,10 +1,16 @@
-//! All 43 preset themes — the **single source of truth** for every colour
-//! used by both the GUI and TUI front-ends.
+//! All preset themes — the **single source of truth** for every colour used by the
+//! GUI, web UI and TUI.
+//!
+//! Two parts share one index space: the 43 hand-tuned *curated* themes (a table, below)
+//! keep indices `0..=42` forever, then the *extra* themes (`extra.rs`, generated from the
+//! `tui-nuances` palettes by a test in `cleansys-tui`) follow, so a theme from either
+//! source is selectable in every front-end.
 //!
 //! Each public function returns a fully-populated [`AppTheme`] with concrete
 //! RGB values. The [`theme_by_index`] dispatcher maps a `0..=42` index to the
 //! matching constructor; out-of-range indices silently fall back to `default()`.
 
+use super::extra::EXTRA;
 use super::types::{AppTheme, Rgb};
 
 // ── Theme catalogue ───────────────────────────────────────────────────────────
@@ -19,16 +25,15 @@ use super::types::{AppTheme, Rgb};
 macro_rules! themes {
     ($( $name:literal => $fn:ident, $dark:literal,
         [$($c:literal),* $(,)?], [$($g:literal),* $(,)?]; )*) => {
-        /// Ordered theme names. The position in this slice **is** the canonical index.
-        pub const THEME_NAMES: &[&str] = &[$($name),*];
+        /// The hand-tuned themes, in canonical order (indices `0..CURATED_THEME_COUNT`).
+        pub const CURATED_THEME_NAMES: &[&str] = &[$($name),*];
 
-        /// Total number of themes.
-        pub const THEME_COUNT: usize = THEME_NAMES.len();
+        /// Number of hand-tuned themes; the generated extras start at this index.
+        pub const CURATED_THEME_COUNT: usize = CURATED_THEME_NAMES.len();
 
-        /// Get a theme by index (0-based). Returns `default()` for out-of-range.
-        pub fn theme_by_index(index: usize) -> AppTheme {
+        fn curated_theme_by_index(index: usize) -> Option<AppTheme> {
             const CTORS: &[fn() -> AppTheme] = &[$($fn),*];
-            CTORS.get(index).map_or_else(default, |f| f())
+            CTORS.get(index).map(|f| f())
         }
 
         $(
@@ -63,10 +68,39 @@ fn from_hex(is_dark: bool, c: [u32; 15], graph: [u32; 8]) -> AppTheme {
     }
 }
 
+/// Every theme name: the curated ones, then the generated extras. The position in this
+/// slice **is** the canonical index.
+pub fn theme_names() -> &'static [&'static str] {
+    static NAMES: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
+    NAMES.get_or_init(|| {
+        CURATED_THEME_NAMES
+            .iter()
+            .copied()
+            .chain(EXTRA.iter().map(|e| e.name))
+            .collect()
+    })
+}
+
+/// Total number of themes (curated + extra).
+pub fn theme_count() -> usize {
+    theme_names().len()
+}
+
+/// Get a theme by index (0-based). Returns `default()` for out-of-range.
+pub fn theme_by_index(index: usize) -> AppTheme {
+    if let Some(t) = curated_theme_by_index(index) {
+        return t;
+    }
+    index
+        .checked_sub(CURATED_THEME_COUNT)
+        .and_then(|i| EXTRA.get(i))
+        .map_or_else(default, |e| from_hex(e.dark, e.colors, e.graph))
+}
+
 /// Find theme index by name (case-insensitive ASCII). Returns `0` (Default) if
 /// no match is found.
 pub fn theme_index_by_name(name: &str) -> usize {
-    THEME_NAMES
+    theme_names()
         .iter()
         .position(|n| n.eq_ignore_ascii_case(name))
         .unwrap_or(0)
@@ -210,15 +244,20 @@ mod tests {
 
     #[test]
     fn theme_count_matches_names() {
-        assert_eq!(THEME_NAMES.len(), THEME_COUNT);
+        assert_eq!(theme_names().len(), theme_count());
     }
 
     #[test]
     fn all_themes_resolve() {
-        for i in 0..THEME_COUNT {
+        for i in 0..theme_count() {
             let t = theme_by_index(i);
-            let has_colour = t.text_primary.r > 0 || t.text_primary.g > 0 || t.text_primary.b > 0;
-            assert!(has_colour, "theme index {i} has zero text_primary");
+            // Light themes have black text, so compare with the background instead.
+            assert_ne!(
+                t.text_primary,
+                t.background,
+                "theme index {i} ({}) has invisible text",
+                theme_names()[i]
+            );
         }
     }
 
@@ -263,16 +302,28 @@ mod tests {
     }
 
     #[test]
+    fn extras_follow_the_curated_themes_and_never_shadow_them() {
+        assert_eq!(theme_names()[..CURATED_THEME_COUNT], *CURATED_THEME_NAMES);
+        for (i, e) in EXTRA.iter().enumerate() {
+            let at = CURATED_THEME_COUNT + i;
+            assert_eq!(theme_names()[at], e.name);
+            let t = theme_by_index(at);
+            assert_eq!(t.is_dark, e.dark, "{}", e.name);
+            assert_ne!(t.background, t.text_primary, "{} is unreadable", e.name);
+        }
+    }
+
+    #[test]
     fn table_is_consistent() {
-        assert_eq!(THEME_COUNT, THEME_NAMES.len());
+        assert_eq!(theme_count(), theme_names().len());
         let mut seen = std::collections::HashSet::new();
-        for (i, name) in THEME_NAMES.iter().enumerate() {
+        for (i, name) in theme_names().iter().enumerate() {
             assert!(seen.insert(name.to_ascii_lowercase()), "duplicate {name}");
             assert_eq!(theme_index_by_name(name), i);
         }
         // Out of range falls back to the default theme.
         assert_eq!(
-            theme_by_index(THEME_COUNT).background,
+            theme_by_index(theme_count()).background,
             theme_by_index(0).background
         );
     }
