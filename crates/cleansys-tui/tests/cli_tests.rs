@@ -269,6 +269,7 @@ fn schedule_show_works_without_a_schedule() {
     cli(t.path()).args(["schedule", "show"]).assert().success();
 }
 
+#[cfg(target_os = "linux")]
 #[test]
 fn scanning_lists_switches_a_category_off_and_refuses_unknown_names() {
     let t = tempfile::tempdir().unwrap();
