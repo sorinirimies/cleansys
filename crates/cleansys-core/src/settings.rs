@@ -40,9 +40,19 @@ pub struct Settings {
     #[serde(default)]
     pub scan_threads: Option<usize>,
     /// Ids of cleaners the user opted out of scanning (and so out of showing a size).
-    /// Empty = everything is scanned.
+    /// A cleaner's own choice beats its category's, which beats the built-in default.
     #[serde(default)]
     pub disabled_cleaners: Vec<String>,
+    /// Ids of cleaners the user opted into scanning although their category is off.
+    #[serde(default)]
+    pub enabled_cleaners: Vec<String>,
+    /// Categories the user switched scanning off for.
+    #[serde(default)]
+    pub disabled_categories: Vec<String>,
+    /// Categories the user switched scanning on for although they start off
+    /// (see `scan_defaults.toml`).
+    #[serde(default)]
+    pub enabled_categories: Vec<String>,
     /// Offer a cleaner for every installed app's cache folder (`None` = default: on).
     /// Applies from the next start.
     #[serde(default)]
@@ -84,18 +94,64 @@ impl Settings {
         self.detect_app_caches.unwrap_or(true)
     }
 
-    /// Is this cleaner scanned (default: yes)?
-    pub fn scan_enabled(&self, id: &str) -> bool {
-        !self.disabled_cleaners.iter().any(|d| d == id)
+    /// Is this cleaner scanned? Its own choice wins, then its category's, then the
+    /// built-in default (`scan_defaults.toml`).
+    pub fn scan_enabled(&self, id: &str, category: &str) -> bool {
+        if contains(&self.disabled_cleaners, id) {
+            false
+        } else if contains(&self.enabled_cleaners, id) {
+            true
+        } else {
+            self.category_scan_enabled(category)
+        }
     }
 
-    /// Opt a cleaner in or out of scanning.
+    /// Is this category scanned unless a cleaner in it says otherwise?
+    pub fn category_scan_enabled(&self, category: &str) -> bool {
+        if contains(&self.disabled_categories, category) {
+            false
+        } else {
+            contains(&self.enabled_categories, category) || scan_on_by_default(category)
+        }
+    }
+
+    /// Ids of the loaded cleaners that scans leave out.
+    pub fn scan_off_ids(&self, categories: &[crate::CleanerCategory]) -> Vec<String> {
+        categories
+            .iter()
+            .flat_map(|c| c.items.iter().map(move |i| (c, i)))
+            .filter(|(c, i)| !self.scan_enabled(&i.id, &c.name))
+            .map(|(_, i)| i.id.clone())
+            .collect()
+    }
+
+    /// Opt one cleaner in or out of scanning, whatever its category does.
     pub fn set_scan_enabled(&mut self, id: &str, enabled: bool) {
         self.disabled_cleaners.retain(|d| d != id);
-        if !enabled {
-            self.disabled_cleaners.push(id.to_string());
-            self.disabled_cleaners.sort();
-        }
+        self.enabled_cleaners.retain(|d| d != id);
+        let list = if enabled {
+            &mut self.enabled_cleaners
+        } else {
+            &mut self.disabled_cleaners
+        };
+        list.push(id.to_string());
+        list.sort();
+    }
+
+    /// Switch a whole category on or off for scanning. The choices made for single
+    /// cleaners in it (`ids`) are dropped, so the category decides for all of them.
+    pub fn set_category_scan(&mut self, category: &str, enabled: bool, ids: &[String]) {
+        self.disabled_categories.retain(|c| c != category);
+        self.enabled_categories.retain(|c| c != category);
+        let list = if enabled {
+            &mut self.enabled_categories
+        } else {
+            &mut self.disabled_categories
+        };
+        list.push(category.to_string());
+        list.sort();
+        self.disabled_cleaners.retain(|d| !ids.contains(d));
+        self.enabled_cleaners.retain(|d| !ids.contains(d));
     }
 
     /// The saved GUI window size, if it looks sane (a corrupt or absurd value is ignored).
@@ -115,6 +171,29 @@ impl Settings {
             .iter()
             .any(|k| k == &Self::selection_key(category_name, item_name))
     }
+}
+
+fn contains(list: &[String], item: &str) -> bool {
+    list.iter().any(|x| x == item)
+}
+
+/// Does a category scan out of the box? (`scan_defaults.toml`; unlisted = yes.)
+pub fn scan_on_by_default(category: &str) -> bool {
+    !off_by_default().iter().any(|c| c == category)
+}
+
+/// The categories that start with scanning off.
+pub fn off_by_default() -> &'static [String] {
+    #[derive(Deserialize)]
+    struct Defaults {
+        off_by_default: Vec<String>,
+    }
+    static OFF: std::sync::OnceLock<Vec<String>> = std::sync::OnceLock::new();
+    OFF.get_or_init(|| {
+        toml::from_str::<Defaults>(include_str!("scan_defaults.toml"))
+            .map(|d| d.off_by_default)
+            .unwrap_or_default()
+    })
 }
 
 /// Returns the settings directory (`~/.config/cleansys/` or equivalent).
@@ -203,14 +282,74 @@ mod tests {
     #[test]
     fn scan_opt_out_round_trips_and_defaults_to_on() {
         let mut s = Settings::default();
-        assert!(s.scan_enabled("proj-rust"));
-        s.set_scan_enabled("proj-rust", false);
-        s.set_scan_enabled("proj-rust", false);
-        assert!(!s.scan_enabled("proj-rust") && s.disabled_cleaners.len() == 1);
+        assert!(s.scan_enabled("a", "Everyday Junk"));
+        s.set_scan_enabled("a", false);
+        s.set_scan_enabled("a", false);
+        assert!(!s.scan_enabled("a", "Everyday Junk") && s.disabled_cleaners.len() == 1);
         let back: Settings = serde_json::from_str(&serde_json::to_string(&s).unwrap()).unwrap();
-        assert!(!back.scan_enabled("proj-rust") && back.scan_enabled("other"));
-        s.set_scan_enabled("proj-rust", true);
-        assert!(s.scan_enabled("proj-rust") && s.disabled_cleaners.is_empty());
+        assert!(
+            !back.scan_enabled("a", "Everyday Junk") && back.scan_enabled("b", "Everyday Junk")
+        );
+        s.set_scan_enabled("a", true);
+        assert!(s.scan_enabled("a", "Everyday Junk") && s.disabled_cleaners.is_empty());
+    }
+
+    #[test]
+    fn slow_categories_start_off_and_unknown_ones_on() {
+        let s = Settings::default();
+        assert!(!s.category_scan_enabled("Project Build Artifacts"));
+        assert!(s.category_scan_enabled("Web Browsers"));
+        assert!(s.category_scan_enabled("My Own Category"));
+    }
+
+    #[test]
+    fn every_default_off_category_exists_in_the_catalog() {
+        let names: Vec<String> = crate::engine::registry::load_all_unfiltered(None)
+            .into_iter()
+            .map(|c| c.category)
+            .collect();
+        for c in off_by_default() {
+            assert!(
+                names.contains(c),
+                "unknown category in scan_defaults.toml: {c}"
+            );
+        }
+    }
+
+    #[test]
+    fn precedence_is_cleaner_then_category_then_default() {
+        let cat = "Project Build Artifacts";
+        let mut s = Settings::default();
+        s.set_category_scan(cat, true, &[]);
+        assert!(s.scan_enabled("x", cat));
+        s.set_scan_enabled("x", false);
+        assert!(!s.scan_enabled("x", cat) && s.scan_enabled("y", cat));
+        // switching the category again drops the per-cleaner choice
+        s.set_category_scan(cat, false, &["x".to_string()]);
+        assert!(!s.scan_enabled("x", cat) && s.disabled_cleaners.is_empty());
+        s.set_scan_enabled("y", true);
+        assert!(s.scan_enabled("y", cat) && !s.scan_enabled("z", cat));
+        // and a category switched on again re-enables a default-on one after off
+        s.set_category_scan("Web Browsers", false, &[]);
+        assert!(!s.scan_enabled("w", "Web Browsers"));
+        s.set_category_scan("Web Browsers", true, &[]);
+        assert!(s.scan_enabled("w", "Web Browsers"));
+    }
+
+    #[test]
+    fn scan_off_ids_lists_loaded_cleaners_left_out() {
+        let cats = crate::load_categories();
+        let mut s = Settings::default();
+        let off = s.scan_off_ids(&cats);
+        for c in &cats {
+            for i in &c.items {
+                assert_eq!(off.contains(&i.id), !scan_on_by_default(&c.name));
+            }
+        }
+        for c in &cats {
+            s.set_category_scan(&c.name, true, &[]);
+        }
+        assert!(s.scan_off_ids(&cats).is_empty());
     }
 
     #[test]
@@ -306,8 +445,8 @@ mod tests {
             window_size: Some((900, 700)),
             log_height: Some(240),
             scan_threads: None,
-            disabled_cleaners: vec![],
             detect_app_caches: Some(false),
+            ..Default::default()
         };
         save_to(&path, &settings).unwrap();
 

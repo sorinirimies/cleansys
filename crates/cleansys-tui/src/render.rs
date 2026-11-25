@@ -792,7 +792,7 @@ fn scan_line(app: &App) -> Line<'static> {
         let off = cleansys_core::scan_off_count(&app.categories, &app.disabled_cleaners);
         if off > 0 {
             spans.push(Span::styled(
-                format!(" · {off} scan off (x)"),
+                format!(" · {off} scan off (x/X)"),
                 Style::default().fg(crate::theme::th().warning),
             ));
         }
@@ -973,6 +973,9 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
             match app.board.scope_bytes_when_done(&app.categories, *scope) {
                 Some(b) if b > 0 => Span::styled(format_size(b), size_style(b)),
                 Some(_) => Span::styled("—", Style::default().fg(crate::theme::th().muted)),
+                None if scope_scan_off(app, *scope) => {
+                    Span::styled("scan off", Style::default().fg(crate::theme::th().warning))
+                }
                 None if app.board.is_scanning() => spinner_spans(app)
                     .into_iter()
                     .next()
@@ -998,6 +1001,15 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
             .title_bottom(scan_line(app).right_aligned()),
     );
     f.render_widget(list, area);
+}
+
+/// Is every cleaner of this single category switched off for scanning?
+fn scope_scan_off(app: &App, scope: cleansys_core::Scope) -> bool {
+    let cleansys_core::Scope::Category(ci) = scope else {
+        return false;
+    };
+    let items = &app.categories[ci].items;
+    !items.is_empty() && items.iter().all(|i| app.disabled_cleaners.contains(&i.id))
 }
 
 /// Per-path rows shown under an expanded cleaner (`☑ label  path  size`).
@@ -1608,6 +1620,7 @@ fn render_action_bar(f: &mut Frame, app: &App, area: Rect) {
         ("/", "search", t.accent),
         ("S", "scan", t.accent),
         ("x", if long { "scan on/off" } else { "off" }, t.accent),
+        ("X", if long { "category scan" } else { "" }, t.accent),
         ("C", if long { "schedule" } else { "" }, t.accent),
         ("D", if long { "storage chart" } else { "" }, t.accent),
         ("U", if long { "disk usage" } else { "" }, t.accent),
@@ -1875,7 +1888,8 @@ fn render_help(f: &mut Frame, area: Rect, scroll: u16) -> u16 {
         l("  Progress, the outcome and the activity log appear under the list;"),
         l("  q / Esc cancels a running clean, Esc dismisses the summary, L toggles the log"),
         l("  S: Scan sizes (R too)   x: scan on/off   C: Schedule automatic cleaning"),
-        l("  s: Scan on/off for the highlighted cleaner (saved; a clean never waits for the scan)"),
+        l("  x: Scan on/off for the highlighted cleaner   X: for its whole category (saved;"),
+        l("     slow categories start off, a clean never waits for the scan)"),
         l("  D: Dashboard (disk, space by category/risk)   v: Charts for the highlighted cleaner"),
         l("  U: Disk usage — where did my disk go? (↑/↓, Enter opens a folder, ← goes up)"),
         l("  P: Report of the last clean (opens automatically when a clean finishes)"),

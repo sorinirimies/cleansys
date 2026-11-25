@@ -348,6 +348,46 @@ impl App {
         self.scan_rx = Some(rx);
     }
 
+    /// The category the highlighted cleaner belongs to (or the open category).
+    fn current_category(&self) -> Option<usize> {
+        match self.scope() {
+            Some(Scope::Category(ci)) => Some(ci),
+            _ => self.current_item().map(|(ci, _)| ci),
+        }
+    }
+
+    /// Switch scanning on or off for the whole category of the highlighted cleaner
+    /// (off when any of its cleaners is scanned), remember it and re-measure.
+    pub fn toggle_scan_category(&mut self) {
+        let Some(ci) = self.current_category() else {
+            return;
+        };
+        let name = self.categories[ci].name.clone();
+        let ids: Vec<String> = self.categories[ci]
+            .items
+            .iter()
+            .map(|i| i.id.clone())
+            .collect();
+        let enable = ids.iter().all(|id| self.disabled_cleaners.contains(id));
+        self.disabled_cleaners.retain(|d| !ids.contains(d));
+        if !enable {
+            self.disabled_cleaners.extend(ids.iter().cloned());
+        }
+        if self.persist
+            && let Err(e) =
+                cleansys_core::update_settings(|s| s.set_category_scan(&name, enable, &ids))
+        {
+            self.log(format!("✗ Could not save preferences: {e}"));
+        }
+        self.set_notice(format!(
+            "{name}: scan {}",
+            if enable { "on" } else { "off" }
+        ));
+        if !self.is_running {
+            self.start_scan();
+        }
+    }
+
     /// Stop the running scan (if any) and keep what it measured so far, so a clean can
     /// start right away without waiting for the slow cleaners.
     pub fn stop_scan(&mut self) {
@@ -636,7 +676,7 @@ impl App {
         });
         self.hide_empty = s.hide_empty();
         self.confirmation_mode = s.confirm_before_run();
-        self.disabled_cleaners.clone_from(&s.disabled_cleaners);
+        self.disabled_cleaners = s.scan_off_ids(&self.categories);
         self.detect_apps = s.detect_app_caches();
     }
 
@@ -2009,6 +2049,12 @@ impl App {
             (KeyCode::Char('x'), _) => {
                 if !self.show_help && !self.is_running {
                     self.toggle_scan_enabled();
+                }
+            }
+            // Opt the whole category of the highlighted cleaner in / out of scanning
+            (KeyCode::Char('X'), _) => {
+                if !self.show_help && !self.is_running {
+                    self.toggle_scan_category();
                 }
             }
             // Scan: measure everything (`R` is the old key, kept as an alias)

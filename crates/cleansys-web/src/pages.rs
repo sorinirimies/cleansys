@@ -140,6 +140,17 @@ async fn home(cx: &Cx) -> Result<impl View> {
                             <h2>(title)</h2>
                             <div class="sub">(subtitle)</div>
                         </div>
+                        if !searching && active < snap.categories.len() {
+                            <form class="scanform catscan" method="post" action="/toggle-scan-category">
+                                <input type="hidden" name="back" value=(back.clone())>
+                                <input type="hidden" name="cat" value=(active.to_string())>
+                                <label class="scantoggle" title="Include every cleaner of this category when scanning for sizes">
+                                    <input type="checkbox" class="scan-switch" role="switch" checked=(!snap.categories[active].scan_off) onchange="this.form.submit()" aria-label="Scan this category">
+                                    " Scan category"
+                                </label>
+                                <noscript><button type="submit">"Toggle scan"</button></noscript>
+                            </form>
+                        }
                         if !searching {
                             <form method="post" action="/select">
                                 <input type="hidden" name="back" value=(back.clone())>
@@ -206,6 +217,18 @@ async fn toggle(cx: &Cx, Form(f): Form<ToggleForm>) -> Result<SeeOther> {
 #[route(POST "/toggle-scan")]
 async fn toggle_scan(cx: &Cx, Form(f): Form<ToggleForm>) -> Result<SeeOther> {
     shared(cx).toggle_scan(&f.id);
+    Ok(see_other(safe_back(f.back.as_deref().unwrap_or("/"))))
+}
+
+#[derive(Deserialize)]
+struct CatScanForm {
+    cat: usize,
+    back: Option<String>,
+}
+
+#[route(POST "/toggle-scan-category")]
+async fn toggle_scan_category(cx: &Cx, Form(f): Form<CatScanForm>) -> Result<SeeOther> {
+    shared(cx).toggle_scan_category(f.cat);
     Ok(see_other(safe_back(f.back.as_deref().unwrap_or("/"))))
 }
 

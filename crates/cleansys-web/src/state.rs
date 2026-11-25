@@ -84,6 +84,8 @@ pub struct CatView {
     pub bytes: Option<u64>,
     pub ticked: usize,
     pub visible: bool,
+    /// Every cleaner in it is opted out of scanning.
+    pub scan_off: bool,
 }
 
 impl Snapshot {
@@ -202,9 +204,12 @@ impl Shared {
     /// Load the real cleaners (restoring nothing: the web UI starts unticked).
     pub fn load() -> Self {
         let s = Self::new(cleansys_core::load_categories());
-        s.lock().disabled = cleansys_core::load_settings()
-            .unwrap_or_default()
-            .disabled_cleaners;
+        {
+            let mut g = s.lock();
+            g.disabled = cleansys_core::load_settings()
+                .unwrap_or_default()
+                .scan_off_ids(&g.categories);
+        }
         s
     }
 
@@ -227,6 +232,29 @@ impl Shared {
         }
         if cfg!(not(test)) {
             let _ = cleansys_core::update_settings(|s| s.set_scan_enabled(id, enable));
+        }
+        if g.run.phase != Phase::Running {
+            start_scan_locked(&mut g);
+        }
+        true
+    }
+
+    /// Opt a whole category in / out of scanning (off when any cleaner in it is scanned),
+    /// remember it and measure again. `false` = unknown category.
+    pub fn toggle_scan_category(&self, ci: usize) -> bool {
+        let mut g = self.lock();
+        let Some(cat) = g.categories.get(ci) else {
+            return false;
+        };
+        let name = cat.name.clone();
+        let ids: Vec<String> = cat.items.iter().map(|i| i.id.clone()).collect();
+        let enable = ids.iter().all(|id| g.disabled.contains(id));
+        g.disabled.retain(|d| !ids.contains(d));
+        if !enable {
+            g.disabled.extend(ids.iter().cloned());
+        }
+        if cfg!(not(test)) {
+            let _ = cleansys_core::update_settings(|s| s.set_category_scan(&name, enable, &ids));
         }
         if g.run.phase != Phase::Running {
             start_scan_locked(&mut g);
@@ -457,6 +485,7 @@ impl Shared {
                 bytes: g.board.category_bytes_when_done(ci),
                 ticked: c.items.iter().filter(|i| i.selected).count(),
                 visible: true,
+                scan_off: !c.items.is_empty() && c.items.iter().all(|i| g.disabled.contains(&i.id)),
             });
             for (ii, it) in c.items.iter().enumerate() {
                 items.push(ItemView {
@@ -506,6 +535,7 @@ impl Shared {
                         .map(|c| g.categories[*c].items.iter().filter(|i| i.selected).count())
                         .sum(),
                     visible: true,
+                    scan_off: false,
                 })
             })
             .collect();
@@ -935,6 +965,25 @@ mod tests {
         assert!(s.toggle_scan("b"));
         assert!(!s.snapshot().items[1].scan_off);
         assert_eq!(s.snapshot().scan_total, 2);
+    }
+
+    #[test]
+    fn category_scan_toggle_switches_all_its_cleaners() {
+        let s = Shared::new(vec![CleanerCategory {
+            name: "User Land Cleaners".into(),
+            description: "u".into(),
+            items: vec![
+                item("a", 10, false, Risk::Safe),
+                item("b", 20, false, Risk::Safe),
+            ],
+        }]);
+        assert!(!s.toggle_scan_category(9));
+        assert!(s.toggle_scan_category(0));
+        let snap = s.snapshot();
+        assert!(snap.categories[0].scan_off && snap.scan_off == 2 && snap.scan_total == 0);
+        assert!(s.toggle_scan_category(0));
+        let snap = s.snapshot();
+        assert!(!snap.categories[0].scan_off && snap.scan_off == 0 && snap.scan_total == 2);
     }
 
     #[test]

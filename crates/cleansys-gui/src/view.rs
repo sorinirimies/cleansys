@@ -474,7 +474,25 @@ fn category_header<'a>(
     let bulk: Element<'a, Message> = if searching {
         Space::new().into()
     } else {
-        row![
+        let mut bulk = row![];
+        if state.active_all.is_none() && cat_idx < state.categories.len() {
+            let scan_on = state.categories[cat_idx]
+                .items
+                .iter()
+                .any(|i| !state.disabled_cleaners.contains(&i.id));
+            bulk = bulk.push(tooltip(
+                iced::widget::toggler(scan_on)
+                    .label("Scan")
+                    .size(14)
+                    .text_size(12)
+                    .on_toggle(move |_| Message::ToggleCategoryScan(cat_idx)),
+                container(text("Include every cleaner of this category when scanning").size(12))
+                    .padding(6)
+                    .style(container::rounded_box),
+                tooltip::Position::Bottom,
+            ));
+        }
+        bulk.push(
             button(text("All").size(12))
                 .padding([4, 10])
                 .style(action_button_style(c))
@@ -482,6 +500,8 @@ fn category_header<'a>(
                     Some(system) => Message::SelectAllScope(system, true),
                     None => Message::SelectAllCategory(cat_idx),
                 }),
+        )
+        .push(
             button(text("None").size(12))
                 .padding([4, 10])
                 .style(action_button_style(c))
@@ -489,8 +509,9 @@ fn category_header<'a>(
                     Some(system) => Message::SelectAllScope(system, false),
                     None => Message::DeselectAllCategory(cat_idx),
                 }),
-        ]
+        )
         .spacing(6)
+        .align_y(Alignment::Center)
         .into()
     };
 
@@ -2403,6 +2424,7 @@ mod tests {
     #[test]
     fn view_does_not_panic_when_cleaners_have_scanning_off() {
         let mut state = CleanSysGui::new();
+        state.disabled_cleaners.clear(); // slow categories start off; count only this one
         let id = state.categories[0].items[0].id.clone();
         state.disabled_cleaners.push(id);
         state

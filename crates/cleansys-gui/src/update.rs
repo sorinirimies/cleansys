@@ -361,9 +361,27 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
             let enable = state.disabled_cleaners.contains(&id);
             state.disabled_cleaners.retain(|d| d != &id);
             if !enable {
-                state.disabled_cleaners.push(id);
+                state.disabled_cleaners.push(id.clone());
             }
-            state.save_theme();
+            state.save_scan_pref(|s| s.set_scan_enabled(&id, enable));
+            if state.is_running {
+                Task::none() // measured again when the clean ends
+            } else {
+                start_scan(state)
+            }
+        }
+        Message::ToggleCategoryScan(cat_idx) => {
+            let Some(cat) = state.categories.get(cat_idx) else {
+                return Task::none();
+            };
+            let name = cat.name.clone();
+            let ids: Vec<String> = cat.items.iter().map(|i| i.id.clone()).collect();
+            let enable = ids.iter().all(|id| state.disabled_cleaners.contains(id));
+            state.disabled_cleaners.retain(|d| !ids.contains(d));
+            if !enable {
+                state.disabled_cleaners.extend(ids.iter().cloned());
+            }
+            state.save_scan_pref(|s| s.set_category_scan(&name, enable, &ids));
             if state.is_running {
                 Task::none() // measured again when the clean ends
             } else {
@@ -1837,6 +1855,21 @@ mod tests {
         let _ = update(&mut state, Message::ToggleScan(0, 1));
         assert!(state.disabled_cleaners.is_empty() && !state.board.is_off(0, 1));
         assert_eq!(state.board.total, 2);
+    }
+
+    #[test]
+    fn category_scan_toggle_switches_every_cleaner_of_the_category() {
+        let mut state = tiny_state();
+        let _ = update(&mut state, Message::ToggleCategoryScan(0));
+        assert_eq!(
+            state.disabled_cleaners.len(),
+            state.categories[0].items.len()
+        );
+        assert_eq!(state.board.total, 0);
+        let _ = update(&mut state, Message::ToggleCategoryScan(0));
+        assert!(state.disabled_cleaners.is_empty());
+        assert_eq!(state.board.total, 2);
+        let _ = update(&mut state, Message::ToggleCategoryScan(99));
     }
 
     #[test]

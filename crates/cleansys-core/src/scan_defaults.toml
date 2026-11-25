@@ -1,0 +1,15 @@
+# Categories whose cleaners are NOT scanned until the user opts in.
+#
+# Everything not listed here (including a user's own categories) is scanned by default.
+# These are the slow or niche ones: they walk big trees (project build folders, large and
+# old files) or probe many installed apps, so a first scan stays quick on a large disk.
+# The user switches any category, or any single cleaner, on from the UI.
+off_by_default = [
+    "Project Build Artifacts",
+    "Large & Old Files",
+    "Applications",
+    "Games",
+    "Maintenance & Tuning",
+    "Privacy Traces",
+    "Installers & Backups",
+]

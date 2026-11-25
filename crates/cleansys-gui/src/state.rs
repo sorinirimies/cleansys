@@ -166,6 +166,7 @@ impl CleanSysGui {
         let mut categories = cleansys_core::load_categories();
         cleansys_core::scope::set_all_selected(&mut categories, false, true);
         let board = cleansys_core::ScanBoard::new(&categories);
+        let disabled_cleaners = settings.scan_off_ids(&categories);
         Self {
             categories,
             logs: Vec::new(),
@@ -192,7 +193,7 @@ impl CleanSysGui {
             board,
             scan_handle: None,
             scan_gen: 0,
-            disabled_cleaners: settings.disabled_cleaners.clone(),
+            disabled_cleaners,
             hide_empty: settings.hide_empty(),
             detect_apps: settings.detect_app_caches(),
             confirm_before_run: settings.confirm_before_run(),
@@ -475,6 +476,11 @@ impl CleanSysGui {
             })
             .collect();
 
+        let base = if cfg!(test) {
+            cleansys_core::Settings::default()
+        } else {
+            cleansys_core::load_settings().unwrap_or_default()
+        };
         cleansys_core::Settings {
             theme_name: Some(if self.follow_system {
                 cleansys_core::SYSTEM_THEME_NAME.to_string()
@@ -486,12 +492,10 @@ impl CleanSysGui {
             confirm_before_run: Some(self.confirm_before_run),
             window_size: self.saved_window_size,
             log_height: Some(self.log_height.round() as u32),
-            // not edited in the GUI: keep whatever the user put in settings.json
-            scan_threads: cleansys_core::load_settings()
-                .ok()
-                .and_then(|s| s.scan_threads),
-            disabled_cleaners: self.disabled_cleaners.clone(),
+            // Not edited here (scan threads, the scan opt-in/out lists): keep what is in
+            // settings.json. The scan lists are written by `save_scan_pref`.
             detect_app_caches: Some(self.detect_apps),
+            ..base
         }
     }
 
@@ -506,6 +510,16 @@ impl CleanSysGui {
         }
         if let Err(e) = cleansys_core::save_settings(&self.current_settings()) {
             log::warn!("failed to save theme preference: {e}");
+        }
+    }
+
+    /// Remember a scan opt-in/out in `settings.json` (no-op under `cfg(test)`).
+    pub fn save_scan_pref(&self, change: impl FnOnce(&mut cleansys_core::Settings)) {
+        if cfg!(test) {
+            return;
+        }
+        if let Err(e) = cleansys_core::update_settings(change) {
+            log::warn!("failed to save scan preference: {e}");
         }
     }
 

@@ -901,14 +901,14 @@ fn category_panel_counts_cleaners_with_scanning_off_once_the_scan_is_complete() 
     finish_scan(&mut app);
     assert!(app.board.complete());
     let before = screen_text(&mut app, 140, 40);
-    assert!(!before.contains("scan off (x)"), "nothing is off yet");
+    assert!(!before.contains("scan off (x/X)"), "nothing is off yet");
     app.item_list_state.select(Some(0));
     app.toggle_scan_enabled();
     // Toggling re-measures; finish that scan the same way.
     finish_scan(&mut app);
     let after = screen_text(&mut app, 140, 40);
     assert!(
-        after.contains("1 scan off (x)"),
+        after.contains("1 scan off (x/X)"),
         "the category panel title should name the count and the key:\n{after}"
     );
 }

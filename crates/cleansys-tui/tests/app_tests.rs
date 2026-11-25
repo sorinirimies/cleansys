@@ -1087,6 +1087,43 @@ fn s_key_opts_the_cleaner_out_of_scanning_and_back_in() {
 }
 
 #[test]
+fn shift_x_opts_the_whole_category_out_of_scanning_and_back_in() {
+    let mut app = app_with_two_categories();
+    app.persist = false;
+    app.item_list_state.select(Some(0));
+    let ids: Vec<String> = app.categories[0]
+        .items
+        .iter()
+        .map(|i| i.id.clone())
+        .collect();
+    key(&mut app, KeyCode::Char('X'));
+    assert!(ids.iter().all(|id| app.disabled_cleaners.contains(id)));
+    assert!(
+        app.categories[1]
+            .items
+            .iter()
+            .all(|i| !app.disabled_cleaners.contains(&i.id))
+    );
+    key(&mut app, KeyCode::Char('X'));
+    assert!(app.disabled_cleaners.is_empty());
+}
+
+#[test]
+fn settings_start_slow_categories_off() {
+    let mut app = app_with_two_categories();
+    app.categories[0].name = "Project Build Artifacts".to_string();
+    app.apply_settings(&cleansys_core::Settings::default());
+    let first: Vec<&String> = app.categories[0].items.iter().map(|i| &i.id).collect();
+    assert!(!first.is_empty() && first.iter().all(|id| app.disabled_cleaners.contains(id)));
+    assert!(
+        app.categories[1]
+            .items
+            .iter()
+            .all(|i| !app.disabled_cleaners.contains(&i.id))
+    );
+}
+
+#[test]
 fn the_menu_has_an_all_entry_listing_every_cleaner_of_its_area() {
     let mut app = app_with_two_categories();
     app.category_index = 0; // All user land

@@ -67,6 +67,8 @@ pub enum Message {
     ScanStopped,
     /// Opt a cleaner in / out of scanning.
     ToggleScan(usize, usize),
+    /// Opt a whole category in / out of scanning.
+    ToggleCategoryScan(usize),
     /// Toggle hiding cleaners that have nothing to clean.
     ToggleHideEmpty,
     ToggleDetectApps,

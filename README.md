@@ -219,6 +219,7 @@ sidebar collapses into a one-line category bar (Tab / Shift+Tab).
 | `Enter` | Run (asks for confirmation; `y` toggles the prompt). Progress, the outcome and the log appear **under the list** — the view never changes; `q` / `Esc` cancels, `Esc` dismisses the summary |
 | `S` | **Scan** — measure every cleaner (`R` still works as an alias) |
 | `x` | Opt the highlighted cleaner in / out of scanning (saved as `disabled_cleaners` in `settings.json`); a switched-off row says *scan off · x to enable* |
+| `X` | Opt the whole category of the highlighted cleaner in / out of scanning (saved as `enabled_categories` / `disabled_categories`). Slow categories (project build folders, large and old files, app caches, games, …) start **off**; the list is `crates/cleansys-core/src/scan_defaults.toml`. Precedence: cleaner, then category, then default. The GUI and web UI have a *Scan* switch per category and per cleaner |
 | `C` | **Schedule** automatic cleaning |
 | `L` | Show / hide the **activity log** under the list |
 | `o` / `i` | **Settings** / **About** overlay (`Tab` switches; see [Settings & About](#settings--about)) |
