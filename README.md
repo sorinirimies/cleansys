@@ -27,7 +27,7 @@ from a **terminal UI**, a **desktop GUI**, a **local web UI** or the **command l
 
 ## ✨ Highlights
 
-- **Never wait for a scan** — a cleaner with a size can be cleaned right away: starting a clean stops the running scan (the sizes found so far stay), and a fresh scan starts by itself when the clean ends. Each cleaner can be opted out of scanning (`x` in the TUI, `s` on the focused cleaner in the web UI, a *Scan* switch on every row in the GUI and web). A cleaner that is switched off is never silent: its row says *scan off · …* with how to enable it, and the totals line counts them (*N cleaners have scanning off*) — the TUI, GUI and web UI share one wording from `cleansys-core`. The same *All* / *None* buttons tick a whole category in all three (`Space` on the category list in the TUI), and a cleaner's paths have *All paths* (TUI top row) / *Select all · Select none* (GUI, web). Scan: `S` (TUI, `R` too), `⌘/Ctrl+R` (GUI), `Shift+R` (web); stop the scan: `⌘/Ctrl+.` (GUI); the choice is saved. The menu has two sections, User land and System; each starts with an **All** entry listing every cleaner of that side in one flat list, followed by its categories.
+- **Never wait for a scan** — a cleaner with a size can be cleaned right away: starting a clean stops the running scan (the sizes found so far stay), and a fresh scan starts by itself when the clean ends. Slow categories start unscanned and any category or cleaner can be switched on or off ([details](#choosing-what-is-scanned)); each cleaner can also be opted out (`x` in the TUI, `s` on the focused cleaner in the web UI, a *Scan* switch on every row in the GUI and web). A cleaner that is switched off is never silent: its row says *scan off · …* with how to enable it, and the totals line counts them (*N cleaners have scanning off*) — the TUI, GUI and web UI share one wording from `cleansys-core`. The same *All* / *None* buttons tick a whole category in all three (`Space` on the category list in the TUI), and a cleaner's paths have *All paths* (TUI top row) / *Select all · Select none* (GUI, web). Scan: `S` (TUI, `R` too), `⌘/Ctrl+R` (GUI), `Shift+R` (web); stop the scan: `⌘/Ctrl+.` (GUI); the choice is saved. The menu has two sections, User land and System; each starts with an **All** entry listing every cleaner of that side in one flat list, followed by its categories.
 - **See before you delete** — every cleaner is measured in the background, in parallel (one shared thread pool, sizes cached per scan, slowest cleaners first; tune with `scan_threads` in `settings.json` or `CLEANSYS_SCAN_THREADS`, default 2× cores), biggest first; preview (`d` / 🔍) lists exact paths.
 - **~370 cleaners** — browsers, apps, IDEs, Gradle/Cargo/npm, Docker, AI/LLM caches, OS logs and more. See [What it cleans](#-what-it-cleans).
 - **Project build output** — `target/`, `node_modules/`, `.venv/`… next to a marker file, by default only in projects idle for 14 days.
@@ -266,6 +266,22 @@ Changing a scan setting saves it and re-measures. Invalid input (a folder that d
 
 **About** shows the version, developer ([Sorin Albu-Irimies](https://github.com/sorinirimies)), GitHub profile, repository, bug tracker, downloads, license, platform and the paths of the two config files. The version (`vX.Y.Z`) is also shown in the TUI title bar, the GUI header and on every web page.
 
+### Choosing what is scanned
+
+On a big disk a full scan takes a while, so the interactive UIs only measure the important categories at first and you opt in to the rest. Scanning only measures; it never deletes, and ticking or cleaning a cleaner works the same whether it was scanned or not.
+
+| Front-end | Per cleaner | Per category |
+|---|---|---|
+| **TUI** | `x` | `X` |
+| **GUI** | *Scan* switch on the row | *Scan* switch in the category header |
+| **Web** | *Scan* switch on the row | *Scan category* switch in the header |
+| **CLI** | `cleansys scanning on\|off <id>` | `cleansys scanning on\|off "<category>"` (`cleansys scanning` lists) |
+
+- Precedence: the cleaner's own choice, then its category's, then the built-in default. Switching a whole category drops the per-cleaner choices inside it.
+- Off by default: Project Build Artifacts, Large & Old Files, Applications, Games, Maintenance & Tuning, Privacy Traces, Installers & Backups (the list is [`scan_defaults.toml`](crates/cleansys-core/src/scan_defaults.toml)). Everything else, including your own categories, is on.
+- Stored in `settings.json` as `disabled_cleaners`, `enabled_cleaners`, `disabled_categories`, `enabled_categories`; all three front-ends and the CLI share them.
+- Explicit commands (`cleansys scan`, `clean`, `auto`, schedules) do exactly what you select and ignore these switches.
+
 ### Details & fine-grained selection
 
 Every front-end can open a cleaner to show **each path it would remove, with its size**, and lets you
@@ -301,6 +317,7 @@ cleansys auto   [-y] [--rescan]         # same --rescan after the auto clean
 cleansys scan|clean|auto -x <path>      # never touch a path (details-view "untick", repeatable)
 cleansys schedule install|show|remove|run-now
 cleansys config show|add-root|remove-root|exclude|min-age
+cleansys scanning [on|off <category|id>]  # what the TUI/GUI/web scan (see Choosing what is scanned)
 cleansys user|system [-y]               # the classic one-shot runners
 cleansys menu                           # plain-text menu
 ```

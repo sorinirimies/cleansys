@@ -138,6 +138,33 @@ impl Settings {
         list.sort();
     }
 
+    /// Switch scanning on or off for `name`: a category (case-insensitive) or a cleaner id.
+    /// Returns what was changed, or an error naming what is unknown.
+    pub fn set_scan_by_name(
+        &mut self,
+        categories: &[crate::CleanerCategory],
+        name: &str,
+        enabled: bool,
+    ) -> Result<String, String> {
+        let want = name.trim().to_lowercase();
+        if let Some(c) = categories.iter().find(|c| c.name.to_lowercase() == want) {
+            let ids: Vec<String> = c.items.iter().map(|i| i.id.clone()).collect();
+            self.set_category_scan(&c.name, enabled, &ids);
+            return Ok(format!("category '{}'", c.name));
+        }
+        if let Some(i) = categories
+            .iter()
+            .flat_map(|c| &c.items)
+            .find(|i| i.id == name.trim())
+        {
+            self.set_scan_enabled(&i.id, enabled);
+            return Ok(format!("cleaner '{}'", i.id));
+        }
+        Err(format!(
+            "unknown category or cleaner id '{name}' (see `cleansys scanning`)"
+        ))
+    }
+
     /// Switch a whole category on or off for scanning. The choices made for single
     /// cleaners in it (`ids`) are dropped, so the category decides for all of them.
     pub fn set_category_scan(&mut self, category: &str, enabled: bool, ids: &[String]) {
@@ -334,6 +361,25 @@ mod tests {
         assert!(!s.scan_enabled("w", "Web Browsers"));
         s.set_category_scan("Web Browsers", true, &[]);
         assert!(s.scan_enabled("w", "Web Browsers"));
+    }
+
+    #[test]
+    fn scan_by_name_takes_a_category_or_an_id_and_refuses_the_rest() {
+        let cats = crate::load_categories();
+        let mut s = Settings::default();
+        let cat = &cats[0];
+        let msg = s
+            .set_scan_by_name(&cats, &cat.name.to_uppercase(), false)
+            .unwrap();
+        assert!(msg.contains("category") && !s.category_scan_enabled(&cat.name));
+        let id = cat.items[0].id.clone();
+        assert!(
+            s.set_scan_by_name(&cats, &id, true)
+                .unwrap()
+                .contains("cleaner")
+        );
+        assert!(s.scan_enabled(&id, &cat.name));
+        assert!(s.set_scan_by_name(&cats, "nope", true).is_err());
     }
 
     #[test]

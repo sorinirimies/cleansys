@@ -268,3 +268,30 @@ fn schedule_show_works_without_a_schedule() {
     let t = tempfile::tempdir().unwrap();
     cli(t.path()).args(["schedule", "show"]).assert().success();
 }
+
+#[test]
+fn scanning_lists_switches_a_category_off_and_refuses_unknown_names() {
+    let t = tempfile::tempdir().unwrap();
+    let list = |t: &std::path::Path| {
+        String::from_utf8_lossy(&cli(t).arg("scanning").output().unwrap().stdout).to_string()
+    };
+    let before = list(t.path());
+    assert!(before.contains("Project Build Artifacts") && before.contains("off"));
+    cli(t.path())
+        .args(["scanning", "on", "project build artifacts"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("Scanning on for category"));
+    let line = |s: &str| {
+        s.lines()
+            .find(|l| l.contains("Project Build Artifacts"))
+            .unwrap()
+            .to_string()
+    };
+    assert!(line(&list(t.path())).trim_end().ends_with("on"));
+    cli(t.path())
+        .args(["scanning", "off", "no-such-thing"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("unknown category or cleaner id"));
+}

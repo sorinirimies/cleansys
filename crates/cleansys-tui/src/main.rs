@@ -68,6 +68,11 @@ enum Commands {
         #[arg(long)]
         json: bool,
     },
+    /// Which cleaners the interactive UIs scan: list, or switch a category / cleaner on or off
+    Scanning {
+        #[command(subcommand)]
+        action: Option<ScanningCmd>,
+    },
     /// Where did my disk go? Size tree of a folder (default: your home), biggest first
     Usage {
         /// Folder to measure (default: your home folder)
@@ -179,6 +184,16 @@ enum ConfigCmd {
     Exclude { pattern: String },
     /// Only clean project build output untouched for N days (0 = always)
     MinAge { days: u64 },
+}
+
+#[derive(Subcommand)]
+enum ScanningCmd {
+    /// Show every category and whether it is scanned (the default)
+    List,
+    /// Scan this category (name) or cleaner (id) in the TUI, GUI and web UI
+    On { name: String },
+    /// Leave this category (name) or cleaner (id) out of those scans
+    Off { name: String },
 }
 
 #[derive(clap::Args, Clone)]
@@ -492,6 +507,53 @@ fn run_usage_cmd(path: Option<String>, depth: usize, top: usize) -> Result<()> {
     Ok(())
 }
 
+/// `cleansys scanning`: the scan opt-in / opt-out the interactive UIs share.
+/// Explicit commands (`scan`, `clean`, `auto`, schedules) are not affected by it.
+fn run_scanning_cmd(action: Option<ScanningCmd>) -> Result<()> {
+    let categories = cleansys_core::load_categories();
+    match action.unwrap_or(ScanningCmd::List) {
+        ScanningCmd::List => {
+            let s = cleansys_core::load_settings().unwrap_or_default();
+            let off = s.scan_off_ids(&categories);
+            print_header("SCANNING (TUI / GUI / web)");
+            for c in &categories {
+                let n_off = c.items.iter().filter(|i| off.contains(&i.id)).count();
+                let state = match n_off {
+                    0 => "on".to_string(),
+                    n if n == c.items.len() => "off".to_string(),
+                    n => format!("{} of {} on", c.items.len() - n, c.items.len()),
+                };
+                println!("  {:<28} {}", c.name, state);
+            }
+            println!("\nChange: cleansys scanning on|off <category or cleaner id>");
+        }
+        ScanningCmd::On { name } => set_scanning(&categories, &name, true)?,
+        ScanningCmd::Off { name } => set_scanning(&categories, &name, false)?,
+    }
+    Ok(())
+}
+
+fn set_scanning(
+    categories: &[cleansys_core::CleanerCategory],
+    name: &str,
+    enabled: bool,
+) -> Result<()> {
+    let mut what = String::new();
+    let mut err = None;
+    cleansys_core::update_settings(|s| match s.set_scan_by_name(categories, name, enabled) {
+        Ok(w) => what = w,
+        Err(e) => err = Some(e),
+    })?;
+    if let Some(e) = err {
+        anyhow::bail!(e);
+    }
+    cleansys_core::utils::print_success(&format!(
+        "Scanning {} for {what}.",
+        if enabled { "on" } else { "off" }
+    ));
+    Ok(())
+}
+
 fn run_config_cmd(action: ConfigCmd) -> Result<()> {
     use cleansys_core::engine::EngineConfig;
     // Edits start from what is saved; `show` reports what is in effect (env overrides too).
@@ -689,6 +751,7 @@ fn main() -> Result<()> {
                 json,
             )?;
         }
+        Some(Commands::Scanning { action }) => run_scanning_cmd(action)?,
         Some(Commands::Usage { path, depth, top }) => run_usage_cmd(path, depth, top)?,
         Some(Commands::Clean {
             select,
