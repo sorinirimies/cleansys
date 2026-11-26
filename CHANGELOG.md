@@ -4,6 +4,12 @@ All notable changes to this project are documented here. It is generated from
 [Conventional Commits](https://www.conventionalcommits.org) by
 [git-cliff](https://git-cliff.org) — do not edit it by hand.
 
+## [0.25.2](https://github.com/sorinirimies/cleansys/compare/v0.25.1...v0.25.2) — 2026-11-26
+
+### 🐛 Bug fixes
+
+- **auth:** One sudo attempt per password check, and say why it failed ([`ae93a88`](https://github.com/sorinirimies/cleansys/commit/ae93a88441f95c5e1ab24a8cee5cdc932e7294b4))
+
 ## [0.25.1](https://github.com/sorinirimies/cleansys/compare/v0.24.1...v0.25.1) — 2026-11-26
 
 ### ✨ Features
