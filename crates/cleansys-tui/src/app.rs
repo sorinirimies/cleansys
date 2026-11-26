@@ -5,9 +5,7 @@ use ratatui::widgets::ListState;
 use std::time::Instant;
 
 use crate::components::password_prompt::PasswordPrompt;
-use cleansys_core::{
-    CleanerCategory, CleanerFn, Scope, Status, check_root, format_size, nav_scopes,
-};
+use cleansys_core::{CleanerCategory, CleanerFn, Scope, Status, check_root, format_size};
 
 /// One editable row of the schedule overlay.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -199,6 +197,8 @@ pub struct App {
     pub scan_rx: Option<std::sync::mpsc::Receiver<(usize, usize, cleansys_core::ScanInfo)>>,
     /// Stops the running scan (a clean started, or a setting changed).
     pub scan_handle: Option<cleansys_core::ScanHandle>,
+    /// Single-cleaner measurements started by switching scanning back on.
+    pub extra_scans: Vec<cleansys_core::ScanJob>,
     /// Ids of cleaners the user opted out of scanning (saved in the settings).
     pub disabled_cleaners: Vec<String>,
     /// Hide cleaners that were scanned and have nothing to clean.
@@ -303,6 +303,7 @@ impl App {
             board: cleansys_core::ScanBoard::default(),
             scan_rx: None,
             scan_handle: None,
+            extra_scans: Vec::new(),
             disabled_cleaners: Vec::new(),
             hide_empty: true,
             detect_apps: true,
@@ -383,9 +384,58 @@ impl App {
             "{name}: scan {}",
             if enable { "on" } else { "off" }
         ));
-        if !self.is_running {
-            self.start_scan();
+        let cleaners: Vec<(usize, usize)> = (0..ids.len()).map(|ii| (ci, ii)).collect();
+        // The category may move (switched-off ones go to the end of their section): keep
+        // the cursor on it.
+        let at = self.scopes().get(self.category_index).copied();
+        self.apply_scan_switch(&cleaners, enable);
+        if let Some(at) = at
+            && let Some(pos) = self.scopes().iter().position(|s| *s == at)
+        {
+            self.category_index = pos;
         }
+    }
+
+    /// Switch scanning on/off for `cleaners` without a new scan: switched-off ones drop
+    /// their size and move to the end of the list; switched-on ones are measured alone.
+    fn apply_scan_switch(&mut self, cleaners: &[(usize, usize)], on: bool) {
+        if !on {
+            for &(c, i) in cleaners {
+                if let Some(item) = self
+                    .categories
+                    .get_mut(c)
+                    .and_then(|cat| cat.items.get_mut(i))
+                {
+                    item.selected = false;
+                }
+            }
+            if self.expanded.is_some_and(|e| cleaners.contains(&e)) {
+                self.collapse_details();
+            }
+            if self.board.switch_off(cleaners) > 0 && !self.board.is_scanning() {
+                // That was the last cleaner the scan waited for.
+                self.scan_rx = None;
+                self.scan_handle = None;
+            }
+            return;
+        }
+        let todo = self.board.switch_on(cleaners);
+        if todo.is_empty() || self.is_running {
+            return; // a clean is running: everything is measured again when it ends
+        }
+        self.measure_alone(&todo);
+    }
+
+    /// Measure just these cleaners (switched back on) next to any running scan.
+    fn measure_alone(&mut self, cleaners: &[(usize, usize)]) {
+        let want: std::collections::HashSet<(usize, usize)> = cleaners.iter().copied().collect();
+        let (tx, rx) = std::sync::mpsc::channel();
+        let handle = cleansys_core::spawn_scan_filtered(
+            &self.categories,
+            |ci, ii, _| want.contains(&(ci, ii)),
+            move |ci, ii, info| tx.send((ci, ii, info)).is_ok(),
+        );
+        self.extra_scans.push((handle, rx));
     }
 
     /// Stop the running scan (if any) and keep what it measured so far, so a clean can
@@ -395,6 +445,9 @@ impl App {
             h.cancel();
         }
         self.scan_rx = None;
+        for (h, _) in self.extra_scans.drain(..) {
+            h.cancel();
+        }
         self.board.cancel();
     }
 
@@ -420,8 +473,10 @@ impl App {
             "{name}: scan {}",
             if enabled { "on" } else { "off" }
         ));
-        if !self.is_running {
-            self.start_scan();
+        self.apply_scan_switch(&[(ci, ii)], enabled);
+        // It moved (switched-off cleaners sort last): keep the cursor on it.
+        if let Some(pos) = self.view_items().iter().position(|&p| p == (ci, ii)) {
+            self.item_list_state.select(Some(pos));
         }
     }
 
@@ -444,6 +499,28 @@ impl App {
             self.scan_handle = None;
             self.ensure_category_visible();
         }
+        // Cleaners switched back on, measured one by one.
+        let mut still = Vec::new();
+        for (h, rx) in std::mem::take(&mut self.extra_scans) {
+            let mut done = false;
+            loop {
+                match rx.try_recv() {
+                    Ok((ci, ii, info)) => {
+                        self.board.record_synced(&self.categories, ci, ii, info);
+                        changed = true;
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        done = true;
+                        break;
+                    }
+                }
+            }
+            if !done {
+                still.push((h, rx));
+            }
+        }
+        self.extra_scans = still;
         changed
     }
 
@@ -868,7 +945,9 @@ impl App {
 
     /// The category menu: an "All" entry per area, then its categories.
     pub fn scopes(&self) -> Vec<Scope> {
-        nav_scopes(&self.categories)
+        cleansys_core::nav_scopes_with_off(&self.categories, |ci| {
+            self.board.category_off(&self.categories, ci)
+        })
     }
 
     /// The menu entry that is open (`category_index` is a position in [`Self::scopes`]).

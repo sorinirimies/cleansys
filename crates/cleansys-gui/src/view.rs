@@ -265,7 +265,7 @@ fn sidebar<'a>(state: &'a CleanSysGui, c: &ThemeColors, width: f32) -> Element<'
     let mut user_rows: Vec<Element<'a, Message>> = Vec::new();
     let mut root_rows: Vec<Element<'a, Message>> = Vec::new();
 
-    for scope in cleansys_core::nav_scopes(&state.categories) {
+    for scope in state.nav_scopes() {
         if !state
             .board
             .scope_visible(&state.categories, scope, state.hide_empty)
@@ -313,8 +313,13 @@ fn category_button<'a>(
     let active = scope == state.scope() && state.search.trim().is_empty();
     let ticked = state.selected_count_in_scope(scope);
     let is_all = matches!(scope, cleansys_core::Scope::All { .. });
+    // Every cleaner switched off: parked at the end of its section, dimmed.
+    let parked = matches!(scope, cleansys_core::Scope::Category(ci)
+        if state.board.category_off(&state.categories, ci));
 
-    let right: Element<'a, Message> =
+    let right: Element<'a, Message> = if parked {
+        text("◌ scan off").size(12).color(c.yellow).into()
+    } else {
         match state.board.scope_bytes_when_done(&state.categories, scope) {
             Some(b) if b > 0 => text(format_size(b))
                 .size(12)
@@ -323,7 +328,8 @@ fn category_button<'a>(
             Some(_) => text("—").size(12).color(c.muted).into(),
             None if state.board.is_scanning() => ring(&c, state.anim_tick, 13.0),
             None => Space::new().into(),
-        };
+        }
+    };
     let tick: Element<'a, Message> = if ticked > 0 {
         text(format!("{ticked} ✓")).size(11).color(c.accent).into()
     } else {
@@ -337,6 +343,7 @@ fn category_button<'a>(
             format!("  {}", scope.title(&state.categories))
         })
         .size(13)
+        .color(if parked { c.muted } else { c.text_primary })
         .width(Length::Fill),
         tick,
         right,
@@ -410,7 +417,8 @@ fn category_header<'a>(
                 f.write_str(&self.1)
             }
         }
-        let opts: Vec<Opt> = cleansys_core::nav_scopes(&state.categories)
+        let opts: Vec<Opt> = state
+            .nav_scopes()
             .into_iter()
             .enumerate()
             .filter(|(_, sc)| {
@@ -428,7 +436,7 @@ fn category_header<'a>(
                 Opt(i, format!("{}{size}", sc.title(&state.categories)))
             })
             .collect();
-        let scopes = cleansys_core::nav_scopes(&state.categories);
+        let scopes = state.nav_scopes();
         let selected = opts
             .iter()
             .find(|o| scopes.get(o.0).copied() == Some(state.scope()))

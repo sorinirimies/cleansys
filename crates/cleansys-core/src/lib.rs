@@ -55,10 +55,11 @@ pub use cleaners::cleaned_item::{
 pub use cleaners::{system_cleaners, user_cleaners};
 pub use model::{CleanerCategory, CleanerItem, Risk, Status, load_categories, select_recommended};
 pub use scan::{
-    EntryState, ScanBoard, ScanEntry, ScanHandle, ScanInfo, disabled_positions, scan_off_badge,
-    scan_off_count, scan_off_note, spawn_scan, spawn_scan_filtered, spawn_scan_with,
+    EntryState, ScanBoard, ScanEntry, ScanHandle, ScanInfo, ScanJob, disabled_positions,
+    scan_off_badge, scan_off_count, scan_off_note, spawn_scan, spawn_scan_filtered,
+    spawn_scan_with,
 };
-pub use scope::{Scope, nav_scopes};
+pub use scope::{Scope, nav_scopes, nav_scopes_with_off};
 pub use settings::{Settings, load_settings, save_settings, update_settings};
 pub use theme::system::{
     SYSTEM_THEME_NAME, current_system_theme_index, detect_system_dark, is_system_name,

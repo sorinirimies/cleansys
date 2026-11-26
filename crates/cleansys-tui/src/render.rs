@@ -973,9 +973,7 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
             match app.board.scope_bytes_when_done(&app.categories, *scope) {
                 Some(b) if b > 0 => Span::styled(format_size(b), size_style(b)),
                 Some(_) => Span::styled("—", Style::default().fg(crate::theme::th().muted)),
-                None if scope_scan_off(app, *scope) => {
-                    Span::styled("scan off", Style::default().fg(crate::theme::th().warning))
-                }
+                None if scope_scan_off(app, *scope) => scan_off_marker(app),
                 None if app.board.is_scanning() => spinner_spans(app)
                     .into_iter()
                     .next()
@@ -984,7 +982,19 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
             },
         );
         // Truncate the name so the size column never gets pushed out.
-        let left = vec![Span::raw(if active { "▎ " } else { "  " }), Span::raw(name)];
+        let off = scope_scan_off(app, *scope);
+        let name_span = if off {
+            // Switched off: dimmed and struck through, at the end of its section.
+            Span::styled(
+                name,
+                Style::default()
+                    .fg(crate::theme::th().muted)
+                    .add_modifier(Modifier::DIM | Modifier::CROSSED_OUT),
+            )
+        } else {
+            Span::raw(name)
+        };
+        let left = vec![Span::raw(if active { "▎ " } else { "  " }), name_span];
         let style = if active {
             Style::default()
                 .fg(crate::theme::th().selection_fg)
@@ -1001,6 +1011,23 @@ fn render_categories(f: &mut Frame, app: &App, area: Rect) {
             .title_bottom(scan_line(app).right_aligned()),
     );
     f.render_widget(list, area);
+}
+
+/// "◌ scan off" for a switched-off category: a slow pulse (dim ↔ bright warning colour)
+/// so the row reads as parked rather than broken. Turn it back on with `X`.
+fn scan_off_marker(app: &App) -> Span<'static> {
+    const FRAMES: [&str; 4] = ["◌", "○", "◎", "○"];
+    let step = (app.anim_tick / 6) as usize % FRAMES.len();
+    let t = crate::theme::th();
+    let fg = if step.is_multiple_of(2) {
+        tui_nuances::color::mix(t.warning, t.muted, 0.55)
+    } else {
+        t.warning
+    };
+    Span::styled(
+        format!("{} scan off", FRAMES[step]),
+        Style::default().fg(fg),
+    )
 }
 
 /// Is every cleaner of this single category switched off for scanning?

@@ -131,12 +131,15 @@ pub(crate) async fn side_nav(
             .iter()
             .filter(|a| a.root == system && a.visible)
             .map(|a| (true, a))
-            .chain(
-                categories
+            .chain({
+                // Categories with scanning switched off go to the end of their section.
+                let mut own: Vec<&CatView> = categories
                     .iter()
                     .filter(|c| c.root == system && c.visible)
-                    .map(|c| (false, c)),
-            )
+                    .collect();
+                own.sort_by_key(|c| c.scan_off);
+                own.into_iter().map(|c| (false, c))
+            })
             .collect()
     };
     let user = entries(false);
@@ -145,22 +148,22 @@ pub(crate) async fn side_nav(
         <nav class="side" aria-label="Categories">
             <div class="section">"User land" <small>"no password needed"</small></div>
             for (all, c) in &user {
-                <a class=(format!("cat{}{}", if c.index == active && q.trim().is_empty() { " active" } else { "" }, if *all { " all" } else { "" })) href=(nav_href(c.index, &q, hide))>
+                <a class=(format!("cat{}{}{}", if c.index == active && q.trim().is_empty() { " active" } else { "" }, if *all { " all" } else { "" }, if c.scan_off { " parked" } else { "" })) href=(nav_href(c.index, &q, hide))>
                     <span class="name">(c.name.clone())</span>
                     if c.ticked > 0 { <span class="tick">(c.ticked) " ✓"</span> }
                     <span class=(format!("sz {}", cat_size(c).1))>
-                        if c.bytes.is_none() && scanning { spinner() } else { (cat_size(c).0) }
+                        if c.scan_off { <span class="off-dot" title="Scanning is off for this category">"◌ scan off"</span> } else if c.bytes.is_none() && scanning { spinner() } else { (cat_size(c).0) }
                     </span>
                 </a>
             }
             if !root.is_empty() {
                 <div class="section">"System · root" <small>"asks for your password"</small></div>
                 for (all, c) in &root {
-                    <a class=(format!("cat{}{}", if c.index == active && q.trim().is_empty() { " active" } else { "" }, if *all { " all" } else { "" })) href=(nav_href(c.index, &q, hide))>
+                    <a class=(format!("cat{}{}{}", if c.index == active && q.trim().is_empty() { " active" } else { "" }, if *all { " all" } else { "" }, if c.scan_off { " parked" } else { "" })) href=(nav_href(c.index, &q, hide))>
                         <span class="name">(c.name.trim_end_matches(cleansys_core::model::ROOT_SUFFIX).to_string())</span>
                         if c.ticked > 0 { <span class="tick">(c.ticked) " ✓"</span> }
                         <span class=(format!("sz {}", cat_size(c).1))>
-                            if c.bytes.is_none() && scanning { spinner() } else { (cat_size(c).0) }
+                            if c.scan_off { <span class="off-dot" title="Scanning is off for this category">"◌ scan off"</span> } else if c.bytes.is_none() && scanning { spinner() } else { (cat_size(c).0) }
                         </span>
                     </a>
                 }

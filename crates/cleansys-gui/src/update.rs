@@ -364,11 +364,7 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
                 state.disabled_cleaners.push(id.clone());
             }
             state.save_scan_pref(|s| s.set_scan_enabled(&id, enable));
-            if state.is_running {
-                Task::none() // measured again when the clean ends
-            } else {
-                start_scan(state)
-            }
+            switch_scan(state, &[(cat_idx, item_idx)], enable)
         }
         Message::ToggleCategoryScan(cat_idx) => {
             let Some(cat) = state.categories.get(cat_idx) else {
@@ -382,11 +378,8 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
                 state.disabled_cleaners.extend(ids.iter().cloned());
             }
             state.save_scan_pref(|s| s.set_category_scan(&name, enable, &ids));
-            if state.is_running {
-                Task::none() // measured again when the clean ends
-            } else {
-                start_scan(state)
-            }
+            let cleaners: Vec<(usize, usize)> = (0..ids.len()).map(|ii| (cat_idx, ii)).collect();
+            switch_scan(state, &cleaners, enable)
         }
         // A result of a scan that was stopped or replaced.
         Message::ScanItemFinished(gen_, ..) if gen_ != state.scan_gen => Task::none(),
@@ -743,8 +736,74 @@ fn blocking(
 
 /// Stop the running scan: not-yet-started cleaners are skipped, results in flight are
 /// dropped, what was measured stays on the board.
+/// Switch scanning on/off without a new scan: switched-off cleaners drop their size and
+/// sort last, switched-on ones are measured on their own (their result arrives as a normal
+/// `ScanItemFinished` of the current scan generation).
+fn switch_scan(state: &mut CleanSysGui, cleaners: &[(usize, usize)], on: bool) -> Task<Message> {
+    if !on {
+        for &(c, i) in cleaners {
+            if let Some(it) = state
+                .categories
+                .get_mut(c)
+                .and_then(|cat| cat.items.get_mut(i))
+            {
+                it.selected = false;
+            }
+        }
+        state.board.switch_off(cleaners);
+        return Task::none();
+    }
+    let todo = state.board.switch_on(cleaners);
+    if todo.is_empty() || state.is_running {
+        return Task::none(); // a clean is running: everything is measured again when it ends
+    }
+    measure_alone(state, &todo)
+}
+
+/// Measure just these cleaners next to any running scan.
+fn measure_alone(state: &mut CleanSysGui, cleaners: &[(usize, usize)]) -> Task<Message> {
+    use std::collections::HashMap;
+    use std::sync::{Arc, Mutex};
+    type Tx = iced::futures::channel::oneshot::Sender<cleansys_core::ScanInfo>;
+    let gen_ = state.scan_gen;
+    let want: std::collections::HashSet<(usize, usize)> = cleaners.iter().copied().collect();
+    let mut tasks = Vec::new();
+    let mut senders: HashMap<(usize, usize), Tx> = HashMap::new();
+    for &(cat_idx, item_idx) in cleaners {
+        let (tx, rx) = iced::futures::channel::oneshot::channel();
+        senders.insert((cat_idx, item_idx), tx);
+        tasks.push(Task::perform(
+            async move { rx.await.ok() },
+            move |info| match info {
+                Some(info) => Message::ScanItemFinished(gen_, cat_idx, item_idx, info),
+                None => Message::ScanStopped,
+            },
+        ));
+    }
+    let senders = Arc::new(Mutex::new(senders));
+    let handle = cleansys_core::spawn_scan_filtered(
+        &state.categories,
+        |ci, ii, _| want.contains(&(ci, ii)),
+        move |ci, ii, info| {
+            if let Some(tx) = senders
+                .lock()
+                .unwrap_or_else(std::sync::PoisonError::into_inner)
+                .remove(&(ci, ii))
+            {
+                let _ = tx.send(info);
+            }
+            true
+        },
+    );
+    state.extra_scans.push(handle);
+    Task::batch(tasks)
+}
+
 fn stop_scan(state: &mut CleanSysGui) {
     if let Some(h) = state.scan_handle.take() {
+        h.cancel();
+    }
+    for h in state.extra_scans.drain(..) {
         h.cancel();
     }
     state.scan_gen += 1;
@@ -1846,15 +1905,24 @@ mod tests {
     }
 
     #[test]
-    fn scan_toggle_opts_a_cleaner_out_and_back_in() {
+    fn scan_toggle_opts_a_cleaner_out_and_back_in_without_a_new_scan() {
         let mut state = tiny_state();
+        let _ = start_scan(&mut state);
+        let gen_ = state.scan_gen;
+        let total = state.board.total;
         let _ = update(&mut state, Message::ToggleScan(0, 1));
         assert_eq!(state.disabled_cleaners, vec!["two".to_string()]);
         assert!(state.board.is_off(0, 1));
-        assert_eq!(state.board.total, 1, "only the opted-in cleaner is scanned");
+        assert_eq!(
+            (state.scan_gen, state.board.total),
+            (gen_, total),
+            "no new scan"
+        );
         let _ = update(&mut state, Message::ToggleScan(0, 1));
         assert!(state.disabled_cleaners.is_empty() && !state.board.is_off(0, 1));
-        assert_eq!(state.board.total, 2);
+        assert_eq!(state.scan_gen, gen_, "still no new scan");
+        assert!(state.board.is_measuring(0, 1), "measured again on its own");
+        assert_eq!(state.extra_scans.len(), 1);
     }
 
     #[test]
@@ -1865,10 +1933,12 @@ mod tests {
             state.disabled_cleaners.len(),
             state.categories[0].items.len()
         );
-        assert_eq!(state.board.total, 0);
+        assert!(state.board.category_off(&state.categories, 0));
+        let gen_ = state.scan_gen;
         let _ = update(&mut state, Message::ToggleCategoryScan(0));
         assert!(state.disabled_cleaners.is_empty());
-        assert_eq!(state.board.total, 2);
+        assert!(!state.board.category_off(&state.categories, 0));
+        assert_eq!(state.scan_gen, gen_, "no new scan");
         let _ = update(&mut state, Message::ToggleCategoryScan(99));
     }
 

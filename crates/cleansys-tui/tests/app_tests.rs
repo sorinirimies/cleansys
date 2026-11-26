@@ -1222,3 +1222,183 @@ fn capital_s_and_the_old_capital_r_both_start_a_scan() {
         );
     }
 }
+
+/// Two user-land and two system categories with a finished scan (every cleaner 1 MB).
+fn app_with_four_scanned_categories() -> App {
+    let mut app = App::new();
+    app.persist = false;
+    app.categories = vec![
+        CleanerCategory {
+            name: "Browsers".into(),
+            description: String::new(),
+            items: vec![
+                sample_item("Chrome Cache", false),
+                sample_item("Firefox Cache", false),
+            ],
+        },
+        CleanerCategory {
+            name: "Developer".into(),
+            description: String::new(),
+            items: vec![sample_item("npm Cache", false)],
+        },
+        CleanerCategory {
+            name: "Logs (root)".into(),
+            description: String::new(),
+            items: vec![sample_item("Journal", true)],
+        },
+        CleanerCategory {
+            name: "Packages (root)".into(),
+            description: String::new(),
+            items: vec![sample_item("pacman Cache", true)],
+        },
+    ];
+    app.board = cleansys_core::ScanBoard::new(&app.categories);
+    let shape: Vec<usize> = app.categories.iter().map(|c| c.items.len()).collect();
+    app.board.start(shape.iter().sum());
+    for (ci, n) in shape.into_iter().enumerate() {
+        for ii in 0..n {
+            let info = cleansys_core::ScanInfo {
+                bytes: 1_000_000 * (ii as u64 + 1),
+                items: 1,
+                ..Default::default()
+            };
+            app.board.record(ci, ii, info);
+        }
+    }
+    assert!(app.board.complete());
+    app
+}
+
+fn scope_names(app: &App) -> Vec<String> {
+    app.scopes()
+        .iter()
+        .map(|s| s.title(&app.categories))
+        .collect()
+}
+
+#[test]
+fn switching_a_cleaner_off_does_not_rescan_and_moves_it_to_the_bottom() {
+    let mut app = app_with_four_scanned_categories();
+    app.focus = cleansys_tui::app::Focus::Items;
+    app.category_index = 1; // "Browsers"
+    let items = app.view_items();
+    // Biggest first: Firefox (2 MB), Chrome (1 MB).
+    assert_eq!(
+        app.categories[items[0].0].items[items[0].1].name,
+        "Firefox Cache"
+    );
+    app.item_list_state.select(Some(0));
+    press(&mut app, 'x');
+    assert!(app.board.complete(), "no new scan started");
+    assert!(
+        app.scan_handle.is_none() && app.scan_rx.is_none(),
+        "no scan running"
+    );
+    let after = app.view_items();
+    let last = after.last().unwrap();
+    assert_eq!(
+        app.categories[last.0].items[last.1].name, "Firefox Cache",
+        "moved to the bottom"
+    );
+    assert_eq!(
+        app.current_item(),
+        Some(*last),
+        "the cursor follows the cleaner to the bottom"
+    );
+    assert!(app.board.is_off(last.0, last.1) && app.board.get(last.0, last.1).is_none());
+    // The other cleaner kept its measured size.
+    assert_eq!(app.board.get(0, 0).map(|s| s.bytes), Some(1_000_000));
+}
+
+#[test]
+fn switching_a_cleaner_back_on_measures_only_it() {
+    let mut app = app_with_four_scanned_categories();
+    app.focus = cleansys_tui::app::Focus::Items;
+    app.category_index = 1;
+    app.item_list_state.select(Some(0));
+    press(&mut app, 'x'); // off — the cursor follows it to the bottom
+    let (ci, ii) = *app.view_items().last().unwrap();
+    press(&mut app, 'x'); // back on, without moving the cursor
+    assert!(!app.board.is_off(ci, ii));
+    assert!(app.board.complete(), "the finished scan is not restarted");
+    assert_eq!(
+        app.extra_scans.len(),
+        1,
+        "one measurement just for this cleaner"
+    );
+    // Its result comes back on its own and fills the size in.
+    for _ in 0..500 {
+        app.poll_scan();
+        if app.board.get(ci, ii).is_some() {
+            break;
+        }
+        std::thread::sleep(std::time::Duration::from_millis(5));
+    }
+    assert!(app.board.get(ci, ii).is_some(), "re-measured");
+    assert!(app.board.complete());
+}
+
+#[test]
+fn shift_x_parks_the_category_at_the_end_of_its_section_and_the_cursor_follows() {
+    let mut app = app_with_four_scanned_categories();
+    app.focus = cleansys_tui::app::Focus::Categories;
+    assert_eq!(
+        scope_names(&app),
+        [
+            "All user land",
+            "Browsers",
+            "Developer",
+            "All system",
+            "Logs",
+            "Packages"
+        ]
+    );
+    app.category_index = 1; // Browsers
+    press(&mut app, 'X');
+    assert!(app.board.complete(), "no new scan started");
+    assert_eq!(
+        scope_names(&app),
+        [
+            "All user land",
+            "Developer",
+            "Browsers",
+            "All system",
+            "Logs",
+            "Packages"
+        ],
+        "a switched-off category goes last in user land"
+    );
+    assert_eq!(
+        scope_names(&app)[app.category_index],
+        "Browsers",
+        "cursor follows it"
+    );
+    // System side too.
+    app.category_index = 4; // Logs
+    press(&mut app, 'X');
+    assert_eq!(
+        scope_names(&app),
+        [
+            "All user land",
+            "Developer",
+            "Browsers",
+            "All system",
+            "Packages",
+            "Logs"
+        ]
+    );
+    // Back on: it returns to its place and is measured again (alone).
+    press(&mut app, 'X');
+    assert_eq!(
+        scope_names(&app),
+        [
+            "All user land",
+            "Developer",
+            "Browsers",
+            "All system",
+            "Logs",
+            "Packages"
+        ]
+    );
+    assert!(!app.extra_scans.is_empty());
+}

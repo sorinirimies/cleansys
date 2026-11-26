@@ -24,11 +24,21 @@ fn is_system(c: &CleanerCategory) -> bool {
 /// The menu in display order: `All user land`, its categories, `All system`, its categories.
 /// An area without categories gets no "All" entry.
 pub fn nav_scopes(categories: &[CleanerCategory]) -> Vec<Scope> {
+    nav_scopes_with_off(categories, |_| false)
+}
+
+/// [`nav_scopes`] with every category for which `off` is true (all its cleaners have
+/// scanning switched off) moved to the end of its section, User land or System.
+pub fn nav_scopes_with_off(
+    categories: &[CleanerCategory],
+    off: impl Fn(usize) -> bool,
+) -> Vec<Scope> {
     let mut out = Vec::new();
     for system in [false, true] {
-        let own: Vec<usize> = (0..categories.len())
+        let mut own: Vec<usize> = (0..categories.len())
             .filter(|&i| is_system(&categories[i]) == system)
             .collect();
+        own.sort_by_key(|&i| off(i)); // stable: menu order within each group
         if own.is_empty() {
             continue;
         }

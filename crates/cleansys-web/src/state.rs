@@ -95,7 +95,15 @@ impl Snapshot {
         let mut out = Vec::new();
         for system in [false, true] {
             out.extend(self.areas.iter().filter(|a| a.root == system).cloned());
-            out.extend(self.categories.iter().filter(|c| c.root == system).cloned());
+            // Categories with scanning switched off go to the end of their section.
+            let mut own: Vec<CatView> = self
+                .categories
+                .iter()
+                .filter(|c| c.root == system)
+                .cloned()
+                .collect();
+            own.sort_by_key(|c| c.scan_off);
+            out.extend(own);
         }
         out
     }
@@ -151,6 +159,8 @@ pub struct Inner {
     scan_rx: Option<Receiver<(usize, usize, ScanInfo)>>,
     /// Stops the running scan (a clean started, or a setting changed).
     scan_handle: Option<cleansys_core::ScanHandle>,
+    /// Single-cleaner measurements started by switching scanning back on.
+    extra_scans: Vec<cleansys_core::ScanJob>,
     /// Ids of cleaners the user opted out of scanning (saved in the settings).
     disabled: Vec<String>,
     run: RunState,
@@ -190,6 +200,7 @@ impl Shared {
             categories,
             board,
             scan_rx: None,
+            extra_scans: Vec::new(),
             scan_handle: None,
             disabled: Vec::new(),
             run: RunState::default(),
@@ -233,9 +244,15 @@ impl Shared {
         if cfg!(not(test)) {
             let _ = cleansys_core::update_settings(|s| s.set_scan_enabled(id, enable));
         }
-        if g.run.phase != Phase::Running {
-            start_scan_locked(&mut g);
-        }
+        let at: Vec<(usize, usize)> = g
+            .categories
+            .iter()
+            .enumerate()
+            .flat_map(|(ci, c)| c.items.iter().enumerate().map(move |(ii, it)| (ci, ii, it)))
+            .filter(|(_, _, it)| it.id == id)
+            .map(|(ci, ii, _)| (ci, ii))
+            .collect();
+        switch_scan_locked(&mut g, &at, enable);
         true
     }
 
@@ -256,9 +273,8 @@ impl Shared {
         if cfg!(not(test)) {
             let _ = cleansys_core::update_settings(|s| s.set_category_scan(&name, enable, &ids));
         }
-        if g.run.phase != Phase::Running {
-            start_scan_locked(&mut g);
-        }
+        let at: Vec<(usize, usize)> = (0..ids.len()).map(|ii| (ci, ii)).collect();
+        switch_scan_locked(&mut g, &at, enable);
         true
     }
 
@@ -414,6 +430,28 @@ impl Shared {
             *scan_rx = None;
             *scan_handle = None;
         }
+        // Cleaners switched back on, measured one by one.
+        let mut still = Vec::new();
+        let g = &mut *g;
+        for (h, rx) in std::mem::take(&mut g.extra_scans) {
+            let mut done = false;
+            loop {
+                match rx.try_recv() {
+                    Ok((c, i, info)) => {
+                        g.board.record_synced(&g.categories, c, i, info);
+                    }
+                    Err(std::sync::mpsc::TryRecvError::Empty) => break,
+                    Err(std::sync::mpsc::TryRecvError::Disconnected) => {
+                        done = true;
+                        break;
+                    }
+                }
+            }
+            if !done {
+                still.push((h, rx));
+            }
+        }
+        g.extra_scans = still;
     }
 
     // ── selection ──────────────────────────────────────────────────
@@ -726,11 +764,43 @@ fn jobs_locked(g: &Inner, include_root: bool) -> Vec<Job> {
     jobs
 }
 
+/// Switch scanning on/off for `cleaners` without a new scan: switched-off ones drop
+/// their size and sort last; switched-on ones are measured on their own.
+fn switch_scan_locked(g: &mut Inner, cleaners: &[(usize, usize)], on: bool) {
+    if !on {
+        for &(c, i) in cleaners {
+            if let Some(it) = g.categories.get_mut(c).and_then(|cat| cat.items.get_mut(i)) {
+                it.selected = false;
+            }
+        }
+        if g.board.switch_off(cleaners) > 0 && !g.board.is_scanning() {
+            g.scan_rx = None;
+            g.scan_handle = None;
+        }
+        return;
+    }
+    let todo = g.board.switch_on(cleaners);
+    if todo.is_empty() || g.run.phase == Phase::Running {
+        return; // a clean is running: everything is measured again when it ends
+    }
+    let want: std::collections::HashSet<(usize, usize)> = todo.into_iter().collect();
+    let (tx, rx) = std::sync::mpsc::channel();
+    let handle = spawn_scan_filtered(
+        &g.categories,
+        |ci, ii, _| want.contains(&(ci, ii)),
+        move |ci, ii, info| tx.send((ci, ii, info)).is_ok(),
+    );
+    g.extra_scans.push((handle, rx));
+}
+
 fn stop_scan_locked(g: &mut Inner) {
     if let Some(h) = g.scan_handle.take() {
         h.cancel();
     }
     g.scan_rx = None;
+    for (h, _) in g.extra_scans.drain(..) {
+        h.cancel();
+    }
     g.board.cancel();
 }
 
@@ -945,6 +1015,7 @@ mod tests {
         }]);
         assert!(!s.toggle_scan("nope"));
         assert_eq!(s.snapshot().scan_off, 0);
+        s.start_scan();
         assert!(s.toggle_scan("b"));
         assert!(s.snapshot().items[1].scan_off);
         assert_eq!(
@@ -952,7 +1023,6 @@ mod tests {
             1,
             "the footer count follows the toggle"
         );
-        assert_eq!(s.snapshot().scan_total, 1);
         for _ in 0..200 {
             s.poll();
             if !s.snapshot().scanning {
@@ -962,9 +1032,26 @@ mod tests {
         }
         let snap = s.snapshot();
         assert!(snap.items[0].scan.is_some() && snap.items[1].scan.is_none());
+        let total = s.snapshot().scan_total;
         assert!(s.toggle_scan("b"));
         assert!(!s.snapshot().items[1].scan_off);
-        assert_eq!(s.snapshot().scan_total, 2);
+        assert_eq!(
+            s.snapshot().scan_total,
+            total,
+            "no new scan: only b is measured"
+        );
+        for _ in 0..200 {
+            s.poll();
+            if s.snapshot().items[1].scan.is_some() {
+                break;
+            }
+            std::thread::sleep(std::time::Duration::from_millis(25));
+        }
+        assert!(
+            s.snapshot().items[1].scan.is_some(),
+            "b measured on its own"
+        );
+        assert!(s.snapshot().items[0].scan.is_some(), "a kept its size");
     }
 
     #[test]
@@ -980,10 +1067,35 @@ mod tests {
         assert!(!s.toggle_scan_category(9));
         assert!(s.toggle_scan_category(0));
         let snap = s.snapshot();
-        assert!(snap.categories[0].scan_off && snap.scan_off == 2 && snap.scan_total == 0);
+        assert!(snap.categories[0].scan_off && snap.scan_off == 2);
+        let total = snap.scan_total;
         assert!(s.toggle_scan_category(0));
         let snap = s.snapshot();
-        assert!(!snap.categories[0].scan_off && snap.scan_off == 0 && snap.scan_total == 2);
+        assert!(!snap.categories[0].scan_off && snap.scan_off == 0);
+        assert_eq!(snap.scan_total, total, "no new scan");
+    }
+
+    #[test]
+    fn a_category_with_scanning_off_is_listed_last_in_its_section() {
+        let cat = |name: &str, id: &str| CleanerCategory {
+            name: name.into(),
+            description: "d".into(),
+            items: vec![item(id, 10, false, Risk::Safe)],
+        };
+        let s = Shared::new(vec![cat("First", "a"), cat("Second", "b")]);
+        let names = |s: &Shared| -> Vec<String> {
+            s.snapshot()
+                .nav_entries()
+                .into_iter()
+                .filter(|c| !c.name.starts_with("All"))
+                .map(|c| c.name)
+                .collect()
+        };
+        assert_eq!(names(&s), ["First", "Second"]);
+        assert!(s.toggle_scan_category(0));
+        assert_eq!(names(&s), ["Second", "First"], "parked at the end");
+        assert!(s.toggle_scan_category(0));
+        assert_eq!(names(&s), ["First", "Second"]);
     }
 
     #[test]

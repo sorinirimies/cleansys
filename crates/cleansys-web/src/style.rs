@@ -63,6 +63,11 @@ label.item { max-width:100%; display:grid; grid-template-columns:auto minmax(0,1
 label.item:hover { border-color:var(--accent); }
 label.item.sel { background:var(--sel); border-color:var(--accent); }
 label.item.off { opacity:.55; cursor:not-allowed; }
+/* A category with scanning off: dimmed, struck through, a slowly pulsing marker. */
+nav.side a.cat.parked .name { opacity:.5; text-decoration:line-through; }
+nav.side a.cat.parked .off-dot { color:var(--warn); animation:parked 2.4s ease-in-out infinite; }
+@keyframes parked { 0%,100% { opacity:.35; } 50% { opacity:1; } }
+@media (prefers-reduced-motion: reduce) { nav.side a.cat.parked .off-dot { animation:none; opacity:.7; } }
 label.item input[type=checkbox] { width:18px; height:18px; accent-color:var(--accent); }
 .item .title { display:flex; flex-wrap:wrap; gap:6px 8px; align-items:center; font-weight:500; }
 .item .desc { color:var(--dim); font-size:12px; grid-column:2; }

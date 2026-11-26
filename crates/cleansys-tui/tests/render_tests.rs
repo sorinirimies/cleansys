@@ -965,3 +965,22 @@ fn the_selected_row_is_readable_in_every_theme() {
         "selected-row text unreadable: {unreadable:?}"
     );
 }
+
+#[test]
+fn a_parked_category_is_drawn_last_with_a_scan_off_marker() {
+    let mut app = app_with_categories();
+    app.persist = false;
+    finish_scan(&mut app);
+    app.focus = cleansys_tui::app::Focus::Categories;
+    app.category_index = 1; // "User"
+    app.toggle_scan_category();
+    let text = screen_text(&mut app, 120, 40);
+    let line = text
+        .lines()
+        .find(|l| l.contains("User") && l.contains("scan off"))
+        .unwrap_or_else(|| panic!("no parked row:\n{text}"));
+    assert!(
+        ["◌", "○", "◎"].iter().any(|f| line.contains(f)),
+        "animated marker: {line}"
+    );
+}

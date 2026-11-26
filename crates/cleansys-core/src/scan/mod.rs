@@ -72,6 +72,13 @@ impl ScanInfo {
     }
 }
 
+/// A scan running on its own (e.g. one cleaner switched back on) and where its
+/// `(category, item, result)` messages arrive.
+pub type ScanJob = (
+    ScanHandle,
+    std::sync::mpsc::Receiver<(usize, usize, ScanInfo)>,
+);
+
 /// Scan results for every cleaner, shaped like the category list.
 #[derive(Debug, Clone, Default)]
 pub struct ScanBoard {
@@ -86,6 +93,8 @@ pub struct ScanBoard {
     off: HashSet<(usize, usize)>,
     /// The scan was stopped (e.g. a clean started) before every cleaner reported.
     interrupted: bool,
+    /// Cleaners measured on their own (switched back on) whose result is still due.
+    extra: HashSet<(usize, usize)>,
 }
 
 /// Tick state of a cleaner's entries.
@@ -451,6 +460,131 @@ mod tests {
             EntryState::Nothing
         };
         assert_eq!(b.entry_state(0, 0), want, "paths mirror the cleaner");
+    }
+
+    #[test]
+    fn switching_off_drops_the_size_and_never_waits_for_that_cleaner() {
+        let c = cats();
+        let mut b = ScanBoard::new(&c);
+        b.start(3); // a1, a2, b1
+        b.record(
+            0,
+            0,
+            ScanInfo {
+                bytes: 100,
+                ..Default::default()
+            },
+        );
+        assert!(b.is_scanning());
+        // a2 is still pending; b1 too. Switching a2 off: the scan no longer waits for it.
+        assert_eq!(b.switch_off(&[(0, 1)]), 1);
+        assert!(b.is_off(0, 1) && b.get(0, 1).is_none());
+        assert!(
+            !b.record(
+                0,
+                1,
+                ScanInfo {
+                    bytes: 999,
+                    ..Default::default()
+                }
+            ),
+            "late result dropped"
+        );
+        assert!(b.get(0, 1).is_none());
+        assert!(
+            b.record(1, 0, ScanInfo::default()),
+            "b1 was the last one owed"
+        );
+        assert!(
+            b.complete(),
+            "a scan with a switched-off cleaner still completes"
+        );
+        // Switching a measured cleaner off forgets its size too.
+        assert_eq!(b.switch_off(&[(0, 0)]), 0);
+        assert!(b.get(0, 0).is_none() && b.complete());
+    }
+
+    #[test]
+    fn switching_back_on_measures_only_that_cleaner() {
+        let c = cats();
+        let mut b = ScanBoard::new(&c);
+        b.start_with(2, [(0, 1)].into_iter().collect());
+        b.record(0, 0, ScanInfo::default());
+        b.record(1, 0, ScanInfo::default());
+        assert!(b.complete());
+        assert_eq!(b.switch_on(&[(0, 1)]), vec![(0, 1)]);
+        assert_eq!(
+            b.switch_on(&[(0, 1)]),
+            Vec::<(usize, usize)>::new(),
+            "already on"
+        );
+        assert!(
+            b.is_measuring(0, 1) && b.complete(),
+            "the finished scan stays complete"
+        );
+        assert!(!b.record(
+            0,
+            1,
+            ScanInfo {
+                bytes: 42,
+                ..Default::default()
+            }
+        ));
+        assert_eq!(b.get(0, 1).map(|s| s.bytes), Some(42));
+        assert!(!b.is_measuring(0, 1));
+    }
+
+    #[test]
+    fn switched_off_cleaners_and_categories_sort_last() {
+        let c = cats();
+        let mut b = ScanBoard::new(&c);
+        b.start(3);
+        b.record(
+            0,
+            0,
+            ScanInfo {
+                bytes: 5,
+                ..Default::default()
+            },
+        );
+        b.record(
+            0,
+            1,
+            ScanInfo {
+                bytes: 900,
+                ..Default::default()
+            },
+        );
+        b.record(
+            1,
+            0,
+            ScanInfo {
+                bytes: 50,
+                ..Default::default()
+            },
+        );
+        b.switch_off(&[(0, 1)]);
+        let mut items = vec![(0, 0), (0, 1), (1, 0)];
+        b.sort_biggest_first(&mut items);
+        assert_eq!(
+            items,
+            vec![(1, 0), (0, 0), (0, 1)],
+            "off last even when it was biggest"
+        );
+        assert!(!b.category_off(&c, 0), "one of two is off");
+        b.switch_off(&[(0, 0)]);
+        assert!(b.category_off(&c, 0));
+        let order = crate::nav_scopes_with_off(&c, |ci| b.category_off(&c, ci));
+        let pos = |ci| {
+            order
+                .iter()
+                .position(|s| *s == crate::Scope::Category(ci))
+                .unwrap()
+        };
+        assert!(
+            pos(0) > pos(1),
+            "the switched-off category moved after the other: {order:?}"
+        );
     }
 
     #[test]

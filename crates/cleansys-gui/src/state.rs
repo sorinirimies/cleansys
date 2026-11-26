@@ -88,6 +88,8 @@ pub struct CleanSysGui {
     /// Stops the running scan (a clean started, or a setting changed).
     pub scan_handle: Option<cleansys_core::ScanHandle>,
     /// Counts scans, so results of a replaced one are recognised and dropped.
+    /// Single-cleaner measurements started by switching scanning back on.
+    pub extra_scans: Vec<cleansys_core::ScanHandle>,
     pub scan_gen: u64,
     /// Ids of cleaners the user opted out of scanning (saved in the settings).
     pub disabled_cleaners: Vec<String>,
@@ -193,6 +195,7 @@ impl CleanSysGui {
             board,
             scan_handle: None,
             scan_gen: 0,
+            extra_scans: Vec::new(),
             disabled_cleaners,
             hide_empty: settings.hide_empty(),
             detect_apps: settings.detect_app_caches(),
@@ -230,6 +233,14 @@ impl CleanSysGui {
     }
 
     /// Cleaners to list in the main pane (search hits or active category).
+    /// The category menu, with categories whose scanning is switched off moved to the
+    /// end of their section (User land / System).
+    pub fn nav_scopes(&self) -> Vec<cleansys_core::Scope> {
+        cleansys_core::nav_scopes_with_off(&self.categories, |ci| {
+            self.board.category_off(&self.categories, ci)
+        })
+    }
+
     pub fn visible_items(&self) -> Vec<(usize, usize)> {
         self.board.scope_items(
             &self.categories,

@@ -15,6 +15,7 @@ impl ScanBoard {
             skipped: HashSet::new(),
             off: HashSet::new(),
             interrupted: false,
+            extra: HashSet::new(),
         }
     }
 
@@ -141,6 +142,7 @@ impl ScanBoard {
     pub fn start_with(&mut self, total: usize, off: HashSet<(usize, usize)>) {
         self.off = off;
         self.interrupted = false;
+        self.extra.clear();
         self.skipped.clear();
         for row in &mut self.info {
             for s in row.iter_mut() {
@@ -154,6 +156,17 @@ impl ScanBoard {
     /// Store one result; returns `true` when it was the last pending one. A result that
     /// arrives with no scan running (it was cancelled) is dropped and returns `false`.
     pub fn record(&mut self, cat: usize, item: usize, info: ScanInfo) -> bool {
+        // A cleaner switched back on and measured on its own: not part of the count.
+        if self.extra.remove(&(cat, item)) {
+            if let Some(slot) = self.info.get_mut(cat).and_then(|r| r.get_mut(item)) {
+                *slot = Some(info);
+            }
+            return false;
+        }
+        // Switched off while the scan ran: its late result is dropped (already counted).
+        if self.off.contains(&(cat, item)) {
+            return false;
+        }
         if self.pending == 0 {
             return false;
         }
@@ -202,6 +215,49 @@ impl ScanBoard {
     }
 
     /// Is this cleaner excluded from scanning by the user's opt-out?
+    /// Switch scanning off for these cleaners **without a new scan**: their sizes are
+    /// dropped and, while a scan runs, it no longer waits for them. Returns how many
+    /// were still pending (the caller may stop their jobs; their results are ignored).
+    pub fn switch_off(&mut self, cleaners: &[(usize, usize)]) -> usize {
+        let mut dropped = 0;
+        for &(c, i) in cleaners {
+            if !self.off.insert((c, i)) {
+                continue;
+            }
+            self.extra.remove(&(c, i));
+            let had = self
+                .info
+                .get_mut(c)
+                .and_then(|r| r.get_mut(i))
+                .and_then(Option::take)
+                .is_some();
+            if self.pending > 0 && !had {
+                // Still owed by the running scan: stop counting it.
+                self.pending -= 1;
+                dropped += 1;
+            }
+        }
+        dropped
+    }
+
+    /// Switch scanning back on for these cleaners; returns the ones the caller should now
+    /// measure on their own (the rest of the results stay as they are).
+    pub fn switch_on(&mut self, cleaners: &[(usize, usize)]) -> Vec<(usize, usize)> {
+        let mut todo = Vec::new();
+        for &(c, i) in cleaners {
+            if self.off.remove(&(c, i)) {
+                self.extra.insert((c, i));
+                todo.push((c, i));
+            }
+        }
+        todo
+    }
+
+    /// Is this cleaner (switched back on) still being measured on its own?
+    pub fn is_measuring(&self, cat: usize, item: usize) -> bool {
+        self.extra.contains(&(cat, item))
+    }
+
     pub fn is_off(&self, cat: usize, item: usize) -> bool {
         self.off.contains(&(cat, item))
     }
@@ -322,8 +378,21 @@ impl ScanBoard {
 
     /// Order listed cleaners by size, biggest first. Unmeasured ones count as 0 and keep
     /// their menu order (the sort is stable).
+    /// Cleaners with scanning switched off go last (they cannot be measured).
     pub fn sort_biggest_first(&self, items: &mut [(usize, usize)]) {
-        items.sort_by_key(|&(c, i)| std::cmp::Reverse(self.get(c, i).map_or(0, |s| s.bytes)));
+        items.sort_by_key(|&(c, i)| {
+            (
+                self.is_off(c, i),
+                std::cmp::Reverse(self.get(c, i).map_or(0, |s| s.bytes)),
+            )
+        });
+    }
+
+    /// Every cleaner of category `cat` has scanning switched off.
+    pub fn category_off(&self, categories: &[CleanerCategory], cat: usize) -> bool {
+        categories
+            .get(cat)
+            .is_some_and(|c| !c.items.is_empty() && (0..c.items.len()).all(|i| self.is_off(cat, i)))
     }
 
     /// The "recommended" preset (safe, user-land cleaners) minus anything a
