@@ -16,29 +16,73 @@ from a **terminal UI**, a **desktop GUI**, a **local web UI** or the **command l
 *before* you delete anything, never touches system folders, and can run **automatically on a schedule**.
 
 <p align="center">
-  <b>Terminal UI</b><br>
   <img src="demo/previews/tui-overview.gif" alt="CleanSys terminal UI: live sizes, recommended preset, preview and search" width="900">
 </p>
 
 <p align="center">
-  <b>Desktop GUI</b><br>
-  <img src="demo/previews/gui-wide.png" alt="CleanSys desktop GUI, wide layout" width="900">
+  <a href="#-install"><b>Install</b></a> ·
+  <a href="#-quick-start"><b>Quick start</b></a> ·
+  <a href="#️-screenshots"><b>Screenshots</b></a> ·
+  <a href="#-what-it-cleans"><b>What it cleans</b></a> ·
+  <a href="#️-safety"><b>Safety</b></a> ·
+  <a href="https://github.com/sorinirimies/cleansys/releases/latest"><b>Downloads</b></a>
 </p>
 
-## ✨ Highlights
+## 📦 Install
 
-- **Never wait for a scan** — a cleaner with a size can be cleaned right away: starting a clean stops the running scan (the sizes found so far stay), and a fresh scan starts by itself when the clean ends. Slow categories start unscanned and any category or cleaner can be switched on or off ([details](#choosing-what-is-scanned)); each cleaner can also be opted out (`x` in the TUI, `s` on the focused cleaner in the web UI, a *Scan* switch on every row in the GUI and web). A cleaner that is switched off is never silent: its row says *scan off · …* with how to enable it, and the totals line counts them (*N cleaners have scanning off*) — the TUI, GUI and web UI share one wording from `cleansys-core`. The same *All* / *None* buttons tick a whole category in all three (`Space` on the category list in the TUI), and a cleaner's paths have *All paths* (TUI top row) / *Select all · Select none* (GUI, web). Scan: `S` (TUI, `R` too), `⌘/Ctrl+R` (GUI), `Shift+R` (web); stop the scan: `⌘/Ctrl+.` (GUI); the choice is saved. The menu has two sections, User land and System; each starts with an **All** entry listing every cleaner of that side in one flat list, followed by its categories.
-- **See before you delete** — every cleaner is measured in the background, in parallel (one shared thread pool, sizes cached per scan, slowest cleaners first; tune with `scan_threads` in `settings.json` or `CLEANSYS_SCAN_THREADS`, default 2× cores), biggest first; preview (`d` / 🔍) lists exact paths.
-- **~370 cleaners** — browsers, apps, IDEs, Gradle/Cargo/npm, Docker, AI/LLM caches, OS logs and more. See [What it cleans](#-what-it-cleans).
-- **Project build output** — `target/`, `node_modules/`, `.venv/`… next to a marker file, by default only in projects idle for 14 days.
-- **Smart selection** — `r` / ✨ *Recommended* ticks only safe, user-land cleaners with something to free; expand any cleaner to [untick single paths](#details--fine-grained-selection).
-- **Risk levels** — `safe`, `moderate` (`~`), `caution` (`!`, never in bulk or unattended runs); root cleaners sit in a separate section and nothing asks for sudo until you run it.
-- **Safe by design** — skips open apps, never follows symlinks, refuses `$HOME`, `/usr`, `.ssh`…, honours your exclusions. See [Safety](#️-safety).
-- **Automatic cleaning** — daily/weekly/monthly via systemd/cron, launchd or Task Scheduler.
-- **Four front-ends, one engine** — TUI, GUI, [web UI](crates/cleansys-web) and CLI share cleaners, scanner, scheduler and safety rules; the UIs share [Settings & About](#settings--about), responsive layouts and progress animation (104 themes in all three: the 43 hand-tuned ones plus every other palette of [`tui-nuances`](https://crates.io/crates/tui-nuances) — `cleansys --list-themes`, `T` in the TUI, `--theme "Pip Boy"`, the theme pick-list in the GUI and web. One shared name is saved in `settings.json`, so a theme picked in one front-end is the theme in the others).
-- **Scriptable** — `--json`, stable cleaner ids, exit codes, your own cleaners in TOML.
+Pick one — every option installs the terminal UI + command line (`cleansys`); the desktop app
+(`cleansys-gui`) and the local web UI (`cleansys-web`) come the same way.
 
-## 🎬 Demo
+| Platform | Easiest | Download from the [latest release](https://github.com/sorinirimies/cleansys/releases/latest) |
+|---|---|---|
+| **macOS** (Apple Silicon + Intel) | `cargo install cleansys` | `cleansys-<version>-macos.dmg` — the desktop app plus the `cleansys` and `cleansys-web` commands; or `cleansys-<arch>-apple-darwin.tar.gz` |
+| **Windows** (x86_64) | `cargo install cleansys` | `cleansys-<version>-windows-x86_64-setup.exe` installer; or the `.zip` per app |
+| **Debian / Ubuntu** | `sudo apt install ./cleansys_<version>_amd64.deb` | `.deb` for `amd64` and `arm64`, one per app (`cleansys`, `cleansys-gui`, `cleansys-web`) |
+| **Fedora / openSUSE** | `sudo dnf install ./cleansys-<version>-x86_64.rpm` | `.rpm` for `x86_64` and `aarch64` |
+| **Arch Linux** | `makepkg -si` with the release's `PKGBUILD` ([below](#arch-linux)) | builds all three apps into one package |
+| **Any Linux** | `chmod +x cleansys-<version>-x86_64.AppImage` and run it | AppImage (`x86_64`, `aarch64`) or `.tar.gz` |
+| **Anywhere with Rust** | `cargo install cleansys cleansys-gui cleansys-web` | the web UI needs Rust 1.98+ |
+
+Then run `cleansys` (or `cleansys-gui`, or `cleansys-web`) — see [Quick start](#-quick-start).
+More options — building from source, Arch details — are in [Installation details](#-installation-details).
+
+## 🚀 Quick start
+
+```bash
+cleansys                 # interactive TUI — press r, then Enter
+cleansys-gui             # desktop GUI
+cleansys-web             # web UI on http://127.0.0.1:3000 (opens your browser)
+cleansys auto            # no UI: scan the recommended set, show it, ask once, clean
+cleansys auto -n         # …only report (dry run)
+sudo cleansys            # also unlock the system (root) cleaners
+```
+
+## 🖼️ Screenshots
+
+Every screenshot runs on a synthetic home folder ([`demo/fixture.nu`](demo/fixture.nu)) — nothing real is shown or deleted.
+
+<table>
+<tr>
+<td width="50%"><b>Web UI on a phone-sized window</b> — same app, narrow layout<br><img src="demo/previews/web-responsive.gif" alt="Web UI, responsive"></td>
+<td width="50%"><b>Desktop GUI</b> — sidebar, sizes, risk badges<br><img src="demo/previews/gui-wide.png" alt="GUI"></td>
+</tr>
+<tr>
+<td><b>Web UI</b> — the same app in a browser tab, no JavaScript bundle<br><img src="demo/previews/web-wide.png" alt="Web UI"></td>
+<td><b>Command line</b> — <code>auto</code>, <code>scan --json</code>, schedule<br><img src="demo/previews/cli.gif" alt="CLI"></td>
+</tr>
+<tr>
+<td><b>Clean for real</b> — confirm, live progress, summary<br><img src="demo/previews/tui-clean.gif" alt="TUI clean run"></td>
+<td><b>Pick exact paths</b> — every path with its size<br><img src="demo/previews/tui-details.png" alt="TUI details"></td>
+</tr>
+<tr>
+<td><b>User land vs root</b> — a password only when a root cleaner runs<br><img src="demo/previews/tui-system-root.gif" alt="TUI root cleaners"></td>
+<td><b>Automatic cleaning</b> — daily, weekly or monthly<br><img src="demo/previews/tui-schedule.gif" alt="TUI schedule"></td>
+</tr>
+</table>
+
+<details>
+<summary><b>More screenshots</b> — responsive GUI and web layouts, web flow, settings, narrow terminals</summary>
+
 
 ### Desktop GUI — responsive layouts
 
@@ -107,70 +151,20 @@ sudo cleansys-web                # optional: run as root (no password prompt nee
 
 > Every demo runs against a synthetic home directory ([`demo/fixture.nu`](demo/fixture.nu)) — no real paths, nothing deleted. See [`demo/previews`](demo/previews/README.md).
 
-## 🧱 Project Structure
+</details>
 
-CleanSys is a Cargo workspace with four crates:
+## ✨ Highlights
 
-| Crate | Binary | Description |
-|-------|--------|-------------|
-| [`cleansys-core`](crates/cleansys-core) | *(library)* | Framework-free logic shared by all front-ends: cleaner engine, scan board, scheduler, safety rules, sudo auth |
-| [`cleansys-tui`](crates/cleansys-tui) | `cleansys` | Ratatui terminal UI **and** the CLI — published to crates.io as `cleansys` |
-| [`cleansys-gui`](crates/cleansys-gui) | `cleansys-gui` | Iced desktop GUI |
-| [`cleansys-web`](crates/cleansys-web) | `cleansys-web` | Local web UI built with [Topcoat](https://github.com/tokio-rs/topcoat) (needs Rust 1.98+) |
-
-## 📦 Installation
-
-```bash
-cargo install cleansys           # terminal UI + CLI
-cargo install cleansys-gui       # desktop GUI
-cargo install cleansys-web       # local web UI (Rust 1.98+)
-```
-
-From source:
-
-```bash
-git clone https://github.com/sorinirimies/cleansys && cd cleansys
-cargo build --workspace --release          # binaries in target/release/
-cargo install --path crates/cleansys-tui   # or crates/cleansys-gui
-```
-
-### Arch Linux
-
-Not on the AUR yet. Every release attaches a `PKGBUILD`; build and install it with `makepkg`:
-
-```bash
-mkdir cleansys-pkg && cd cleansys-pkg
-curl -fsSLO https://github.com/sorinirimies/cleansys/releases/latest/download/PKGBUILD
-makepkg -si          # builds cleansys, cleansys-gui and cleansys-web into one package
-```
-
-Uninstall with `sudo pacman -R cleansys`.
-
-### Download the desktop GUI
-
-**Web downloads page: <https://github.com/sorinirimies/cleansys/releases/latest>**
-
-Pre-built `cleansys-gui` packages are on the [Releases](https://github.com/sorinirimies/cleansys/releases) page (only the latest version is kept):
-
-| Platform | Package |
-|----------|---------|
-| Linux (x86_64, aarch64) | `.deb`, `.rpm`; AppImage (x86_64) |
-| macOS (Intel + Apple Silicon) | universal `.dmg` |
-| Windows (x86_64) | installer (`.exe`) and zip |
-| Any | raw binary `cleansys-gui-<target>` |
-
-The TUI (`cleansys-tui-<target>`) and web UI (`cleansys-web-<target>`) ship the same way, with `.deb`/`.rpm` for Linux. `just --list` shows all development tasks.
-
-## 🚀 Quick start
-
-```bash
-cleansys                 # interactive TUI — press r, then Enter
-cleansys-gui             # desktop GUI
-cleansys-web             # web UI on http://127.0.0.1:3000 (opens your browser)
-cleansys auto            # no UI: scan the recommended set, show it, ask once, clean
-cleansys auto -n         # …only report (dry run)
-sudo cleansys            # also unlock the system (root) cleaners
-```
+- **Never wait for a scan** — a cleaner with a size can be cleaned right away: starting a clean stops the running scan (the sizes found so far stay), and a fresh scan starts by itself when the clean ends. Slow categories start unscanned and any category or cleaner can be switched on or off ([details](#choosing-what-is-scanned)); each cleaner can also be opted out (`x` in the TUI, `s` on the focused cleaner in the web UI, a *Scan* switch on every row in the GUI and web). A cleaner that is switched off is never silent: its row says *scan off · …* with how to enable it, and the totals line counts them (*N cleaners have scanning off*) — the TUI, GUI and web UI share one wording from `cleansys-core`. The same *All* / *None* buttons tick a whole category in all three (`Space` on the category list in the TUI), and a cleaner's paths have *All paths* (TUI top row) / *Select all · Select none* (GUI, web). Scan: `S` (TUI, `R` too), `⌘/Ctrl+R` (GUI), `Shift+R` (web); stop the scan: `⌘/Ctrl+.` (GUI); the choice is saved. The menu has two sections, User land and System; each starts with an **All** entry listing every cleaner of that side in one flat list, followed by its categories.
+- **See before you delete** — every cleaner is measured in the background, in parallel (one shared thread pool, sizes cached per scan, slowest cleaners first; tune with `scan_threads` in `settings.json` or `CLEANSYS_SCAN_THREADS`, default 2× cores), biggest first; preview (`d` / 🔍) lists exact paths.
+- **~370 cleaners** — browsers, apps, IDEs, Gradle/Cargo/npm, Docker, AI/LLM caches, OS logs and more. See [What it cleans](#-what-it-cleans).
+- **Project build output** — `target/`, `node_modules/`, `.venv/`… next to a marker file, by default only in projects idle for 14 days.
+- **Smart selection** — `r` / ✨ *Recommended* ticks only safe, user-land cleaners with something to free; expand any cleaner to [untick single paths](#details--fine-grained-selection).
+- **Risk levels** — `safe`, `moderate` (`~`), `caution` (`!`, never in bulk or unattended runs); root cleaners sit in a separate section and nothing asks for sudo until you run it.
+- **Safe by design** — skips open apps, never follows symlinks, refuses `$HOME`, `/usr`, `.ssh`…, honours your exclusions. See [Safety](#️-safety).
+- **Automatic cleaning** — daily/weekly/monthly via systemd/cron, launchd or Task Scheduler.
+- **Four front-ends, one engine** — TUI, GUI, [web UI](crates/cleansys-web) and CLI share cleaners, scanner, scheduler and safety rules; the UIs share [Settings & About](#settings--about), responsive layouts and progress animation (104 themes in all three: the 43 hand-tuned ones plus every other palette of [`tui-nuances`](https://crates.io/crates/tui-nuances) — `cleansys --list-themes`, `T` in the TUI, `--theme "Pip Boy"`, the theme pick-list in the GUI and web. One shared name is saved in `settings.json`, so a theme picked in one front-end is the theme in the others).
+- **Scriptable** — `--json`, stable cleaner ids, exit codes, your own cleaners in TOML.
 
 ## 🧹 What it cleans
 
@@ -412,6 +406,58 @@ Other actions: `command` (`program`, `args`, `sudo`, `measure = [paths]` to repo
 (`name_regex`, `not_name_regex`, `path_regex`, `not_path_regex`) and `min_age_days` (only items neither written nor
 read for that many days; with `age_by_contents = true` a directory is judged by the newest file *inside* it, and the version a manager has selected — a `current`/`default` symlink, a `bin/` shim, a `version` or `alias/default` file — is never removed, nor any version a project under the scan roots pins in `.nvmrc`, `.node-version`, `.python-version`, `.ruby-version`, `.tool-versions`, `.sdkmanrc`, `rust-toolchain(.toml)`, `gradle-wrapper.properties` or `go.mod`). Project build folders that git tracks (a committed `vendor/` or `build/`) are never offered. Set `requires_root = true` for anything that
 needs elevation — it will appear in the System · root section.
+
+## 🔧 Installation details
+
+```bash
+cargo install cleansys           # terminal UI + CLI
+cargo install cleansys-gui       # desktop GUI
+cargo install cleansys-web       # local web UI (Rust 1.98+)
+```
+
+From source:
+
+```bash
+git clone https://github.com/sorinirimies/cleansys && cd cleansys
+cargo build --workspace --release          # binaries in target/release/
+cargo install --path crates/cleansys-tui   # or crates/cleansys-gui
+```
+
+### Arch Linux
+
+Not on the AUR yet. Every release attaches a `PKGBUILD`; build and install it with `makepkg`:
+
+```bash
+mkdir cleansys-pkg && cd cleansys-pkg
+curl -fsSLO https://github.com/sorinirimies/cleansys/releases/latest/download/PKGBUILD
+makepkg -si          # builds cleansys, cleansys-gui and cleansys-web into one package
+```
+
+Uninstall with `sudo pacman -R cleansys`.
+
+### Release files
+
+Every [release](https://github.com/sorinirimies/cleansys/releases/latest) (only the latest is kept) has, for each
+app (`cleansys`, `cleansys-gui`, `cleansys-web`):
+
+| Platform | Files |
+|----------|-------|
+| Linux (`x86_64`, `aarch64`) | `<app>_<version>_amd64.deb` / `_arm64.deb`, `<app>-<version>-x86_64.rpm` / `-aarch64.rpm`, AppImage (TUI and GUI), `<app>-<target>.tar.gz` |
+| macOS (Intel + Apple Silicon) | one universal `cleansys-<version>-macos.dmg` (GUI app + `cleansys` and `cleansys-web`), `<app>-<target>.tar.gz` |
+| Windows (`x86_64`) | `cleansys-<version>-windows-x86_64-setup.exe` (all three), `<app>-x86_64-pc-windows-msvc.zip` |
+
+Each `.tar.gz` has a `.sha256` next to it. `just --list` shows all development tasks.
+
+## 🧱 Project Structure
+
+CleanSys is a Cargo workspace with four crates:
+
+| Crate | Binary | Description |
+|-------|--------|-------------|
+| [`cleansys-core`](crates/cleansys-core) | *(library)* | Framework-free logic shared by all front-ends: cleaner engine, scan board, scheduler, safety rules, sudo auth |
+| [`cleansys-tui`](crates/cleansys-tui) | `cleansys` | Ratatui terminal UI **and** the CLI — published to crates.io as `cleansys` |
+| [`cleansys-gui`](crates/cleansys-gui) | `cleansys-gui` | Iced desktop GUI |
+| [`cleansys-web`](crates/cleansys-web) | `cleansys-web` | Local web UI built with [Topcoat](https://github.com/tokio-rs/topcoat) (needs Rust 1.98+) |
 
 ## 🛡️ Safety
 
