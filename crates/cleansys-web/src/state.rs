@@ -382,8 +382,16 @@ impl Shared {
                 g.auth_fails = 0;
             }
         }
-        let ok = cleansys_core::authenticate_sudo(password).map_err(|e| format!("sudo: {e}"))?;
+        let result =
+            cleansys_core::check_sudo_password(password).map_err(|e| format!("sudo: {e}"))?;
         let mut g = self.lock();
+        let ok = result.is_ok();
+        if let Err(why) = result
+            && why != cleansys_core::AuthFailure::WrongPassword
+        {
+            // Locked out / not allowed: retrying cannot help, so say so (and do not count it).
+            return Err(why.message());
+        }
         if ok {
             g.sudo_ok = true;
             g.auth_fails = 0;

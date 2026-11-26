@@ -42,7 +42,7 @@ pub enum Message {
     /// User cancelled the sudo authentication dialog.
     PasswordCancel,
     /// A background sudo authentication attempt finished.
-    AuthenticationResult(bool),
+    AuthenticationResult(Result<(), String>),
     /// User acknowledged the "needs Administrator" notice (Windows).
     AdminNoticeAcknowledged,
     /// User clicked "Relaunch as Administrator" (Windows only).

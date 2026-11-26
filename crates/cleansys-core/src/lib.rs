@@ -47,7 +47,8 @@ pub mod utils;
 
 // Convenience re-exports
 pub use auth::{
-    authenticate_sudo, cache_sudo_password, cached_sudo_password, clear_cached_sudo_password,
+    AuthFailure, authenticate_sudo, cache_sudo_password, cached_sudo_password, check_sudo_password,
+    classify_sudo_failure, clear_cached_sudo_password,
 };
 pub use cleaners::cleaned_item::{
     CleanedItem, CleanedItemType, CleanerFn, CleaningResult, RunOptions, cleaner_fn,

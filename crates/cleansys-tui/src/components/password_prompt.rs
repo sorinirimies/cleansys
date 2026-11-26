@@ -82,18 +82,21 @@ impl PasswordPrompt {
 
     /// Verify the password using sudo (delegates to shared core logic).
     pub fn verify_password(&mut self) -> Result<bool> {
-        let authenticated = cleansys_core::authenticate_sudo(&self.password_input)?;
-
-        if authenticated {
-            self.authenticated = true;
-            self.visible = false;
-            self.password_input.clear();
-            self.error_message = None;
-            Ok(true)
-        } else {
-            self.error_message = Some("Incorrect password. Please try again.".to_string());
-            self.password_input.clear();
-            Ok(false)
+        match cleansys_core::check_sudo_password(&self.password_input)? {
+            Ok(()) => {
+                self.authenticated = true;
+                self.visible = false;
+                self.password_input.clear();
+                self.error_message = None;
+                Ok(true)
+            }
+            Err(why) => {
+                // Say what sudo really said: a locked-out account refuses the right
+                // password too, and "incorrect" would only lead to more lockout attempts.
+                self.error_message = Some(why.message());
+                self.password_input.clear();
+                Ok(false)
+            }
         }
     }
 

@@ -66,45 +66,150 @@ pub fn cached_sudo_password() -> Option<String> {
     password_cell().lock().ok().and_then(|guard| guard.clone())
 }
 
-/// Attempt to authenticate as root using `sudo -S -v` with the given password
-/// piped over stdin. Returns `Ok(true)` if authentication succeeded, `Ok(false)`
-/// if the password was rejected, and `Err` if `sudo` could not be invoked at all.
+/// Why a sudo password check did not succeed — so the UI can say what really happened
+/// instead of "incorrect password" for everything.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum AuthFailure {
+    /// sudo rejected the password.
+    WrongPassword,
+    /// The account is locked after too many failed attempts (PAM `pam_faillock` /
+    /// `pam_tally2`): even the right password fails until the lock expires.
+    LockedOut,
+    /// This user may not use sudo at all.
+    NotAllowed,
+    /// sudo refused for another reason; its own message is kept.
+    Other(String),
+}
+
+impl AuthFailure {
+    /// A message for the password dialog.
+    pub fn message(&self) -> String {
+        match self {
+            Self::WrongPassword => "Incorrect password. Please try again.".to_string(),
+            Self::LockedOut => "Your account is temporarily locked after too many failed sudo \
+                attempts — even the right password is refused until the lock expires (usually \
+                10 minutes). `faillock --user $USER --reset` clears it."
+                .to_string(),
+            Self::NotAllowed => "This user is not allowed to use sudo.".to_string(),
+            Self::Other(m) => format!("sudo refused: {m}"),
+        }
+    }
+}
+
+/// Classify sudo's error output after a failed `sudo -S -v`.
+pub fn classify_sudo_failure(stderr: &str) -> AuthFailure {
+    let s = stderr.to_ascii_lowercase();
+    if s.contains("account locked")
+        || s.contains("account is locked")
+        || s.contains("the account is locked")
+        || s.contains("maximum number of tries exceeded")
+        || s.contains("faillock")
+    {
+        AuthFailure::LockedOut
+    } else if s.contains("not in the sudoers")
+        || s.contains("is not allowed to run sudo")
+        || s.contains("may not run sudo")
+    {
+        AuthFailure::NotAllowed
+    } else if s.is_empty()
+        || s.contains("incorrect password")
+        || s.contains("sorry, try again")
+        || s.contains("authentication failure")
+    {
+        AuthFailure::WrongPassword
+    } else {
+        AuthFailure::Other(stderr.trim().lines().last().unwrap_or("").to_string())
+    }
+}
+
+/// Check `password` with sudo **once** and say why it failed.
 ///
-/// On success, the password is also cached (see [`cache_sudo_password`]) so
-/// that subsequent privileged commands run via
-/// [`crate::utils::execute_with_sudo`] can re-authenticate reliably without
-/// depending on `sudo`'s own (TTY/session-keyed) credential cache.
-pub fn authenticate_sudo(password: &str) -> Result<bool> {
+/// `sudo -S -v -p ''` reads exactly one line: no prompt text is mixed into the output,
+/// and stdin is closed after the password, so sudo does not retry with empty input —
+/// every retry would count as another failure towards a `pam_faillock` lockout. A
+/// trailing newline or carriage return the user's input picked up is not part of the
+/// password. On success the password is cached for later privileged commands (see
+/// [`cache_sudo_password`]).
+pub fn check_sudo_password(password: &str) -> Result<std::result::Result<(), AuthFailure>> {
+    let password = password.trim_end_matches(['\r', '\n']);
     let mut child = Command::new("sudo")
-        .arg("-S")
-        .arg("-v")
+        .args(["-S", "-v", "-p", ""])
+        // sudo's messages must be parseable whatever the user's language.
+        .env("LC_ALL", "C")
+        .env("LANG", "C")
         .stdin(Stdio::piped())
         .stdout(Stdio::null())
-        .stderr(Stdio::null())
+        .stderr(Stdio::piped())
         .spawn()?;
-
     if let Some(mut stdin) = child.stdin.take() {
         writeln!(stdin, "{password}")?;
+        // dropping stdin here closes it: sudo cannot read a second (empty) attempt
     }
-
-    let status = child.wait()?;
-    let success = status.success();
-    if success {
+    let out = child.wait_with_output()?;
+    if out.status.success() {
         cache_sudo_password(password.to_string());
+        return Ok(Ok(()));
     }
-    Ok(success)
+    Ok(Err(classify_sudo_failure(&String::from_utf8_lossy(
+        &out.stderr,
+    ))))
+}
+
+/// [`check_sudo_password`] as a yes/no: `Ok(true)` accepted, `Ok(false)` refused for any
+/// reason, `Err` if `sudo` could not be run at all.
+pub fn authenticate_sudo(password: &str) -> Result<bool> {
+    Ok(check_sudo_password(password)?.is_ok())
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
 
+    /// Runs the real `sudo` with a wrong password: every run counts as a failed login
+    /// towards a `pam_faillock` lockout, so it only runs when asked for
+    /// (`cargo test -- --ignored`).
     #[test]
     #[cfg(unix)]
+    #[ignore = "counts as a failed sudo login (pam_faillock); run with --ignored"]
     fn authenticate_sudo_with_wrong_password_does_not_panic() {
         // We can't guarantee the outcome (depends on the test machine's sudo
         // config and cached credentials), just that the call completes.
         let _ = authenticate_sudo("definitely-not-the-real-password-12345");
+    }
+
+    #[test]
+    fn sudo_failures_are_told_apart() {
+        use AuthFailure::*;
+        assert_eq!(
+            classify_sudo_failure("Sorry, try again.\nsudo: 1 incorrect password attempt\n"),
+            WrongPassword
+        );
+        assert_eq!(classify_sudo_failure(""), WrongPassword);
+        assert_eq!(
+            classify_sudo_failure(
+                "sudo: pam_faillock(sudo:auth): Consecutive login failures for user sorin account temporarily locked\nsudo: account locked\n"
+            ),
+            LockedOut
+        );
+        assert_eq!(
+            classify_sudo_failure("The account is locked due to 3 failed logins.\n"),
+            LockedOut
+        );
+        assert_eq!(
+            classify_sudo_failure(
+                "sorin is not in the sudoers file.  This incident will be reported.\n"
+            ),
+            NotAllowed
+        );
+        assert_eq!(
+            classify_sudo_failure("sudo: a terminal is required to read the password\n"),
+            Other("sudo: a terminal is required to read the password".into())
+        );
+        assert!(LockedOut.message().contains("faillock"));
+        assert_eq!(
+            WrongPassword.message(),
+            "Incorrect password. Please try again."
+        );
     }
 
     #[test]

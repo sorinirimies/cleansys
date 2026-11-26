@@ -583,22 +583,28 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
         Message::PasswordSubmit => {
             let password = state.password_input.clone();
             Task::perform(
-                async move { cleansys_core::authenticate_sudo(&password).unwrap_or(false) },
+                async move {
+                    match cleansys_core::check_sudo_password(&password) {
+                        Ok(Ok(())) => Ok(()),
+                        Ok(Err(why)) => Err(why.message()),
+                        Err(e) => Err(format!("Could not run sudo: {e}")),
+                    }
+                },
                 Message::AuthenticationResult,
             )
         }
 
-        Message::AuthenticationResult(success) => {
-            if success {
+        Message::AuthenticationResult(result) => {
+            if let Err(why) = result {
+                state.password_error = Some(why);
+                state.password_input.clear();
+                Task::none()
+            } else {
                 state.needs_password = false;
                 state.password_input.clear();
                 state.password_error = None;
                 state.sudo_ok = true; // sudo credentials are now cached (the process is still not root)
                 start_pending_operations(state)
-            } else {
-                state.password_error = Some("Incorrect password. Please try again.".to_string());
-                state.password_input.clear();
-                Task::none()
             }
         }
 
@@ -986,6 +992,17 @@ mod tests {
     use crate::state::CleanSysGui;
 
     #[test]
+    fn a_locked_out_account_is_reported_as_such_not_as_a_wrong_password() {
+        let mut state = CleanSysGui::new();
+        state.needs_password = true;
+        let why = cleansys_core::AuthFailure::LockedOut.message();
+        let _ = update(&mut state, Message::AuthenticationResult(Err(why.clone())));
+        assert!(state.needs_password, "the dialog stays open");
+        assert_eq!(state.password_error.as_deref(), Some(why.as_str()));
+        assert!(!why.contains("Incorrect password"));
+    }
+
+    #[test]
     fn toggle_item_flips_selection() {
         let mut state = CleanSysGui::new();
         assert!(!state.categories[0].items[0].selected);
@@ -1273,7 +1290,7 @@ mod tests {
             "ROOT while a system category is open"
         );
 
-        let _ = update(&mut state, Message::AuthenticationResult(true));
+        let _ = update(&mut state, Message::AuthenticationResult(Ok(())));
         assert!(
             state.sudo_ok && !state.is_root,
             "authenticated, but the process is not root"
@@ -1320,12 +1337,15 @@ mod tests {
             .expect("a root cleaner");
         state.categories[root].items[item].selected = true;
         assert!(state.selection_needs_root());
-        let _ = update(&mut state, Message::AuthenticationResult(false));
+        let _ = update(
+            &mut state,
+            Message::AuthenticationResult(Err("Incorrect password. Please try again.".into())),
+        );
         assert!(
             !state.sudo_ok && state.selection_needs_root(),
             "a wrong password changes nothing"
         );
-        let _ = update(&mut state, Message::AuthenticationResult(true));
+        let _ = update(&mut state, Message::AuthenticationResult(Ok(())));
         assert!(!state.selection_needs_root());
     }
 
@@ -1607,7 +1627,10 @@ mod tests {
         let mut state = CleanSysGui::new();
         state.needs_password = true;
         state.password_input = "wrong".to_string();
-        let _ = update(&mut state, Message::AuthenticationResult(false));
+        let _ = update(
+            &mut state,
+            Message::AuthenticationResult(Err("Incorrect password. Please try again.".into())),
+        );
 
         assert!(state.password_error.is_some());
         assert_eq!(state.password_input, "");
@@ -1626,7 +1649,7 @@ mod tests {
         state.categories[ci].items[ii].function =
             cleansys_core::cleaner_fn(|_| Ok(cleansys_core::CleaningResult::new()));
 
-        let _ = update(&mut state, Message::AuthenticationResult(true));
+        let _ = update(&mut state, Message::AuthenticationResult(Ok(())));
 
         assert!(!state.needs_password);
         assert!(state.sudo_ok, "the session is authenticated");
