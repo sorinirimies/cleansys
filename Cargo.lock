@@ -651,9 +651,9 @@ dependencies = [
 
 [[package]]
 name = "cc"
-version = "1.11.3"
+version = "1.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "02f0e023adb368345ce0ca6cdfc0f24a06554468d0e8503e14a0841de79bfa69"
+checksum = "95e45cf2980b2d467be49a9ed942c9179b701063a7ca3d037de7ee9bd67f8d66"
 dependencies = [
  "find-msvc-tools",
  "jobserver",
@@ -1553,9 +1553,9 @@ dependencies = [
 
 [[package]]
 name = "find-msvc-tools"
-version = "0.1.15"
+version = "0.1.16"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1c66915cc5391097de7a2b0b972e8505aa33c0df401fd3a6811dbdb32881ba48"
+checksum = "3e44f110d1777dc6559a51e7d45083945ded4f1bf3305494350f693b6d20b9c8"
 
 [[package]]
 name = "finl_unicode"
@@ -5816,9 +5816,9 @@ dependencies = [
 
 [[package]]
 name = "tui-chart"
-version = "0.6.11"
+version = "0.6.12"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b75dbcf90d2c286dc9f892f9734922915ce4ba62ef547dd09696abcae7bcbcdc"
+checksum = "8c0492e6214bce7ccddf23672b932fda1059d46147634bf5bf1a8ffdd0c72e9e"
 dependencies = [
  "ratatui",
  "tui-nuances",
@@ -5828,9 +5828,9 @@ dependencies = [
 
 [[package]]
 name = "tui-checkbox"
-version = "0.6.1"
+version = "0.6.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "1d2c8d9713232b5f14216c2fa05f85e11fd98e22a2c89634b1ed2d921e7c4321"
+checksum = "728005e69782dd045e2e524a650fe7592df0909f871c1fc16928f7238519622d"
 dependencies = [
  "ratatui",
  "tui-nuances",
@@ -5847,9 +5847,9 @@ dependencies = [
 
 [[package]]
 name = "tui-piechart"
-version = "1.4.4"
+version = "1.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d65272d25bb3799d827de6d07f7c4885eb40761693ea0db6eafe051fa63457ac"
+checksum = "50a2da79cd55ed43e4c022ddf97c76d8948e312c7327e06c5789448960428d74"
 dependencies = [
  "ratatui",
  "tui-nuances",
