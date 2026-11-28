@@ -333,6 +333,22 @@ impl App {
     /// (read-only). A scan already running is replaced: its results are stale.
     /// Every scan starts with nothing ticked, so the user picks from the fresh sizes.
     pub fn start_scan(&mut self) {
+        // A new scan clears the "freed" info of the previous clean.
+        if !self.is_running {
+            self.run_summary = None;
+            self.total_bytes_cleaned = 0;
+            for category in &mut self.categories {
+                for item in &mut category.items {
+                    item.bytes_cleaned = 0;
+                    item.status = None;
+                }
+            }
+        }
+        self.begin_scan();
+    }
+
+    /// Start the scan without clearing the last clean's result (used right after a clean).
+    fn begin_scan(&mut self) {
         self.stop_scan();
         self.collapse_details();
         cleansys_core::scope::set_all_selected(&mut self.categories, false, true);
@@ -1621,7 +1637,7 @@ impl App {
         // is opt-in (`P`) instead of covering the screen the moment a clean ends.
         self.run_summary = Some(summary);
         // Sizes changed — measure again so the list shows what is left.
-        self.start_scan();
+        self.begin_scan();
     }
 
     /// Stop the run after the cleaner currently executing (remaining ones are

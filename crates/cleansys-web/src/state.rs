@@ -415,6 +415,10 @@ impl Shared {
     /// already running is replaced.
     pub fn start_scan(&self) {
         let mut g = self.lock();
+        // A new scan clears the "freed" info of the previous clean.
+        if g.run.phase == Phase::Done {
+            g.run = RunState::default();
+        }
         start_scan_locked(&mut g);
     }
 
@@ -1134,6 +1138,20 @@ mod tests {
         let snap = s.snapshot();
         assert!(!snap.scanning, "scan stopped by the clean");
         assert!(!snap.complete);
+    }
+
+    #[test]
+    fn a_new_scan_clears_the_finished_run() {
+        let s = shared();
+        s.lock().run = RunState {
+            phase: Phase::Done,
+            freed: 123,
+            ..RunState::default()
+        };
+        s.start_scan();
+        let snap = s.snapshot();
+        assert_eq!(snap.run.phase, Phase::Idle);
+        assert_eq!(snap.run.freed, 0);
     }
 
     #[test]

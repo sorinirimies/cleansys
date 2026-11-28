@@ -687,7 +687,7 @@ pub fn update(state: &mut CleanSysGui, message: Message) -> Task<Message> {
                 state.push_log(format!("\u{1f389} {summary}"));
                 crate::platform::notify_completion(&summary);
                 // Sizes changed: re-measure so the list shows what is left.
-                return start_scan(state);
+                return begin_scan(state);
             }
 
             Task::none()
@@ -824,6 +824,21 @@ fn start_scan(state: &mut CleanSysGui) -> Task<Message> {
     if state.is_running {
         return Task::none();
     }
+    // A new scan clears the "freed" info of the previous clean.
+    state.total_bytes_cleaned = 0;
+    state.operations_total = 0;
+    state.operations_completed = 0;
+    for cat in &mut state.categories {
+        for item in &mut cat.items {
+            item.bytes_cleaned = 0;
+            item.status = None;
+        }
+    }
+    begin_scan(state)
+}
+
+/// Scan without clearing the last clean's result (used right after a clean).
+fn begin_scan(state: &mut CleanSysGui) -> Task<Message> {
     stop_scan(state);
     cleansys_core::scope::set_all_selected(&mut state.categories, false, true);
     use std::collections::HashMap;
@@ -1843,6 +1858,19 @@ mod tests {
         state.board = cleansys_core::ScanBoard::new(&state.categories);
         state.disabled_cleaners.clear();
         state
+    }
+
+    #[test]
+    fn a_new_scan_clears_the_previous_clean_result() {
+        let mut state = tiny_state();
+        state.total_bytes_cleaned = 2048;
+        state.operations_total = 2;
+        state.operations_completed = 2;
+        state.categories[0].items[0].bytes_cleaned = 2048;
+        let _ = start_scan(&mut state);
+        assert_eq!(state.total_bytes_cleaned, 0);
+        assert_eq!(state.operations_total, 0);
+        assert_eq!(state.categories[0].items[0].bytes_cleaned, 0);
     }
 
     #[test]

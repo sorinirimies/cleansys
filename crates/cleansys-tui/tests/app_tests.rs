@@ -572,6 +572,19 @@ fn starting_a_run_clears_the_previous_summary_and_log() {
 }
 
 #[test]
+fn a_new_scan_clears_the_previous_clean_result() {
+    let mut app = app_with_categories();
+    app.run_summary = Some(cleansys_tui::app::RunSummary::default());
+    app.total_bytes_cleaned = 4096;
+    app.categories[0].items[0].bytes_cleaned = 4096;
+    app.start_scan();
+    assert!(app.run_summary.is_none());
+    assert_eq!(app.total_bytes_cleaned, 0);
+    assert_eq!(app.categories[0].items[0].bytes_cleaned, 0);
+    app.stop_scan();
+}
+
+#[test]
 fn selection_and_run_keys_are_ignored_while_a_clean_is_running() {
     let mut app = app_with_categories();
     app.confirmation_mode = false;

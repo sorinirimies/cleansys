@@ -291,7 +291,7 @@ untick individual paths. The classic case is *Rust target/ Directories*: expand 
 - The *"X selected"* size and the **Clean N · X GB** button count only the ticked paths; **Preview** and **Run** both leave unticked paths alone.
 - Each cleaner lists its 300 biggest paths (the rest are noted as *"… and N smaller not listed"*).
 - Cleaners that run a command (e.g. `docker prune`) show their paths for information but are removed as a whole — the list says so.
-- Selections are for the current scan; a re-scan resets them.
+- Selections are for the current scan; a re-scan resets them. A new scan also clears the previous clean's result ("Freed X", summary); the automatic re-scan right after a clean keeps it.
 - A cleaner's checkbox and its paths stay in sync: opening an **unticked** cleaner shows all its paths unticked; ticking any one path ticks the cleaner, and unticking the last one unticks it.
 
 **Idle-days selector.** Project build output (`target/`, `node_modules`, …) is only offered once its
